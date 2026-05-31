@@ -7,6 +7,6 @@ import org.springframework.stereotype.Service;
 public class IdentityHelloService {
 
     public IdentityModuleStatus status() {
-        return new IdentityModuleStatus("identity", "UP", "identity module started");
+        return new IdentityModuleStatus("identity", "UP", "identity module up");
     }
 }

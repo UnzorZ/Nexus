@@ -24,6 +24,9 @@ services:
     command: sh -c "node -e \"require('next/package.json'); require('lightningcss')\" >/dev/null 2>&1 || npm install --include=optional; npm run dev -- --hostname 0.0.0.0"
     environment:
       NEXT_TELEMETRY_DISABLED: "1"
+      NEXUS_AUTH_BASE_URL: "http://localhost:8080"
+      NEXUS_AUTH_INTERNAL_BASE_URL: "http://host.docker.internal:8080"
+      NEXUS_FRONTEND_BASE_URL: "http://localhost:3000"
     ports:
       - "3000:3000"
     volumes:

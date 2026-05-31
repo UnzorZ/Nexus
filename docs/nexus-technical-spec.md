@@ -1,0 +1,1817 @@
+# Nexus Technical Specification
+
+Version: 0.1  
+Status: Draft for implementation planning  
+Primary audience: project owner, future contributors, future SDK implementers
+
+## 1. Executive Summary
+
+Nexus is a personal control plane for backend projects. It centralizes common platform capabilities that would otherwise be duplicated across applications: project registry, API keys, isolated project authentication, permission management, notifications, audit, module configuration, and future shared infrastructure services.
+
+The initial deployment target is personal use, but the architecture must remain clean enough to become open source later. Nexus will run without Kubernetes, preferably with Docker or a local server installation. The first supported application stack is Java/Spring Boot, but all public integration contracts must be HTTP/OpenAPI-first so SDKs can later be created for other languages.
+
+The system follows this central rule:
+
+> Nexus is the source of truth. If Nexus is unavailable, dependent authentication and authorization flows fail closed.
+
+## 2. Confirmed Decisions
+
+- Nexus starts as a new project from scratch.
+- Backend stack: Spring Boot.
+- Backend architecture: modular monolith, preferably with Spring Modulith boundaries.
+- Authorization server: Spring Authorization Server for production.
+- Learning goal: document and understand the low-level OAuth2/OIDC/JWT mechanics behind Spring Authorization Server.
+- Frontend: React/Next.js dashboard as a separate client consuming Nexus APIs.
+- Database: PostgreSQL.
+- Deployment: Docker or local process on a server; no Kubernetes.
+- Quality gate for backend implementation: `./gradlew build`.
+- Each Nexus project is identified to Nexus by one or more API keys.
+- Multiple API keys per project are supported from the beginning.
+- No environment split in MVP; environments such as dev/staging/prod may be added later.
+- Each project has isolated authentication and isolated users.
+- Nexus manages explicit permissions for each project.
+- Apps expose permission strings; Nexus stores, displays, assigns, and resolves them.
+- Backend applications are the only expected direct consumers of Nexus in MVP.
+- Permission system supports only positive permissions in MVP.
+- Permission negation is a future feature.
+- Permission snapshots with short TTL are supported to reduce Nexus load.
+
+## 3. Product Definition
+
+### 3.1 What Nexus Is
+
+Nexus is a platform service that provides shared operational capabilities to multiple backend projects.
+
+Nexus manages:
+
+- projects,
+- project API keys,
+- project modules,
+- isolated project users,
+- OAuth clients,
+- permission catalogs,
+- roles and assignments,
+- authorization checks,
+- audit events,
+- health and heartbeat status,
+- future modules such as Notify, Storage, Vault, Config, Metrics, Backups, and Document Generation.
+
+### 3.2 What Nexus Is Not
+
+Nexus is not:
+
+- a generic business application framework,
+- a replacement for domain logic inside apps,
+- a microservice platform,
+- a Kubernetes operator,
+- a frontend authorization library for MVP,
+- a multi-tenant SaaS product in the first version,
+- a place to hardcode project-specific business rules.
+
+### 3.3 Core Design Principle
+
+Apps declare what they can do. Nexus decides who can do it.
+
+Example:
+
+- F-Shop declares `orders.cancel`.
+- Nexus assigns `orders.cancel` to a role or user.
+- F-Shop asks Nexus whether user `usr_123` can perform `orders.cancel`.
+- F-Shop still owns the actual order cancellation logic.
+
+## 4. Conceptual Model
+
+```text
+Nexus Instance
+├── Admin Accounts
+├── Projects
+│   ├── Project API Keys
+│   ├── Enabled Modules
+│   ├── OAuth Clients
+│   ├── Project Users
+│   ├── Permission Catalog
+│   ├── Roles
+│   ├── Permission Assignments
+│   ├── Heartbeat State
+│   └── Audit Events
+└── Global Configuration
+```
+
+## 5. Domain Terms
+
+### 5.1 Nexus Instance
+
+A single running installation of Nexus. For personal use, there will usually be one production instance at a stable domain such as `nexus.unzor.xyz`.
+
+### 5.2 Admin Account
+
+An account used to access the Nexus dashboard. Admin accounts are separate from project users.
+
+Admin account types:
+
+- `INSTANCE_ADMIN`: can manage all projects and global settings.
+- `PROJECT_ADMIN`: can administer one or more assigned projects.
+
+### 5.3 Project
+
+A security and configuration boundary representing one application or product, such as F-Shop, GarageLab, or F-Drive.
+
+A project owns:
+
+- API keys,
+- project users,
+- OAuth clients,
+- permission catalog,
+- roles,
+- module configuration,
+- audit log entries.
+
+### 5.4 API Key
+
+A machine credential used by a backend app to identify itself to Nexus.
+
+Important rules:
+
+- An API key belongs to exactly one project.
+- A project may have multiple API keys.
+- API keys are never stored in plain text.
+- API keys have scopes.
+- API keys can be disabled, rotated, expired, and audited.
+
+### 5.5 Project User
+
+A user account inside a specific project auth realm.
+
+Important rules:
+
+- Users are isolated by project.
+- The same email can exist in different projects as different users.
+- A project user is not automatically a Nexus admin account.
+- A project user may receive roles and direct permissions inside that project.
+
+### 5.6 OAuth Client
+
+An OAuth2/OIDC client registered under a project.
+
+Examples:
+
+- `fshop-web`
+- `fshop-backend`
+- `garagelab-admin`
+
+MVP consumers are backend applications, but OAuth clients should still be modeled cleanly for future browser or mobile flows.
+
+### 5.7 Module
+
+A feature area that can be enabled or disabled per project.
+
+Core system capabilities are always present internally, but project-level access to modules is configurable.
+
+Candidate modules:
+
+- `identity`
+- `permissions`
+- `registry`
+- `notify`
+- `audit`
+- `storage`
+- `vault`
+- `config`
+- `metrics`
+- `backup`
+- `documents`
+
+### 5.8 Permission
+
+A string flag declared by an app and managed by Nexus.
+
+Examples:
+
+- `orders.read`
+- `orders.cancel`
+- `products.write`
+- `admin.dashboard.access`
+- `*`
+
+Permissions are positive-only in MVP.
+
+## 6. Architecture Overview
+
+```text
+                    ┌───────────────────────────┐
+                    │       Next.js Admin UI     │
+                    │  dashboard / project mgmt  │
+                    └──────────────┬────────────┘
+                                   │ HTTPS
+                                   ▼
+┌──────────────────────────────────────────────────────────────┐
+│                         Nexus API                            │
+│                    Spring Boot Modulith                      │
+│                                                              │
+│  ┌──────────────┐ ┌──────────────┐ ┌─────────────────────┐  │
+│  │ Admin/Auth   │ │ Project Core │ │ API Key Security    │  │
+│  └──────────────┘ └──────────────┘ └─────────────────────┘  │
+│  ┌──────────────┐ ┌──────────────┐ ┌─────────────────────┐  │
+│  │ Identity     │ │ Permissions  │ │ Registry/Heartbeat  │  │
+│  └──────────────┘ └──────────────┘ └─────────────────────┘  │
+│  ┌──────────────┐ ┌──────────────┐ ┌─────────────────────┐  │
+│  │ Audit        │ │ Notify       │ │ Future Modules      │  │
+│  └──────────────┘ └──────────────┘ └─────────────────────┘  │
+└──────────────────────────────┬───────────────────────────────┘
+                               │
+                               ▼
+                       ┌──────────────┐
+                       │ PostgreSQL   │
+                       └──────────────┘
+
+         ┌─────────────────────────────────────────────┐
+         │ Java apps with nexus-spring-boot-starter    │
+         │ API key + heartbeat + authz snapshot cache  │
+         └─────────────────────────────────────────────┘
+```
+
+## 7. Backend Modular Structure
+
+Recommended package structure:
+
+```text
+com.unzor.nexus
+├── NexusApplication.java
+├── shared
+│   ├── api
+│   ├── errors
+│   ├── persistence
+│   ├── security
+│   └── time
+├── admin
+│   ├── account
+│   ├── session
+│   └── web
+├── projects
+│   ├── domain
+│   ├── api
+│   └── persistence
+├── apikeys
+│   ├── domain
+│   ├── api
+│   └── security
+├── modules
+│   ├── domain
+│   ├── gate
+│   └── api
+├── identity
+│   ├── users
+│   ├── oauth
+│   ├── sessions
+│   └── tokens
+├── permissions
+│   ├── catalog
+│   ├── roles
+│   ├── assignments
+│   ├── resolver
+│   └── snapshot
+├── registry
+│   ├── heartbeat
+│   └── status
+├── audit
+│   ├── api
+│   ├── application
+│   ├── domain
+│   └── persistence
+└── notify
+    ├── telegram
+    ├── templates
+    └── delivery
+```
+
+Spring Modulith should be used to keep module boundaries explicit. Cross-module communication should happen through public application services or domain events, not direct repository access.
+
+Audit is a first-class module. Other modules should not write directly to the audit database tables. They should publish meaningful events or call a narrow audit application service with a stable audit command.
+
+## 8. Database and Persistence
+
+Use PostgreSQL as the primary database and Flyway or Liquibase for migrations.
+
+Recommended migration tool: Flyway.
+
+All tables should include:
+
+- `id`,
+- `created_at`,
+- `updated_at`,
+- where relevant, `deleted_at` or `disabled_at`,
+- optimistic locking where concurrent admin edits are likely.
+
+IDs should be stable and opaque. UUIDs are acceptable for MVP. Public IDs may later use readable prefixes such as `prj_`, `usr_`, `key_`.
+
+## 9. Core Data Model
+
+### 9.1 Admin Accounts
+
+```text
+nexus_admin_accounts
+- id
+- email
+- password_hash
+- display_name
+- status
+- mfa_enabled
+- last_login_at
+- created_at
+- updated_at
+```
+
+```text
+nexus_admin_roles
+- id
+- admin_account_id
+- role
+- project_id nullable
+- created_at
+```
+
+Rules:
+
+- `INSTANCE_ADMIN` has global access.
+- `PROJECT_ADMIN` must reference a project unless intentionally globalized later.
+- Admin accounts are not project users.
+
+### 9.2 Projects
+
+```text
+projects
+- id
+- slug
+- name
+- description
+- status
+- public_base_url nullable
+- created_at
+- updated_at
+```
+
+Rules:
+
+- `slug` is unique.
+- Project isolation is based on `project_id`.
+- Environment separation is out of scope for MVP.
+
+### 9.3 API Keys
+
+```text
+project_api_keys
+- id
+- project_id
+- name
+- key_prefix
+- key_hash
+- scopes
+- status
+- expires_at nullable
+- last_used_at nullable
+- created_by_admin_id nullable
+- created_at
+- updated_at
+```
+
+Rules:
+
+- Store only `key_prefix` and `key_hash`.
+- Show the full key only once when created.
+- Use constant-time comparison for key validation.
+- API key scopes are additive.
+- Disabled keys must be rejected immediately.
+- Expired keys must be rejected.
+
+Recommended API key format:
+
+```text
+nxs_<projectSlug>_<randomSecret>
+```
+
+The project slug helps humans identify the key, but the database lookup should rely on a safe prefix/hash strategy, not trust the slug blindly.
+
+### 9.4 Project Modules
+
+```text
+project_modules
+- id
+- project_id
+- module_key
+- enabled
+- config_json
+- created_at
+- updated_at
+```
+
+Rules:
+
+- One row per project/module.
+- Module checks happen before executing module-specific APIs.
+- Disabled modules return `403 module_disabled`.
+
+### 9.5 Project Users
+
+```text
+project_users
+- id
+- project_id
+- email
+- username nullable
+- password_hash
+- display_name
+- status
+- email_verified_at nullable
+- last_login_at nullable
+- authz_version
+- created_at
+- updated_at
+```
+
+Rules:
+
+- Unique `(project_id, email)`.
+- Users do not cross project boundaries.
+- `authz_version` increments when effective permissions may have changed.
+
+### 9.6 OAuth Clients
+
+```text
+project_oauth_clients
+- id
+- project_id
+- client_id
+- client_secret_hash nullable
+- name
+- redirect_uris
+- post_logout_redirect_uris
+- grant_types
+- scopes
+- require_pkce
+- status
+- created_at
+- updated_at
+```
+
+Rules:
+
+- OAuth clients are project-scoped.
+- Client IDs should be unique globally for operational simplicity.
+- Redirect URIs must match exactly.
+- PKCE should be required for public clients.
+
+### 9.7 Permission Catalog
+
+```text
+project_permissions
+- id
+- project_id
+- key
+- label
+- description nullable
+- source
+- enabled
+- deprecated
+- missing_from_last_sync
+- last_declared_at nullable
+- created_at
+- updated_at
+```
+
+Allowed sources:
+
+- `WEB`
+- `YAML`
+- `CODE`
+- `OPENAPI`
+- `SYSTEM`
+
+Rules:
+
+- Unique `(project_id, key)`.
+- Permission keys are immutable once created.
+- Metadata can be updated.
+- Missing permissions from app sync are not deleted automatically.
+- Deprecated permissions remain visible for audit/history.
+
+### 9.8 Roles
+
+```text
+project_roles
+- id
+- project_id
+- key
+- label
+- description nullable
+- system
+- created_at
+- updated_at
+```
+
+```text
+project_role_permissions
+- id
+- project_id
+- role_id
+- permission_key
+- created_at
+```
+
+Rules:
+
+- Unique `(project_id, key)`.
+- Role keys are stable.
+- Role permissions reference permission keys, not necessarily permission IDs, to support wildcard entries.
+
+### 9.9 User Assignments
+
+```text
+project_user_roles
+- id
+- project_id
+- user_id
+- role_id
+- created_at
+```
+
+```text
+project_user_permissions
+- id
+- project_id
+- user_id
+- permission_key
+- created_at
+```
+
+Rules:
+
+- Direct user permissions are positive-only in MVP.
+- Role permissions and direct user permissions are additive.
+- Every assignment mutation increments the target user's `authz_version`.
+
+### 9.10 Audit Events
+
+```text
+audit_events
+- id
+- project_id nullable
+- trace_id nullable
+- actor_type
+- actor_id nullable
+- action
+- resource_type
+- resource_id nullable
+- outcome
+- ip_address nullable
+- user_agent nullable
+- metadata_json
+- created_at
+```
+
+Actor types:
+
+- `ADMIN`
+- `PROJECT_USER`
+- `API_KEY`
+- `SYSTEM`
+
+Audit must be written for:
+
+- admin login success/failure,
+- project creation/update,
+- API key creation/disable/delete,
+- module enable/disable,
+- permission declaration,
+- role changes,
+- permission assignment changes,
+- auth login success/failure,
+- token revocation,
+- sensitive module actions.
+
+Audit event payloads must be intentionally small. Store enough metadata to understand what happened, but never store full API keys, passwords, refresh tokens, authorization codes, or raw JWTs.
+
+### 9.11 Heartbeat
+
+```text
+project_heartbeats
+- id
+- project_id
+- api_key_id
+- instance_id
+- app_name
+- app_version nullable
+- status
+- metadata_json
+- last_seen_at
+- created_at
+- updated_at
+```
+
+Rules:
+
+- Heartbeat is tied to the API key that reported it.
+- Multiple app instances can report for the same project.
+- Offline status is derived from `last_seen_at` and configured timeout.
+
+## 10. API Authentication
+
+Nexus has two API categories:
+
+### 10.1 Admin API
+
+Used by the Next.js dashboard.
+
+Recommended path:
+
+```text
+/api/admin/v1/...
+```
+
+Authentication:
+
+- Admin login using secure HTTP-only cookies, or
+- short-lived admin JWTs with refresh handled by secure cookie.
+
+MVP recommendation:
+
+- Use HTTP-only session cookie for dashboard.
+- Use Spring Security session support.
+- Keep dashboard auth separate from project OAuth.
+
+### 10.2 Project API
+
+Used by backend applications.
+
+Recommended path:
+
+```text
+/api/v1/...
+```
+
+Authentication:
+
+```http
+X-Nexus-Api-Key: nxs_fshop_...
+```
+
+Rules:
+
+- API key identifies the project.
+- API key scopes determine what the backend may call.
+- Project ID should not be trusted from request bodies when an API key is present.
+- If project is disabled, reject the request.
+- If module is disabled, reject module-specific requests.
+
+## 11. Error Format
+
+Use `application/problem+json` style responses.
+
+Example:
+
+```json
+{
+  "type": "https://docs.nexus.local/errors/module-disabled",
+  "title": "Module disabled",
+  "status": 403,
+  "code": "module_disabled",
+  "detail": "The permissions module is disabled for this project.",
+  "traceId": "01J..."
+}
+```
+
+Common codes:
+
+- `invalid_api_key`
+- `api_key_disabled`
+- `api_key_expired`
+- `missing_scope`
+- `project_disabled`
+- `module_disabled`
+- `permission_denied`
+- `validation_error`
+- `resource_not_found`
+- `conflict`
+- `rate_limited`
+- `internal_error`
+
+## 12. Project and API Key Contracts
+
+### 12.1 Create Project
+
+Admin API:
+
+```http
+POST /api/admin/v1/projects
+Content-Type: application/json
+```
+
+Request:
+
+```json
+{
+  "slug": "f-shop",
+  "name": "F-Shop",
+  "description": "Ecommerce project"
+}
+```
+
+Response:
+
+```json
+{
+  "id": "prj_123",
+  "slug": "f-shop",
+  "name": "F-Shop",
+  "status": "active"
+}
+```
+
+### 12.2 Create API Key
+
+Admin API:
+
+```http
+POST /api/admin/v1/projects/{projectId}/api-keys
+Content-Type: application/json
+```
+
+Request:
+
+```json
+{
+  "name": "fshop-backend",
+  "scopes": [
+    "registry:heartbeat",
+    "permissions:declare",
+    "permissions:check",
+    "authz:snapshot",
+    "notify:send"
+  ],
+  "expiresAt": null
+}
+```
+
+Response:
+
+```json
+{
+  "id": "key_123",
+  "name": "fshop-backend",
+  "prefix": "nxs_f-shop_abc123",
+  "secret": "nxs_f-shop_abc123.full-secret-visible-once",
+  "scopes": [
+    "registry:heartbeat",
+    "permissions:declare",
+    "permissions:check",
+    "authz:snapshot",
+    "notify:send"
+  ]
+}
+```
+
+Rules:
+
+- `secret` is only returned once.
+- Subsequent reads show metadata only.
+- Key creation writes an audit event.
+
+## 13. Registry and Heartbeat
+
+### 13.1 Heartbeat
+
+Project API:
+
+```http
+POST /api/v1/registry/heartbeat
+X-Nexus-Api-Key: nxs_fshop_...
+Content-Type: application/json
+```
+
+Required scope:
+
+```text
+registry:heartbeat
+```
+
+Request:
+
+```json
+{
+  "instanceId": "fshop-api-main-01",
+  "appName": "F-Shop API",
+  "appVersion": "1.4.0",
+  "status": "up",
+  "metadata": {
+    "javaVersion": "21",
+    "springProfile": "prod"
+  }
+}
+```
+
+Response:
+
+```json
+{
+  "projectId": "prj_123",
+  "receivedAt": "2026-05-30T14:00:00Z",
+  "nextHeartbeatInSeconds": 30
+}
+```
+
+Rules:
+
+- SDK sends heartbeat every 30 seconds by default.
+- Nexus marks an instance offline if no heartbeat is received for 90 seconds by default.
+- Offline detection can later trigger Notify.
+
+## 14. Permission System
+
+### 14.1 Permission Philosophy
+
+Nexus should behave like a project-level permission authority:
+
+- Apps declare permission flags.
+- Admins assign permissions to roles and users.
+- Apps ask Nexus whether a user has a permission.
+- Nexus returns an answer based on explicit assignments.
+
+Nexus does not know project business rules.
+
+### 14.2 Permission Key Format
+
+Recommended grammar:
+
+```text
+permission = segment("." segment)* | wildcard
+segment    = lowercase letters, numbers, hyphen, underscore
+wildcard   = "*" or prefix ".*"
+```
+
+Examples:
+
+```text
+orders.read
+orders.cancel
+products.write
+admin.dashboard.access
+orders.*
+*
+```
+
+Recommended convention:
+
+```text
+<resource>.<action>
+<area>.<resource>.<action>
+```
+
+Examples:
+
+```text
+orders.read
+orders.refund
+admin.users.invite
+billing.invoices.export
+```
+
+### 14.3 MVP Matching Rules
+
+Positive permissions only.
+
+A user is allowed if any effective permission matches:
+
+- exact match: `orders.cancel` matches `orders.cancel`,
+- namespace wildcard: `orders.*` matches `orders.cancel`,
+- global wildcard: `*` matches everything.
+
+No negative permissions in MVP.
+
+### 14.4 Future Matching Rules
+
+Future versions may support:
+
+```text
+-orders.cancel
+```
+
+Potential precedence:
+
+1. explicit deny,
+2. explicit allow,
+3. wildcard deny,
+4. wildcard allow,
+5. default deny.
+
+This must not be added until there is a clear test suite and UI explanation, because negation makes permission resolution much easier to misunderstand.
+
+### 14.5 Effective Permissions
+
+Effective permissions for a user:
+
+```text
+direct user permissions
+UNION role permissions from all assigned roles
+```
+
+MVP has no inheritance between roles.
+
+Future role inheritance may be considered, but it should not be part of v1.
+
+### 14.6 Permission Declaration Sources
+
+Permissions can be registered through:
+
+1. Dashboard/manual web entry.
+2. Local `application.yml`.
+3. Hardcoded declaration in Java code.
+
+All declarations go into the same project permission catalog.
+
+### 14.7 YAML Declaration
+
+Example:
+
+```yaml
+nexus:
+  permissions:
+    - key: orders.read
+      label: Ver pedidos
+      description: Permite listar y consultar pedidos
+    - key: orders.cancel
+      label: Cancelar pedidos
+      description: Permite cancelar pedidos abiertos
+    - key: admin.dashboard.access
+      label: Acceso al panel admin
+```
+
+### 14.8 Code Declaration
+
+Example:
+
+```java
+@Bean
+NexusPermissionDeclaration permissions() {
+    return NexusPermissionDeclaration.of(
+        Permission.of("orders.read", "Ver pedidos"),
+        Permission.of("orders.cancel", "Cancelar pedidos"),
+        Permission.of("admin.dashboard.access", "Acceso al panel admin")
+    );
+}
+```
+
+### 14.9 Declaration Sync API
+
+Project API:
+
+```http
+PUT /api/v1/permissions/declarations
+X-Nexus-Api-Key: nxs_fshop_...
+Content-Type: application/json
+```
+
+Required scope:
+
+```text
+permissions:declare
+```
+
+Request:
+
+```json
+{
+  "source": "YAML",
+  "declarationId": "fshop-api-default",
+  "permissions": [
+    {
+      "key": "orders.read",
+      "label": "Ver pedidos",
+      "description": "Permite listar y consultar pedidos"
+    },
+    {
+      "key": "orders.cancel",
+      "label": "Cancelar pedidos",
+      "description": "Permite cancelar pedidos abiertos"
+    }
+  ]
+}
+```
+
+Response:
+
+```json
+{
+  "projectId": "prj_123",
+  "created": ["orders.read"],
+  "updated": ["orders.cancel"],
+  "markedMissing": ["products.write"],
+  "ignored": []
+}
+```
+
+Rules:
+
+- Sync is a merge, not a destructive replace.
+- Existing assignments are never deleted by sync.
+- Missing permissions are marked as `missing_from_last_sync = true`.
+- Admins can later deprecate or delete unused permissions manually.
+- Web-created permissions are not removed by app sync.
+
+### 14.10 Permission Check API
+
+Project API:
+
+```http
+POST /api/v1/authz/check
+X-Nexus-Api-Key: nxs_fshop_...
+Content-Type: application/json
+```
+
+Required scope:
+
+```text
+permissions:check
+```
+
+Request:
+
+```json
+{
+  "userId": "usr_123",
+  "permission": "orders.cancel"
+}
+```
+
+Response:
+
+```json
+{
+  "allowed": true,
+  "userId": "usr_123",
+  "permission": "orders.cancel",
+  "matchedBy": "orders.*",
+  "authzVersion": 42
+}
+```
+
+Rules:
+
+- Default is deny.
+- Unknown user returns deny or `404` based on SDK configuration; MVP should prefer deny for safer behavior.
+- Unknown permission returns deny and may include warning metadata.
+
+### 14.11 Permission Snapshot API
+
+Project API:
+
+```http
+GET /api/v1/authz/users/{userId}/snapshot
+X-Nexus-Api-Key: nxs_fshop_...
+```
+
+Required scope:
+
+```text
+authz:snapshot
+```
+
+Response:
+
+```json
+{
+  "userId": "usr_123",
+  "projectId": "prj_123",
+  "authzVersion": 42,
+  "roles": ["manager"],
+  "permissions": [
+    "orders.read",
+    "orders.cancel",
+    "products.*"
+  ],
+  "expiresAt": "2026-05-30T14:05:00Z"
+}
+```
+
+Rules:
+
+- Default TTL: 30 seconds.
+- Recommended configurable range: 5 to 300 seconds.
+- SDK resolves permissions locally while snapshot is valid.
+- If snapshot expires and Nexus is unavailable, SDK denies permission.
+- Any assignment mutation increments `authzVersion`.
+- Future optimization may support conditional requests using `If-None-Match` or version checks.
+
+## 15. Identity and Auth
+
+### 15.1 Identity Scope
+
+Each project has isolated users and OAuth clients.
+
+There is no global end-user identity in MVP.
+
+The same email in two projects represents two separate project users.
+
+### 15.2 Authorization Server
+
+Use Spring Authorization Server for production implementation.
+
+Nexus should document the low-level concepts it relies on:
+
+- `RegisteredClientRepository`: stores OAuth clients.
+- `OAuth2AuthorizationService`: stores authorization codes, access tokens, refresh tokens.
+- `OAuth2AuthorizationConsentService`: stores user consent if used.
+- `OAuth2TokenGenerator`: creates tokens.
+- `JWKSource`: exposes signing keys.
+- Authorization endpoint: starts login/consent.
+- Token endpoint: exchanges code/refresh/client credentials.
+- JWK Set endpoint: exposes public keys.
+- OIDC discovery endpoint: tells clients where endpoints and keys are.
+
+### 15.3 Project Issuer Model
+
+Each project should have its own issuer.
+
+Recommended issuer:
+
+```text
+https://nexus.example.com/p/{projectSlug}
+```
+
+Example:
+
+```text
+https://nexus.unzor.xyz/p/f-shop
+```
+
+Recommended endpoints:
+
+```text
+GET  /p/{projectSlug}/.well-known/openid-configuration
+GET  /p/{projectSlug}/oauth2/authorize
+POST /p/{projectSlug}/oauth2/token
+GET  /p/{projectSlug}/oauth2/jwks
+POST /p/{projectSlug}/oauth2/revoke
+GET  /p/{projectSlug}/userinfo
+```
+
+JWT claims:
+
+```json
+{
+  "iss": "https://nexus.unzor.xyz/p/f-shop",
+  "sub": "usr_123",
+  "aud": "fshop-api",
+  "exp": 1770000000,
+  "iat": 1769996400,
+  "scope": "openid profile",
+  "project_id": "prj_123",
+  "authz_version": 42
+}
+```
+
+Rules:
+
+- Tokens must never cross project boundaries.
+- Project ID must be included as a claim.
+- Permissions should not be fully embedded by default; use snapshot API for fresh authorization.
+- Roles may optionally be included later, but Nexus remains the permission source of truth.
+
+### 15.4 Auth Flow MVP
+
+Recommended production-first flow:
+
+- Authorization Code Flow with PKCE.
+- Refresh tokens for trusted clients where appropriate.
+- Strict redirect URI validation.
+- JWT access tokens signed by Nexus.
+- JWKS endpoint for token validation.
+
+For Java backend apps:
+
+- Backend initiates login redirect.
+- Nexus authenticates user in project realm.
+- Nexus redirects back to app.
+- App exchanges code for tokens.
+- App validates token or asks Nexus depending on integration mode.
+- App asks Nexus for permission snapshot when it needs authorization decisions.
+
+### 15.5 Fail-Closed Behavior
+
+If Nexus is unavailable:
+
+- new login fails,
+- token refresh fails,
+- permission check fails,
+- expired permission snapshot fails,
+- secret/config reads fail unless explicitly cached by a future module.
+
+This is intentional because Nexus is the source of truth.
+
+## 16. Module System
+
+### 16.1 Module Gate
+
+Every project-level API must pass:
+
+1. API key authentication.
+2. Project status check.
+3. API key scope check.
+4. Module enabled check, when endpoint belongs to a module.
+5. Endpoint-specific authorization.
+
+### 16.2 Core vs Project Modules
+
+Always-on internal capabilities:
+
+- project management,
+- API key validation,
+- audit write path,
+- admin dashboard access.
+
+Project-configurable modules:
+
+- identity,
+- permissions,
+- registry,
+- notify,
+- storage,
+- vault,
+- config,
+- metrics,
+- backup,
+- documents.
+
+Recommended MVP default:
+
+- enable `registry`,
+- enable `permissions`,
+- enable `identity` when project auth is needed.
+
+## 17. Admin Dashboard
+
+### 17.1 Dashboard Goals
+
+The dashboard is the control surface for Nexus.
+
+It must allow:
+
+- admin login,
+- project listing,
+- project creation/editing,
+- module enable/disable,
+- API key creation/revocation,
+- permission catalog management,
+- role management,
+- user permission assignment,
+- heartbeat/status visibility,
+- audit browsing.
+
+### 17.2 Route Map
+
+Recommended Next.js routes:
+
+```text
+/login
+/dashboard
+/projects
+/projects/new
+/projects/[projectId]
+/projects/[projectId]/overview
+/projects/[projectId]/api-keys
+/projects/[projectId]/modules
+/projects/[projectId]/users
+/projects/[projectId]/users/[userId]
+/projects/[projectId]/permissions
+/projects/[projectId]/roles
+/projects/[projectId]/oauth-clients
+/projects/[projectId]/heartbeat
+/projects/[projectId]/audit
+/settings/admins
+/settings/system
+```
+
+### 17.3 UI Principles
+
+- Operational dashboard, not marketing site.
+- Dense, clear, quiet UI.
+- Fast scanning over decorative layout.
+- Tables for projects, keys, users, permissions, roles, and audit.
+- Confirmation dialogs for destructive or sensitive actions.
+- Clear disabled states when a module is inactive.
+- Show API key secret once after creation.
+- Never show stored API key secrets again.
+
+## 18. Java SDK
+
+### 18.1 Artifact
+
+Recommended artifact:
+
+```groovy
+implementation "com.unzor:nexus-spring-boot-starter:1.0.0"
+```
+
+### 18.2 Configuration
+
+```yaml
+nexus:
+  url: https://nexus.unzor.xyz
+  api-key: ${NEXUS_API_KEY}
+  app-name: F-Shop API
+  instance-id: fshop-api-main-01
+  heartbeat:
+    enabled: true
+    interval: 30s
+  permissions:
+    snapshot-ttl: 30s
+    fail-closed: true
+    declarations:
+      - key: orders.read
+        label: Ver pedidos
+      - key: orders.cancel
+        label: Cancelar pedidos
+```
+
+### 18.3 SDK Responsibilities
+
+The Java SDK should:
+
+- auto-configure a `NexusClient`,
+- send heartbeat,
+- declare permissions from YAML,
+- declare permissions from code providers,
+- fetch and cache permission snapshots,
+- resolve wildcard permissions locally,
+- deny on expired cache when Nexus is unavailable,
+- expose typed clients,
+- implement retry policies only where safe,
+- avoid hiding security failures.
+
+### 18.4 SDK Client Shape
+
+```java
+@Autowired
+NexusClient nexus;
+
+boolean allowed = nexus.permissions()
+    .can(userId, "orders.cancel");
+
+nexus.notify()
+    .send("Archivo subido correctamente");
+```
+
+### 18.5 Future SDKs
+
+All SDKs must be generated or guided by OpenAPI contracts.
+
+Future SDK targets:
+
+- JavaScript/TypeScript,
+- Python,
+- Go,
+- Kotlin.
+
+The Java SDK must not become the only source of truth.
+
+## 19. OpenAPI Requirement
+
+Nexus must publish a complete OpenAPI document for:
+
+- admin API,
+- project API,
+- error shapes,
+- authentication headers,
+- module endpoints.
+
+Recommended endpoints:
+
+```text
+GET /api/docs/openapi.json
+GET /api/docs
+```
+
+OpenAPI enables:
+
+- SDK generation,
+- integration tests,
+- future open source adoption,
+- clearer contracts between Nexus and apps.
+
+## 20. Deployment
+
+### 20.1 Docker Compose Shape
+
+Recommended services:
+
+```text
+nexus-api
+nexus-web
+postgres
+reverse-proxy
+```
+
+Alternative for simplicity:
+
+```text
+nexus-api
+postgres
+```
+
+with Next.js dashboard hosted separately or built as static assets if the chosen mode allows it.
+
+### 20.2 Required Environment Variables
+
+```text
+NEXUS_PUBLIC_URL
+NEXUS_DATABASE_URL
+NEXUS_DATABASE_USERNAME
+NEXUS_DATABASE_PASSWORD
+NEXUS_ADMIN_BOOTSTRAP_EMAIL
+NEXUS_ADMIN_BOOTSTRAP_PASSWORD
+NEXUS_TOKEN_SIGNING_KEY_PATH
+NEXUS_API_KEY_PEPPER
+NEXUS_COOKIE_SECRET
+```
+
+Future module variables:
+
+```text
+NEXUS_TELEGRAM_BOT_TOKEN
+NEXUS_TELEGRAM_DEFAULT_CHAT_ID
+NEXUS_VAULT_MASTER_KEY
+NEXUS_STORAGE_PATH
+```
+
+### 20.3 Operational Requirements
+
+MVP should include:
+
+- health endpoint,
+- readiness endpoint,
+- structured logs,
+- database migrations on startup or deploy,
+- Docker restart policy,
+- backup instructions for PostgreSQL,
+- bootstrap admin flow.
+
+## 21. Security Requirements
+
+### 21.1 API Keys
+
+- Generate high-entropy keys.
+- Store only hashes.
+- Display full secret once.
+- Support rotation.
+- Support disable/revoke.
+- Track last used time.
+- Audit all key management operations.
+
+### 21.2 Passwords
+
+- Use Argon2id or bcrypt with strong parameters.
+- Never log passwords.
+- Rate limit login attempts.
+- Audit failed login attempts without leaking sensitive data.
+
+### 21.3 Tokens
+
+- Use asymmetric signing keys for JWTs.
+- Expose public keys through JWKS.
+- Support key rotation in future.
+- Keep access tokens short-lived.
+- Store refresh tokens securely.
+
+### 21.4 Admin Dashboard
+
+- HTTP-only secure cookies.
+- CSRF protection if cookie-based sessions are used.
+- SameSite cookie settings.
+- Session revocation.
+- Audit sensitive changes.
+
+### 21.5 Authorization
+
+- Default deny.
+- Project isolation enforced at repository/query level and service level.
+- API key project identity must override any request-provided project ID.
+- Avoid "admin by naming convention"; admin access must be explicit.
+
+## 22. Audit Strategy
+
+Audit is a core capability, not an optional nice-to-have.
+
+Audit events should be:
+
+- append-only,
+- queryable by project,
+- queryable by actor,
+- queryable by action,
+- visible in dashboard,
+- retained long enough for operational debugging.
+
+Audit lives in its own Modulith module:
+
+```text
+audit/
+├── api/
+├── application/
+├── domain/
+└── persistence/
+```
+
+Primary responsibilities:
+
+- receive audit commands from other modules,
+- subscribe to important application events,
+- normalize actor, resource, outcome, and trace metadata,
+- persist append-only audit events,
+- expose admin dashboard queries.
+
+Recommended audit command shape:
+
+```text
+RecordAuditEventCommand
+- project_id nullable
+- trace_id nullable
+- actor
+- action
+- resource
+- outcome
+- metadata
+```
+
+Audit should not block critical flows if the audit write fails due to transient infrastructure issues, but failures must be logged and observable. For sensitive security actions, prefer transactional audit writes where possible.
+
+Every audit event created during an HTTP request should include the request `traceId`.
+
+## 22.1 ADRs
+
+Architectural decisions must be captured as ADRs under `docs/adr`.
+
+ADRs should document decisions, not obvious implementation details. Good ADR topics:
+
+- Nexus as source of truth,
+- modular monolith with Spring Modulith,
+- positive-only permissions in MVP,
+- API keys identifying projects,
+- PostgreSQL as primary database,
+- trace IDs for request correlation.
+
+## 23. Roadmap
+
+### Phase 0: Bootstrap
+
+Goal: create a runnable foundation.
+
+Deliverables:
+
+- Spring Boot project.
+- Gradle wrapper.
+- PostgreSQL integration.
+- Flyway migrations.
+- Testcontainers if desired.
+- Health endpoint.
+- Basic error format.
+- Docker Compose for API and database.
+- `./gradlew build` passes.
+
+### Phase 1: Admin Core and Projects
+
+Goal: create the control plane base.
+
+Deliverables:
+
+- Admin account model.
+- Bootstrap admin.
+- Admin login/session.
+- Project CRUD.
+- Project module table.
+- Audit event table.
+- Next.js dashboard scaffold.
+- Project list/detail views.
+
+### Phase 2: API Keys and Registry
+
+Goal: allow apps to identify themselves.
+
+Deliverables:
+
+- Multiple API keys per project.
+- API key generation and one-time display.
+- API key validation filter.
+- API key scopes.
+- Heartbeat endpoint.
+- Project heartbeat dashboard.
+- Offline detection.
+
+### Phase 3: Permissions
+
+Goal: centralize authorization flags.
+
+Deliverables:
+
+- Permission catalog.
+- Manual permission management in dashboard.
+- YAML declaration via SDK/API.
+- Code declaration via SDK.
+- Roles.
+- User role assignment.
+- Direct user permission assignment.
+- Permission check endpoint.
+- Permission snapshot endpoint.
+- Wildcard resolver.
+- Positive-only permission tests.
+
+### Phase 4: Identity
+
+Goal: project-isolated auth.
+
+Deliverables:
+
+- Project users.
+- OAuth clients per project.
+- Spring Authorization Server integration.
+- Project-specific issuer.
+- Authorization Code + PKCE.
+- JWT signing.
+- JWKS endpoint.
+- Refresh tokens.
+- Session visibility/revocation.
+- Auth audit events.
+- Documentation of Spring Authorization Server internals.
+
+### Phase 5: Java SDK
+
+Goal: make Java app integration easy.
+
+Deliverables:
+
+- `nexus-spring-boot-starter`.
+- Auto-configuration.
+- API key configuration.
+- Heartbeat client.
+- Permission declaration client.
+- Permission snapshot cache.
+- Wildcard permission resolver.
+- Fail-closed behavior.
+- Integration sample app.
+
+### Phase 6: Notify
+
+Goal: centralize notifications.
+
+Deliverables:
+
+- Notify module toggle.
+- Telegram channel.
+- Message send endpoint.
+- Notification history.
+- Notification audit.
+- SDK client.
+
+### Phase 7: Future Shared Services
+
+Candidate modules:
+
+- Storage,
+- Secrets Vault,
+- Config,
+- Metrics/Uptime,
+- Backup/Snapshot,
+- Document Generator,
+- Agent Hub,
+- Runbook Engine,
+- RAG.
+
+## 24. Future Features
+
+### 24.1 Environments
+
+Future model:
+
+```text
+Project
+└── Environments
+    ├── dev
+    ├── staging
+    └── prod
+```
+
+This affects:
+
+- API keys,
+- users,
+- OAuth clients,
+- module config,
+- permission assignments,
+- secrets,
+- storage.
+
+Do not add this until there is a real need.
+
+### 24.2 Negative Permissions
+
+Future syntax:
+
+```text
+-orders.cancel
+```
+
+Needs:
+
+- deterministic precedence,
+- UI explanation,
+- test matrix,
+- audit clarity.
+
+### 24.3 Permission Inheritance
+
+Future role inheritance:
+
+```text
+admin inherits manager
+manager inherits viewer
+```
+
+This should wait until simple roles are proven insufficient.
+
+### 24.4 External Identity Federation
+
+Future options:
+
+- Google login,
+- GitHub login,
+- SAML,
+- LDAP,
+- passkeys.
+
+### 24.5 Open Source Readiness
+
+Before open sourcing:
+
+- remove personal assumptions,
+- document installation,
+- document threat model,
+- add example apps,
+- add contribution guide,
+- add license,
+- add database migration policy,
+- add security reporting policy.
+
+## 25. Quality Gate
+
+Required backend quality gate:
+
+```bash
+./gradlew build
+```
+
+The build should include:
+
+- compilation,
+- unit tests,
+- integration tests included in Gradle lifecycle where feasible,
+- static checks configured in Gradle if adopted.
+
+Frontend quality gates should be defined when the Next.js package is scaffolded. Recommended future commands:
+
+```bash
+npm run lint
+npm run build
+```
+
+## 26. Key Implementation Rules
+
+- API contracts come before SDK convenience.
+- Nexus APIs must be versioned.
+- Project isolation must be enforced everywhere.
+- Default authorization result is deny.
+- API keys identify projects.
+- Multiple API keys per project are first-class.
+- API key scopes must be checked for project API endpoints.
+- Permission sync must never delete assignments.
+- Permission snapshots must expire.
+- Expired snapshots fail closed.
+- OAuth tokens must not cross project boundaries.
+- Dashboard admin accounts are separate from project users.
+- Audit security-sensitive operations.
+- Do not add microservices before the modular monolith is under real pressure.
+
+## 27. MVP Cut Line
+
+The minimum useful Nexus should include:
+
+- admin login,
+- projects,
+- multiple API keys per project,
+- module activation,
+- heartbeat,
+- isolated project users,
+- permission catalog,
+- roles,
+- positive permission assignment,
+- permission check,
+- permission snapshot,
+- basic audit,
+- Java SDK with heartbeat and permissions.
+
+Notify can follow immediately after MVP because it provides high personal value, but it does not need to block the permission/auth core.
