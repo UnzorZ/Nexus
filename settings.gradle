@@ -1,1 +1,4 @@
 rootProject.name = 'Nexus'
+
+include 'apps:api'
+project(':apps:api').name = 'nexus-api'
