@@ -83,8 +83,10 @@ Example:
 
 ```text
 Nexus Instance
-├── Admin Accounts
+├── Nexus Accounts
+├── Instance Administrator Grants
 ├── Projects
+│   ├── Project Memberships
 │   ├── Project API Keys
 │   ├── Enabled Modules
 │   ├── OAuth Clients
@@ -103,16 +105,35 @@ Nexus Instance
 
 A single running installation of Nexus. For personal use, there will usually be one production instance at a stable domain such as `nexus.unzor.xyz`.
 
-### 5.2 Admin Account
+### 5.2 Nexus Account
 
-An account used to access the Nexus dashboard. Admin accounts are separate from project users.
+A person account used to access the Nexus dashboard, create projects, and manage
+projects through explicit memberships.
 
-Admin account types:
+Important rules:
 
-- `INSTANCE_ADMIN`: can manage all projects and global settings.
-- `PROJECT_ADMIN`: can administer one or more assigned projects.
+- A Nexus account is not a project user.
+- Most Nexus accounts are not instance administrators.
+- `INSTANCE_ADMIN` is a global grant assigned to a Nexus account, not a separate
+  account type.
+- An instance administrator can manage all projects and global settings.
+- Project access is granted through project memberships.
 
-### 5.3 Project
+### 5.3 Project Membership
+
+A relationship that grants a Nexus account access to manage a specific project
+from the dashboard.
+
+Recommended membership roles:
+
+- `OWNER`: controls the project and its memberships.
+- `ADMIN`: manages project configuration and resources.
+- `MEMBER`: has limited dashboard access defined by project policy.
+
+The account that creates a project receives its first `OWNER` membership.
+Project administration is not represented by an `INSTANCE_ADMIN` grant.
+
+### 5.4 Project
 
 A security and configuration boundary representing one application or product, such as F-Shop, GarageLab, or F-Drive.
 
@@ -126,7 +147,7 @@ A project owns:
 - module configuration,
 - audit log entries.
 
-### 5.4 API Key
+### 5.5 API Key
 
 A machine credential used by a backend app to identify itself to Nexus.
 
@@ -138,7 +159,7 @@ Important rules:
 - API keys have scopes.
 - API keys can be disabled, rotated, expired, and audited.
 
-### 5.5 Project User
+### 5.6 Project User
 
 A user account inside a specific project auth realm.
 
@@ -146,10 +167,10 @@ Important rules:
 
 - Users are isolated by project.
 - The same email can exist in different projects as different users.
-- A project user is not automatically a Nexus admin account.
+- A project user is not a Nexus account and cannot access the Nexus dashboard.
 - A project user may receive roles and direct permissions inside that project.
 
-### 5.6 OAuth Client
+### 5.7 OAuth Client
 
 An OAuth2/OIDC client registered under a project.
 
@@ -161,7 +182,7 @@ Examples:
 
 MVP consumers are backend applications, but OAuth clients should still be modeled cleanly for future browser or mobile flows.
 
-### 5.7 Module
+### 5.8 Module
 
 A feature area that can be enabled or disabled per project.
 
@@ -181,7 +202,7 @@ Candidate modules:
 - `backup`
 - `documents`
 
-### 5.8 Permission
+### 5.9 Permission
 
 A string flag declared by an app and managed by Nexus.
 
@@ -199,8 +220,8 @@ Permissions are positive-only in MVP.
 
 ```text
                     ┌───────────────────────────┐
-                    │       Next.js Admin UI     │
-                    │  dashboard / project mgmt  │
+                    │       Next.js Admin UI    │
+                    │  dashboard / project mgmt │
                     └──────────────┬────────────┘
                                    │ HTTPS
                                    ▼
@@ -288,6 +309,12 @@ Spring Modulith should be used to keep module boundaries explicit. Cross-module 
 
 Audit is a first-class module. Other modules should not write directly to the audit database tables. They should publish meaningful events or call a narrow audit application service with a stable audit command.
 
+Module-owned entities remain in their owning module even when several modules
+reference them. Cross-module persistence stores typed identifiers such as
+`NexusAccountId`, `ProjectId`, and `ProjectUserId`; it must not create JPA
+associations to entities owned by another module. `shared` may contain these
+stable identifiers and narrow contracts, but not account or membership entities.
+
 ## 8. Database and Persistence
 
 Use PostgreSQL as the primary database and Flyway or Liquibase for migrations.
@@ -306,10 +333,10 @@ IDs should be stable and opaque. UUIDs are acceptable for MVP. Public IDs may la
 
 ## 9. Core Data Model
 
-### 9.1 Admin Accounts
+### 9.1 Nexus Accounts and Control-Plane Access
 
 ```text
-nexus_admin_accounts
+nexus_accounts
 - id
 - email
 - password_hash
@@ -322,19 +349,38 @@ nexus_admin_accounts
 ```
 
 ```text
-nexus_admin_roles
+nexus_instance_roles
 - id
-- admin_account_id
+- nexus_account_id
 - role
-- project_id nullable
 - created_at
+```
+
+```text
+project_memberships
+- id
+- project_id
+- nexus_account_id
+- role
+- status
+- created_at
+- updated_at
 ```
 
 Rules:
 
-- `INSTANCE_ADMIN` has global access.
-- `PROJECT_ADMIN` must reference a project unless intentionally globalized later.
-- Admin accounts are not project users.
+- `nexus_accounts.email` is globally unique.
+- `INSTANCE_ADMIN` is an instance role and has global access.
+- Project roles are `OWNER`, `ADMIN`, or `MEMBER` and belong to
+  `project_memberships`.
+- Unique `(project_id, nexus_account_id)`.
+- Every project must retain at least one active `OWNER`.
+- Nexus accounts and project users are separate identities.
+- `NexusAccount` is owned by `admin`; `ProjectMembership` is owned by `projects`.
+
+The concrete entities, status transitions, Spring Security principals, and
+module boundaries are documented in
+[`docs/auth/accounts-and-project-users.md`](auth/accounts-and-project-users.md).
 
 ### 9.2 Projects
 
@@ -369,7 +415,7 @@ project_api_keys
 - status
 - expires_at nullable
 - last_used_at nullable
-- created_by_admin_id nullable
+- created_by_account_id nullable
 - created_at
 - updated_at
 ```
@@ -433,6 +479,8 @@ Rules:
 - Unique `(project_id, email)`.
 - Users do not cross project boundaries.
 - `authz_version` increments when effective permissions may have changed.
+- `ProjectUser` does not implement `UserDetails`; `ProjectUserPrincipal` adapts
+  it to Spring Security while preserving `project_id`.
 
 ### 9.6 OAuth Clients
 
@@ -570,14 +618,14 @@ audit_events
 
 Actor types:
 
-- `ADMIN`
+- `NEXUS_ACCOUNT`
 - `PROJECT_USER`
 - `API_KEY`
 - `SYSTEM`
 
 Audit must be written for:
 
-- admin login success/failure,
+- Nexus account login success/failure,
 - project creation/update,
 - API key creation/disable/delete,
 - module enable/disable,
@@ -629,8 +677,8 @@ Recommended path:
 
 Authentication:
 
-- Admin login using secure HTTP-only cookies, or
-- short-lived admin JWTs with refresh handled by secure cookie.
+- Nexus account login using secure HTTP-only cookies, or
+- short-lived dashboard JWTs with refresh handled by secure cookie.
 
 MVP recommendation:
 
@@ -1254,9 +1302,10 @@ The dashboard is the control surface for Nexus.
 
 It must allow:
 
-- admin login,
+- Nexus account login,
 - project listing,
 - project creation/editing,
+- project membership management,
 - module enable/disable,
 - API key creation/revocation,
 - permission catalog management,
@@ -1285,7 +1334,7 @@ Recommended Next.js routes:
 /projects/[projectId]/oauth-clients
 /projects/[projectId]/heartbeat
 /projects/[projectId]/audit
-/settings/admins
+/settings/accounts
 /settings/system
 ```
 
@@ -1451,7 +1500,7 @@ MVP should include:
 - database migrations on startup or deploy,
 - Docker restart policy,
 - backup instructions for PostgreSQL,
-- bootstrap admin flow.
+- bootstrap Nexus account and instance administrator flow.
 
 ## 21. Security Requirements
 
@@ -1574,16 +1623,18 @@ Deliverables:
 - Docker Compose for API and database.
 - `./gradlew build` passes.
 
-### Phase 1: Admin Core and Projects
+### Phase 1: Nexus Accounts and Projects
 
 Goal: create the control plane base.
 
 Deliverables:
 
-- Admin account model.
-- Bootstrap admin.
-- Admin login/session.
+- Nexus account model.
+- Bootstrap Nexus account with `INSTANCE_ADMIN`.
+- Nexus account login/session.
+- Instance administrator grants.
 - Project CRUD.
+- Project memberships and ownership roles.
 - Project module table.
 - Audit event table.
 - Next.js dashboard scaffold.
@@ -1792,7 +1843,10 @@ npm run build
 - Permission snapshots must expire.
 - Expired snapshots fail closed.
 - OAuth tokens must not cross project boundaries.
-- Dashboard admin accounts are separate from project users.
+- Nexus accounts are separate from project users.
+- Instance administration is a grant on a Nexus account.
+- Project administration is expressed through project membership.
+- Cross-module persistence uses IDs, not JPA entity associations.
 - Audit security-sensitive operations.
 - Do not add microservices before the modular monolith is under real pressure.
 
@@ -1800,7 +1854,7 @@ npm run build
 
 The minimum useful Nexus should include:
 
-- admin login,
+- Nexus account login,
 - projects,
 - multiple API keys per project,
 - module activation,

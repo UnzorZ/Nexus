@@ -7,9 +7,33 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.SecurityFilterChain;
 
+/**
+ * Configuración de seguridad compartida para endpoints internos y de operaciones.
+ * <p>
+ * Forma parte del esquema de tres cadenas de filtros de Nexus. Esta es la cadena
+ * {@code @Order(2)}: se evalúa después del Authorization Server ({@code @Order(1)} en
+ * {@link dev.unzor.nexus.identity.application.configuration.SecurityConfig}) y antes
+ * de la cadena por defecto ({@code @Order(3)}).
+ * <p>
+ * Los health-checks de módulos bajo {@code /internal/**} deben ser accesibles sin
+ * credenciales para facilitar comprobaciones locales y de despliegue. El resto de
+ * endpoints de Actuator quedan protegidos con HTTP Basic.
+ *
+ * @see dev.unzor.nexus.identity.application.configuration.SecurityConfig
+ */
 @Configuration
 public class SecurityConfiguration {
 
+    /**
+     * Cadena de filtros para rutas internas y Actuator ({@code @Order(2)}).
+     * <p>
+     * Coincide solo con {@code /internal/**} y {@code /actuator/**}. Desactiva CSRF en
+     * esas rutas para permitir llamadas programáticas (por ejemplo {@code curl} o probes).
+     * <ul>
+     *   <li>{@code /internal/**} y {@code /actuator/health} → acceso público</li>
+     *   <li>Resto de {@code /actuator/**} → requiere HTTP Basic</li>
+     * </ul>
+     */
     @Bean
     @Order(2)
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {

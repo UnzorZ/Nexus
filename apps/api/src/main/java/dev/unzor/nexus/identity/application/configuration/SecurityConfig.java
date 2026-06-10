@@ -38,10 +38,37 @@ import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.util.UUID;
 
+/**
+ * Configuración central de seguridad del módulo Identity.
+ * <p>
+ * Nexus registra varias {@link SecurityFilterChain} con {@link Order} explícito.
+ * Spring Security las evalúa en orden; la primera cadena cuyo {@code securityMatcher}
+ * coincide con la petición es la que la procesa. Esta clase define las cadenas 1 y 3;
+ * la cadena 2 vive en {@link dev.unzor.nexus.shared.security.SecurityConfiguration}
+ * para {@code /internal/**} y {@code /actuator/**}.
+ * <p>
+ * También declara los beans OAuth2/OIDC ({@link RegisteredClientRepository},
+ * {@link JWKSource}, etc.). En el MVP todo es en memoria y se reinicia al arrancar
+ * la aplicación.
+ *
+ * @see dev.unzor.nexus.shared.security.SecurityConfiguration
+ */
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
 
+    /**
+     * Cadena de filtros del Authorization Server ({@code @Order(1)}).
+     * <p>
+     * Solo aplica a los endpoints del Authorization Server OAuth2 (por ejemplo
+     * {@code /oauth2/authorize}, {@code /oauth2/token}, {@code /oauth2/jwks},
+     * {@code /userinfo}). Activa OpenID Connect 1.0 y exige un sujeto autenticado
+     * antes de emitir códigos o tokens.
+     * <p>
+     * Las peticiones de navegador ({@code Accept: text/html}) sin autenticación se
+     * redirigen a {@code /login} para que el usuario inicie sesión y continúe el flujo
+     * Authorization Code.
+     */
     @Bean
     @Order(1)
     public SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http)
@@ -69,10 +96,20 @@ public class SecurityConfig {
         return http.build();
     }
 
+    /**
+     * Cadena de filtros por defecto de la aplicación ({@code @Order(3)}).
+     * <p>
+     * Cubre las peticiones que no gestionan la cadena del Authorization Server ni la
+     * cadena compartida de internos/actuator. Las rutas públicas se limitan a la página
+     * de login, sus assets estáticos, metadatos well-known de la aplicación y la página
+     * de error.
+     * <p>
+     * El resto de rutas exigen autenticación mediante form login. La página de login la
+     * sirve {@link dev.unzor.nexus.identity.api.controller.LoginController} en {@code /login}.
+     */
     @Bean
     @Order(3)
-    public SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http)
-            throws Exception {
+    public SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http) {
         http
                 .authorizeHttpRequests((authorize) -> authorize
                         .requestMatchers(
@@ -90,6 +127,11 @@ public class SecurityConfig {
         return http.build();
     }
 
+    /**
+     * Almacén temporal de usuarios en memoria para desarrollo local y pruebas del MVP OIDC.
+     * Sustituir por una implementación respaldada en base de datos cuando existan usuarios
+     * aislados por proyecto.
+     */
     @Bean
     public UserDetailsService userDetailsService() {
         UserDetails userDetails = User.withDefaultPasswordEncoder()
@@ -101,6 +143,13 @@ public class SecurityConfig {
         return new InMemoryUserDetailsManager(userDetails);
     }
 
+    /**
+     * Registra el cliente OIDC usado por el frontend de administración de Nexus (Next.js).
+     * <p>
+     * Las redirect URI y post-logout URI se construyen a partir de
+     * {@code nexus.frontend-base-url}. Grant types: authorization code y refresh token.
+     * Se exige pantalla de consentimiento antes de conceder scopes.
+     */
     @Bean
     public RegisteredClientRepository registeredClientRepository(
             @Value("${nexus.frontend-base-url:http://127.0.0.1:3000}") String frontendBaseUrl
@@ -123,6 +172,12 @@ public class SecurityConfig {
         return new InMemoryRegisteredClientRepository(oidcClient);
     }
 
+    /**
+     * Claves de firma para access tokens e ID tokens.
+     * <p>
+     * Se genera un nuevo par RSA-2048 en cada arranque. Los tokens emitidos antes de un
+     * reinicio dejan de ser verificables hasta que los clientes obtengan el JWKS actualizado.
+     */
     @Bean
     public JWKSource<SecurityContext> jwkSource() {
         KeyPair keyPair = generateRsaKey();
@@ -156,11 +211,20 @@ public class SecurityConfig {
         return baseUrl;
     }
 
+    /**
+     * Decodifica JWT firmados por {@link #jwkSource()} para que el Authorization Server
+     * pueda validar sus propios tokens cuando sea necesario.
+     */
     @Bean
     public JwtDecoder jwtDecoder(JWKSource<SecurityContext> jwkSource) {
         return OAuth2AuthorizationServerConfiguration.jwtDecoder(jwkSource);
     }
 
+    /**
+     * Rutas por defecto del Authorization Server y metadatos del issuer.
+     * Aquí se podrán configurar issuers o prefijos de ruta personalizados cuando Nexus
+     * soporte issuers por proyecto.
+     */
     @Bean
     public AuthorizationServerSettings authorizationServerSettings() {
         return AuthorizationServerSettings.builder().build();

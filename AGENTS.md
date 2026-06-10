@@ -36,7 +36,8 @@ This is the main API and control plane. It owns:
 - project registry,
 - API keys,
 - module activation,
-- admin accounts,
+- Nexus accounts and instance administration,
+- project memberships,
 - project users,
 - permissions,
 - auth/OAuth,
@@ -65,27 +66,40 @@ Put here:
 - API response helpers,
 - common DTO primitives,
 - error/problem details,
+- typed identifiers and narrow cross-module contracts,
 - shared validation helpers,
 - persistence utilities,
 - security primitives used by multiple modules,
 - time/clock helpers.
 
-Do not put project-specific business logic here.
+Do not put module-owned entities or project-specific business logic here.
+
+Entities remain in the module that owns their lifecycle and invariants, even when
+other modules need to reference them. Cross-module persistence should store typed
+IDs such as `NexusAccountId`, `ProjectId`, or `ProjectUserId`, not JPA associations
+to entities owned by another module. Obtain additional data through public
+application services or domain events; never access another module's repository
+directly.
 
 ### admin
 
-Nexus dashboard/admin identity.
+Nexus dashboard identity and instance-level administration.
 
 Put here:
 
-- Nexus admin accounts,
-- instance admin and project admin roles,
-- admin login/session logic,
-- admin-facing authorization,
-- admin account persistence,
+- Nexus accounts,
+- instance administrator grants,
+- Nexus account login/session logic,
+- instance-level authorization,
+- Nexus account persistence,
 - admin API controllers.
 
-Admin accounts are not the same as project users.
+A `NexusAccount` is a person who can access the Nexus dashboard. Most Nexus
+accounts are not instance administrators. `INSTANCE_ADMIN` is a global grant
+assigned to a Nexus account, not a separate account type.
+
+Nexus accounts are not the same as project users. Do not merge their credentials,
+sessions, or persistence models.
 
 ### projects
 
@@ -99,8 +113,14 @@ Put here:
 - project slug/name/description,
 - project-level metadata,
 - project isolation rules.
+- project memberships for Nexus accounts,
+- project ownership and dashboard management roles.
 
 A project represents one application/product boundary such as F-Shop or GarageLab.
+
+Use `ProjectMembership` to connect a `NexusAccount` to a project with a role such
+as `OWNER`, `ADMIN`, or `MEMBER`. Project administration is a membership concern,
+not an instance administrator role.
 
 ### apikeys
 
@@ -194,6 +214,8 @@ Put here:
 - project auth flows.
 
 Project users are isolated per project. The same email in two projects is two different users.
+They are end users authenticated through a project's OAuth/OIDC realm and do not
+gain access to the Nexus dashboard.
 
 ### notify
 

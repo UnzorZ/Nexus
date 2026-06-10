@@ -34,13 +34,17 @@ identity/
 │   └── service/
 │       └── IdentityHelloService      # Servicio de estado del módulo
 │
-├── domain/                           # (vacío) Entidades y lógica de dominio
+├── domain/                           # Entidades y lógica de identidad por proyecto
 │   ├── entity/
+│   │   └── ProjectUser              # Usuario aislado dentro de un proyecto
 │   ├── enums/
+│   │   └── ProjectUserStatus        # Estado operativo del usuario
 │   └── exception/
 │
-├── infrastructure/                   # (vacío) Adaptadores externos
-│   └── interceptor/
+├── infrastructure/                   # Adaptadores de frameworks y servicios externos
+│   ├── interceptor/
+│   └── security/
+│       └── ProjectUserPrincipal      # Adaptador de ProjectUser a UserDetails
 │
 ├── oauth/                            # (vacío) Componentes OAuth2 personalizados
 ├── sessions/                         # (vacío) Gestión de sesiones
@@ -51,38 +55,70 @@ identity/
 └── package-info.java                 # Declaración del módulo Modulith
 ```
 
-Las capas `domain`, `infrastructure`, `oauth`, `sessions` y `persistence` están preparadas para la implementación futura de persistencia de usuarios, clientes y tokens.
+`ProjectUser` y `ProjectUserPrincipal` ya definen el modelo de usuario aislado
+por proyecto. Los repositorios y el `UserDetailsService` con resolución
+obligatoria del contexto de proyecto siguen pendientes. Las capas `oauth`,
+`sessions` y `persistence` están preparadas para la implementación de clientes,
+tokens, sesiones y acceso a datos.
+
+La explicación completa del modelo y su separación respecto a las cuentas del
+panel está en
+[`Cuentas Nexus y usuarios de proyecto`](../auth/accounts-and-project-users.md).
 
 ---
 
 ## Configuración de Seguridad
 
-La clase principal es [`SecurityConfig`](../../apps/api/src/main/java/dev/unzor/nexus/identity/application/configuration/SecurityConfig.java). Define tres cadenas de filtros ordenadas por prioridad:
+La clase principal es [`SecurityConfig`](../../apps/api/src/main/java/dev/unzor/nexus/identity/application/configuration/SecurityConfig.java). Concentra la seguridad web del módulo Identity y los beans del Authorization Server OAuth2/OIDC.
+
+Spring Security no usa una sola configuración global: registra varias `SecurityFilterChain` y aplica la **primera cuya ruta coincida** (`securityMatcher`). El orden lo marca `@Order`: números menores tienen prioridad.
+
+```
+Request
+   │
+   ├─ /oauth2/**, /userinfo, …     → @Order(1) SecurityConfig (Authorization Server)
+   ├─ /internal/**, /actuator/**   → @Order(2) shared/SecurityConfiguration
+   └─ todo lo demás                → @Order(3) SecurityConfig (default + form login)
+```
 
 ### Cadena 1 — Authorization Server (`@Order(1)`)
 
-Gestiona los endpoints del Authorization Server (`/oauth2/authorize`, `/oauth2/token`, etc.).
+Gestiona los endpoints del Authorization Server (`/oauth2/authorize`, `/oauth2/token`, `/oauth2/jwks`, `/userinfo`, etc.).
 
 - Activa **OpenID Connect 1.0** (`oidc(Customizer.withDefaults())`).
-- Requiere autenticación en todas las solicitudes.
-- Redirige a `/login` cuando un usuario no autenticado accede desde un navegador (`text/html`).
+- Requiere autenticación en todas las solicitudes antes de emitir códigos o tokens.
+- Si el cliente es un navegador (`Accept: text/html`) y el usuario no está autenticado, redirige a `/login` para continuar el flujo Authorization Code.
 
 ### Cadena 2 — Endpoints internos (`@Order(2)`)
 
-Definida en [`SecurityConfiguration`](../../apps/api/src/main/java/dev/unzor/nexus/shared/security/SecurityConfiguration.java) del paquete `shared`.
+Definida en [`SecurityConfiguration`](../../apps/api/src/main/java/dev/unzor/nexus/shared/security/SecurityConfiguration.java) del paquete `shared` (no en Identity, pero forma parte del mismo despliegue).
 
-- Protege `/internal/**` y `/actuator/**`.
-- Permite acceso libre a `/internal/**` y `/actuator/health`.
-- Deshabilita CSRF en endpoints internos.
-- Requiere autenticación HTTP Basic para el resto de actuator.
+- Aplica solo a `/internal/**` y `/actuator/**` mediante `securityMatcher`.
+- Permite acceso libre a `/internal/**` y `/actuator/health` (health-checks de módulos y de la aplicación).
+- Deshabilita CSRF en esas rutas para permitir llamadas con `curl`, probes o clientes HTTP sin sesión.
+- Requiere autenticación HTTP Basic para el resto de endpoints de Actuator (métricas, info, etc.).
+
+Esta cadena existe en `shared` porque los endpoints `/internal/**` los exponen varios módulos (Identity, Projects, Permissions, etc.), no solo Identity.
 
 ### Cadena 3 — Default (`@Order(3)`)
 
 Cubre el resto de rutas de la aplicación.
 
-- Permite `/.well-known/appspecific/**` y `/error` sin autenticación.
+- Permite sin autenticación: `/login`, `/identity/login.css`, `/.well-known/appspecific/**`, `/error`.
 - Requiere autenticación en todo lo demás.
-- Habilita form login (página de login de Spring Security).
+- Habilita **form login** con página personalizada (`LoginController` → plantilla Thymeleaf `identity/login`).
+
+### Beans OAuth2 definidos en `SecurityConfig`
+
+| Bean | Responsabilidad | Estado MVP |
+|------|-----------------|------------|
+| `userDetailsService` | Usuarios que pueden iniciar sesión en `/login` | Un usuario en memoria (`user` / `password`) |
+| `registeredClientRepository` | Clientes OAuth registrados | Un cliente `oidc-client` para el frontend Next.js |
+| `jwkSource` | Claves RSA para firmar JWT (access token, id token) | Par de claves nuevo en cada arranque |
+| `jwtDecoder` | Valida JWT firmados con `jwkSource` | Derivado de las mismas claves |
+| `authorizationServerSettings` | Rutas e issuer del Authorization Server | Valores por defecto de Spring |
+
+La URL base del frontend (`nexus.frontend-base-url`) se usa al construir el `RegisteredClient` para las redirect URIs de login y logout.
 
 ---
 
