@@ -81,6 +81,60 @@ to entities owned by another module. Obtain additional data through public
 application services or domain events; never access another module's repository
 directly.
 
+### Redis
+
+Nexus uses a single shared Redis instance. PostgreSQL is the only durable source of
+truth for business and security records. Redis holds bounded ephemeral state:
+most values are derivable, while active sessions are intentionally not
+reconstructible and their loss must only log users out. See
+`docs/adr/0008-shared-redis-and-revokable-sessions.md`.
+
+Panel sessions are backed by Spring Session Redis (`RedisIndexedSessionRepository`,
+namespace `nexus:session`), indexed by account. Session serialization is JDK, so
+`NexusAccountPrincipal` is `Serializable` and implements `CredentialsContainer`; never
+store JPA entities in session. The handler erases the password hash before the
+`SecurityContext` is persisted, so the serialized principal never retains the hash. The
+management API exposes only `nexus.sessionPublicId`, never the internal Spring Session
+ID or the `JSESSIONID` value. Session attributes are populated in
+`admin/infrastructure/security/PanelAuthenticationSuccessHandler`; the account index
+resolver, attribute names, the configurable inactivity timeout
+(`SessionRepositoryCustomizer` reading `NEXUS_SESSION_TIMEOUT`) and the cookie serializer
+(applying `nexus.session.cookie.*`) live in
+`admin/application/configuration/PanelSessionConfiguration`. Listing and revocation go
+through `admin/application/service/PanelSessionService`.
+
+Revocation triggered by account lifecycle (suspension, deactivation, removal of
+`instanceAdmin`) is reliable. `NexusAccount` (a Spring Data `AbstractAggregateRoot`)
+registers `NexusAccountSessionsRevocationRequested`, which lives in
+`admin/domain/events` so that `domain` does not depend on `application`. The event is
+only published when the aggregate is saved through the repository within the
+transaction. Spring Modulith persists the publication in PostgreSQL; if Redis fails
+after commit, `PanelSessionRevocationRepublisher` (`admin/application/events`)
+re-delivers incomplete publications using `ResubmissionOptions` filtered to
+`NexusAccountSessionsRevocationRequested` only, at startup (immediately, `minAge` zero)
+and on a bounded schedule (`minAge` configurable, default 15s; batch size and
+in-flight limit configurable). Other event types are never re-delivered by it. The
+revocation operation is idempotent.
+
+Redis is required for session- and security-dependent operations; there is no
+in-memory fallback. Only exceptions whose cause chain contains an unambiguous
+Redis/Lettuce signal are converted to `503` `redis_unavailable` by
+`shared/web/RedisUnavailableFilter`, which runs before `SessionRepositoryFilter`.
+Generic data-access timeouts unrelated to Redis propagate normally. The app may boot
+without Redis, but the readiness health group is `DOWN`.
+
+Rules for any module that touches Redis:
+
+- No separate logical databases. Separate concerns by key namespace, each owned by
+  the module that introduced it.
+- Every ephemeral key must carry a TTL.
+- Bound key cardinality and stream length; shared Redis uses `noeviction`, so an
+  unbounded feature can make security-critical writes fail.
+- Never use `KEYS` or global scans on the request path.
+- No generic business-logic Redis client in `shared`. Each module owns its keys and
+  its adapters.
+
+
 ### admin
 
 Nexus dashboard identity and instance-level administration.

@@ -153,27 +153,23 @@ class PanelSecurityTests {
     @Test
     void apiLogoutInvalidatesSessionWithCsrf() throws Exception {
         String email = "logout-ok-" + UUID.randomUUID() + "@example.com";
-        MockHttpSession session = new MockHttpSession();
         registerAccount(email);
+        MvcResult loginResult = loginAndReturn(email);
 
-        CsrfTokens loginCsrf = fetchCsrfWithSession(session);
-        mockMvc.perform(post("/panel/login")
-                        .session(session)
-                        .cookie(loginCsrf.cookie())
-                        .header("X-XSRF-TOKEN", loginCsrf.token())
-                        .param("username", email)
-                        .param("password", "plain-password"))
-                .andExpect(status().is3xxRedirection());
+        Cookie sessionCookie = loginResult.getResponse().getCookie("JSESSIONID");
+        if (sessionCookie == null) {
+            throw new IllegalStateException("JSESSIONID not issued after login");
+        }
 
-        CsrfTokens logoutCsrf = fetchCsrfWithSession(session);
+        CsrfTokens logoutCsrf = fetchCsrfWithCookies(sessionCookie);
         mockMvc.perform(post("/api/panel/v1/session/logout")
-                        .session(session)
+                        .cookie(sessionCookie)
                         .cookie(logoutCsrf.cookie())
                         .header("X-XSRF-TOKEN", logoutCsrf.token()))
                 .andExpect(status().isNoContent());
 
         mockMvc.perform(get("/api/panel/v1/me")
-                        .session(session)
+                        .cookie(sessionCookie)
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isUnauthorized());
     }
@@ -210,6 +206,17 @@ class PanelSecurityTests {
         }
 
         MvcResult csrfResult = mockMvc.perform(requestBuilder)
+                .andExpect(status().isNoContent())
+                .andReturn();
+        Cookie cookie = csrfResult.getResponse().getCookie("XSRF-TOKEN");
+        if (cookie == null || cookie.getValue() == null) {
+            throw new IllegalStateException("XSRF-TOKEN cookie was not issued by /api/panel/v1/csrf");
+        }
+        return new CsrfTokens(cookie.getValue(), cookie);
+    }
+
+    private CsrfTokens fetchCsrfWithCookies(Cookie... cookies) throws Exception {
+        MvcResult csrfResult = mockMvc.perform(get("/api/panel/v1/csrf").cookie(cookies))
                 .andExpect(status().isNoContent())
                 .andReturn();
         Cookie cookie = csrfResult.getResponse().getCookie("XSRF-TOKEN");

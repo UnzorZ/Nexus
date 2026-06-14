@@ -37,7 +37,7 @@ public class SecurityConfiguration {
      * Coincide solo con {@code /internal/**} y {@code /actuator/**}. Desactiva CSRF en
      * esas rutas para permitir llamadas programáticas (por ejemplo {@code curl} o probes).
      * <ul>
-     *   <li>{@code /internal/**} y {@code /actuator/health} → acceso público</li>
+     *   <li>{@code /internal/**} y {@code /actuator/health/**} (incluye liveness y readiness) → acceso público</li>
      *   <li>Resto de {@code /actuator/**} → requiere HTTP Basic</li>
      * </ul>
      */
@@ -50,7 +50,8 @@ public class SecurityConfiguration {
                 .authorizeHttpRequests(requests -> requests
                         .requestMatchers(
                                 "/internal/**",
-                                "/actuator/health").permitAll()
+                                "/actuator/health",
+                                "/actuator/health/**").permitAll()
                         .requestMatchers("/actuator/**").authenticated())
                 .httpBasic(Customizer.withDefaults())
                 .build();

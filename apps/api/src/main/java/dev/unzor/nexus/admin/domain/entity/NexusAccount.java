@@ -1,5 +1,6 @@
 package dev.unzor.nexus.admin.domain.entity;
 
+import dev.unzor.nexus.admin.domain.events.NexusAccountSessionsRevocationRequested;
 import dev.unzor.nexus.admin.domain.enums.NexusAccountStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -15,6 +16,7 @@ import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.springframework.data.domain.AbstractAggregateRoot;
 
 import java.time.Instant;
 import java.util.Objects;
@@ -31,6 +33,10 @@ import java.util.UUID;
  * <p>Una cuenta Nexus es independiente de los usuarios OAuth de cada proyecto.
  * Aunque compartan email, sus credenciales, sesiones y ciclos de vida no se
  * combinan.</p>
+ *
+ * <p>Extiende {@link AbstractAggregateRoot} para publicar eventos de dominio (p. ej.
+ * la revocación de sesiones al suspender/desactivar la cuenta o retirar
+ * {@code instanceAdmin}).</p>
  */
 @Entity
 @Table(
@@ -42,7 +48,7 @@ import java.util.UUID;
 )
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class NexusAccount {
+public class NexusAccount extends AbstractAggregateRoot<NexusAccount> {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -104,17 +110,32 @@ public class NexusAccount {
     }
 
     /**
-     * Bloquea temporalmente la autenticación de la cuenta.
+     * Bloquea temporalmente la autenticación de la cuenta y solicita la revocación de
+     * todas sus sesiones activas del panel.
+     *
+     * <p>Publica {@link NexusAccountSessionsRevocationRequested}. Para que la
+     * publicación se materialice, el aggregate debe guardarse mediante el repositorio
+     * ({@code NexusAccountRepository.save(...)}) dentro de la misma transacción; Spring
+     * Data extrae los eventos registrados al guardar. La revocación es idempotente y se
+     * reentrega si Redis falla tras el commit (ver
+     * {@code PanelSessionRevocationRepublisher}).</p>
      */
     public void suspend() {
         status = NexusAccountStatus.SUSPENDED;
+        registerEvent(new NexusAccountSessionsRevocationRequested(id));
     }
 
     /**
-     * Desactiva la cuenta de forma indefinida.
+     * Desactiva la cuenta de forma indefinida y solicita la revocación de todas sus
+     * sesiones activas del panel.
+     *
+     * <p>Igual que {@link #suspend()}: el evento se publica al guardar el aggregate con
+     * el repositorio dentro de la misma transacción; la revocación es idempotente y se
+     * reentrega si Redis falla tras el commit.</p>
      */
     public void disable() {
         status = NexusAccountStatus.DISABLED;
+        registerEvent(new NexusAccountSessionsRevocationRequested(id));
     }
 
     /**
@@ -141,6 +162,20 @@ public class NexusAccount {
 
     public void grantInstanceAdmin() {
         instanceAdmin = true;
+    }
+
+    /**
+     * Retira el flag de administrador de instancia y solicita la revocación de todas
+     * las sesiones activas del panel, ya que la autorización efectiva de la cuenta
+     * cambia.
+     *
+     * <p>Igual que {@link #suspend()}: el evento se publica al guardar el aggregate con
+     * el repositorio dentro de la misma transacción; la revocación es idempotente y se
+     * reentrega si Redis falla tras el commit.</p>
+     */
+    public void revokeInstanceAdmin() {
+        instanceAdmin = false;
+        registerEvent(new NexusAccountSessionsRevocationRequested(id));
     }
 
     @PrePersist
