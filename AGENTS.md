@@ -95,11 +95,26 @@ Put here:
 - admin API controllers.
 
 A `NexusAccount` is a person who can access the Nexus dashboard. Most Nexus
-accounts are not instance administrators. `INSTANCE_ADMIN` is a global grant
-assigned to a Nexus account, not a separate account type.
+accounts are not instance administrators. Instance administration is represented
+by the `instanceAdmin` flag on the account, not by a separate account type or
+extensible role model.
 
 Nexus accounts are not the same as project users. Do not merge their credentials,
 sessions, or persistence models.
+
+Panel security lives in `admin/application/configuration/PanelSecurityConfiguration`
+(`@Order(3)`): `/panel/**`, `/api/panel/**`, form login at `/panel/login`, CSRF,
+and `NexusAccountUserDetailsService` scoped to that chain only (not a global
+`UserDetailsService` bean).
+
+Panel sessions use server-side `JSESSIONID` state. Controllers obtain the current
+account through `@AuthenticationPrincipal NexusAccountPrincipal`; they must not
+parse cookies or trust account IDs supplied by the client. The default session
+timeout and persistent cookie lifetime are seven days and can be overridden with
+`NEXUS_SESSION_TIMEOUT` and `NEXUS_SESSION_COOKIE_MAX_AGE`.
+
+Reserve `/admin/**` and `/api/admin/**` for a future instance-administration
+surface restricted to Nexus accounts with `instanceAdmin = true`.
 
 ### projects
 
@@ -216,6 +231,12 @@ Put here:
 Project users are isolated per project. The same email in two projects is two different users.
 They are end users authenticated through a project's OAuth/OIDC realm and do not
 gain access to the Nexus dashboard.
+
+OAuth clients, authorizations, and consents are persisted in PostgreSQL (JDBC).
+Bootstrap client configuration: `identity/application/configuration/NexusOAuthBootstrapProperties`
+and `OidcRegisteredClientBootstrap`. Project-scoped routes under `/p/**` are reserved;
+`ProjectSecurityConfiguration` keeps CSRF enabled. Multi-issuer per project and
+functional `ProjectUser` login are not implemented yet.
 
 ### notify
 
@@ -340,6 +361,31 @@ apps/web/src/
 ```
 
 Keep the dashboard operational and clear. Avoid marketing-page structure for the admin interface.
+
+Organize frontend API calls using the same layered convention as GarageLab:
+
+- `lib/api/routes.ts` owns backend URLs and route builders.
+- `lib/api/client.ts` owns shared fetch behavior, response parsing, credentials, and typed API errors.
+- `lib/api/csrf.ts` owns Nexus panel CSRF handling.
+- `features/<feature>/api.ts` owns feature operations and API-facing types.
+- Pages and components call feature APIs; they should not build backend URLs or perform raw `fetch` calls.
+
+Group API routes hierarchically by surface and resource. Each resource should
+expose `root`, dynamic selectors such as `byId`, and resource-specific actions:
+
+```ts
+apiRoutes.panel.accounts.root
+apiRoutes.panel.accounts.byId(accountId)
+apiRoutes.panel.accounts.changePassword(accountId)
+apiRoutes.panel.session.me
+```
+
+Do not place unrelated resource routes at the same flat level. Encode dynamic
+path segments with `encodeURIComponent`.
+
+Do not copy GarageLab's Next.js proxy/BFF routes by default. Nexus currently calls
+the backend directly from the browser because its panel authentication uses the
+API-hosted session cookie and cookie-to-header CSRF flow.
 
 ## packages
 

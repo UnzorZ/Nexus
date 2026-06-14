@@ -21,8 +21,9 @@ persistence, and lifecycle decisions that belong to separate modules.
 
 Model dashboard identity as `NexusAccount`, owned by the `admin` module.
 
-Model `INSTANCE_ADMIN` as a global grant assigned to a `NexusAccount`, not as a
-separate account type.
+Model instance administration as a boolean capability on `NexusAccount`, not as
+a separate account type or extensible role catalog. Nexus does not plan to add
+other instance-wide administrative roles.
 
 Model project access as `ProjectMembership`, owned by the `projects` module. A
 membership links a `NexusAccountId` and a `ProjectId` and carries a project role
@@ -40,8 +41,8 @@ another module's repository are not allowed.
 
 - Nexus account credentials and sessions remain separate from project-user
   credentials and OAuth sessions.
-- Promoting a Nexus account to instance administrator does not duplicate the
-  account.
+- Promoting a Nexus account to instance administrator updates the account
+  without duplicating it or creating a separate role entity.
 - Project ownership and collaboration can evolve independently from global
   instance administration.
 - The same email may identify a Nexus account and one or more unrelated project

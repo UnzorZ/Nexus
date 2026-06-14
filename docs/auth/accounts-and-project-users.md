@@ -11,7 +11,7 @@ NexusAccount
     |
     +-- ProjectMembership --> Project
     |
-    +-- INSTANCE_ADMIN (futuro grant global)
+    +-- instanceAdmin (privilegio global)
 
 Project
     |
@@ -43,15 +43,16 @@ Responsabilidades:
 - controlar si la cuenta puede autenticarse;
 - registrar la verificación del email y el último inicio de sesión;
 - mantener el estado de MFA;
+- indicar si administra la instancia completa;
 - conservar fechas de creación y actualización.
 
 El email es único para toda la instancia de Nexus. La contraseña se almacena
 exclusivamente como hash.
 
 `NexusAccount` no determina por sí sola qué proyectos puede administrar. Esa
-decisión pertenece a `ProjectMembership`. El futuro privilegio global
-`INSTANCE_ADMIN` será también un grant asociado a la cuenta, no otro tipo de
-cuenta.
+decisión pertenece a `ProjectMembership`. El privilegio global de administración
+de instancia se representa con `instanceAdmin`; no existe un catálogo de roles
+globales porque no se planean privilegios adicionales.
 
 ### NexusAccountStatus
 
@@ -226,11 +227,31 @@ foránea cuando se cree la tabla propietaria `projects`.
 
 ## Trabajo pendiente
 
-- repositorios JPA para las tres entidades;
-- grant persistente para `INSTANCE_ADMIN`;
-- servicios de aplicación para registro, invitaciones y cambios de estado;
-- `UserDetailsService` separado para cuentas Nexus;
-- carga de `ProjectUser` con contexto obligatorio de proyecto;
+- invitaciones y cambios de estado avanzados de cuenta;
+- carga de `ProjectUser` con contexto obligatorio de proyecto y login funcional;
 - validación que impida retirar el último `OWNER` activo;
-- normalización de emails antes de aplicar las restricciones únicas;
-- pruebas de persistencia y transiciones de estado.
+- issuer OAuth dinámico por proyecto, discovery y JWKS por realm;
+- pruebas E2E del panel con frontend y API en dominios distintos.
+
+## Implementado
+
+- repositorios JPA para `NexusAccount`, `ProjectMembership` y `ProjectUser`;
+- indicador persistente `instanceAdmin` (bootstrap en la primera cuenta);
+- registro de `NexusAccount` con CSRF (`POST /api/panel/v1/accounts`);
+- `NexusAccountUserDetailsService` solo en la cadena del panel (`/panel/login`);
+- sesión HTTP del panel, logout API (`POST /api/panel/v1/session/logout`) y CSRF;
+- persistencia JDBC de clientes OAuth, autorizaciones y consentimientos;
+- normalización de emails en registro.
+
+### Bootstrap público de la instancia
+
+El registro de cuentas es público de forma intencionada. Cuando la instancia aún
+no tiene ninguna cuenta con `instanceAdmin = true`, la primera cuenta creada
+recibe ese privilegio global.
+Las siguientes cuentas se registran sin privilegios de administración de instancia.
+
+Este comportamiento permite inicializar una instalación sin credenciales
+preconfiguradas. Como consecuencia, una instancia nueva debe exponerse únicamente
+cuando su operador esté preparado para registrar inmediatamente la primera cuenta.
+El lock transaccional y el índice único parcial de base de datos garantizan que
+solo una cuenta tenga el indicador activo durante registros concurrentes.

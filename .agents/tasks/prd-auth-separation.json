@@ -1,0 +1,282 @@
+{
+  "version": 1,
+  "project": "Separación de autenticación y OAuth persistente",
+  "overview": "Separar la autenticación del panel Nexus, basada en NexusAccount y sesión HTTP segura, de la autenticación OAuth/OIDC de usuarios aislados por proyecto. Activar CSRF para las APIs del panel mediante cookie y persistir los componentes estándar de Spring Authorization Server como base para la futura implementación multi-issuer completa.",
+  "goals": [
+    "Autenticar el panel exclusivamente con NexusAccount mediante /panel/login y sesión HTTP.",
+    "Activar CSRF en todas las operaciones del panel, incluido el registro de cuentas.",
+    "Entregar el token CSRF al frontend mediante cookie XSRF-TOKEN y enviarlo como X-XSRF-TOKEN.",
+    "Reservar /p/{projectSlug}/login y las rutas OAuth por proyecto para ProjectUser.",
+    "Persistir clientes OAuth, autorizaciones y consentimientos usando Spring Authorization Server y PostgreSQL.",
+    "Documentar con precisión la arquitectura multi-issuer final aunque no se implemente completa en esta fase."
+  ],
+  "nonGoals": [
+    "No implementar todavía login funcional de ProjectUser.",
+    "No implementar todavía issuers dinámicos completos por proyecto.",
+    "No implementar todavía discovery, JWKS o claves de firma independientes por proyecto.",
+    "No implementar todavía gestión de clientes OAuth desde el dashboard.",
+    "No emitir todavía tokens cuyo issuer dependa dinámicamente de projectSlug.",
+    "No sustituir la sesión del panel por JWT.",
+    "No cambiar la regla por la que la primera NexusAccount obtiene instanceAdmin = true."
+  ],
+  "successMetrics": [
+    "NexusAccount solo puede autenticarse mediante /panel/login.",
+    "Las solicitudes mutables del panel sin token CSRF reciben 403.",
+    "El registro desde Next.js funciona enviando el token CSRF correcto.",
+    "Las tablas OAuth persisten clientes, autorizaciones y consentimientos tras reiniciar la API.",
+    "Ningún flujo OAuth por proyecto usa NexusAccountUserDetailsService.",
+    "./gradlew build y npm run build finalizan correctamente."
+  ],
+  "openQuestions": [
+    "La estrategia concreta para claves de firma por proyecto se decidirá al implementar multi-issuer.",
+    "La política de consentimiento por cliente y proyecto se decidirá al construir los flujos OAuth reales.",
+    "La persistencia distribuida de sesiones del panel queda fuera del MVP; la sesión podrá mantenerse en memoria mientras exista una sola instancia."
+  ],
+  "stack": {
+    "framework": "Spring Boot 4, Spring Security 7, Spring Authorization Server, Next.js 16",
+    "hosting": "Docker o proceso local, una sola instancia en el MVP",
+    "database": "PostgreSQL con Flyway",
+    "auth": "Sesión HTTP segura para NexusAccount; OAuth2/OIDC persistente como base para ProjectUser por proyecto"
+  },
+  "routes": [
+    {
+      "path": "/panel/login",
+      "name": "Login del panel",
+      "purpose": "Autenticar NexusAccount mediante formulario y sesión HTTP"
+    },
+    {
+      "path": "/api/panel/v1/csrf",
+      "name": "Inicialización CSRF",
+      "purpose": "Materializar la cookie XSRF-TOKEN para clientes del panel"
+    },
+    {
+      "path": "/api/panel/v1/accounts",
+      "name": "Registro Nexus",
+      "purpose": "Crear NexusAccount exigiendo token CSRF"
+    },
+    {
+      "path": "/p/{projectSlug}/login",
+      "name": "Login de proyecto reservado",
+      "purpose": "Punto de entrada futuro para autenticar ProjectUser"
+    },
+    {
+      "path": "/p/{projectSlug}/oauth2/*",
+      "name": "OAuth de proyecto reservado",
+      "purpose": "Rutas futuras del Authorization Server multi-issuer"
+    }
+  ],
+  "uiNotes": [
+    "El formulario del panel debe apuntar a /panel/login.",
+    "La página de registro debe solicitar primero /api/panel/v1/csrf y enviar X-XSRF-TOKEN en el POST.",
+    "La cookie de sesión debe ser HTTP-only; XSRF-TOKEN debe ser legible por JavaScript para copiarla a la cabecera.",
+    "No mostrar la página de login del panel como si fuera un login de usuarios de proyecto."
+  ],
+  "dataModel": [
+    {
+      "entity": "NexusAccount",
+      "fields": [
+        "id",
+        "email",
+        "passwordHash",
+        "displayName",
+        "status",
+        "mfaEnabled",
+        "instanceAdmin",
+        "emailVerifiedAt",
+        "lastLoginAt",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    {
+      "entity": "ProjectUser",
+      "fields": [
+        "id",
+        "projectId",
+        "email",
+        "username",
+        "passwordHash",
+        "status",
+        "authzVersion"
+      ]
+    },
+    {
+      "entity": "OAuth persistence",
+      "fields": [
+        "registered client",
+        "authorization",
+        "authorization consent"
+      ]
+    }
+  ],
+  "importFormat": {
+    "description": "No aplica",
+    "example": {}
+  },
+  "rules": [
+    "NexusAccount y ProjectUser nunca comparten UserDetailsService.",
+    "NexusAccountUserDetailsService solo participa en la cadena de seguridad del panel.",
+    "El futuro ProjectUserUserDetailsService siempre necesita projectId resuelto desde projectSlug o issuer.",
+    "Toda operación mutable del panel requiere CSRF, incluido el registro público.",
+    "La cookie de sesión se configura HttpOnly, Secure en producción y SameSite=Lax.",
+    "La cookie XSRF-TOKEN no es HttpOnly y solo contiene el token CSRF, nunca credenciales.",
+    "El registro público no debe volver a excluirse de CSRF.",
+    "El primer usuario mantiene la promoción automática a instanceAdmin = true.",
+    "Las entidades OAuth persistentes o adaptadores JDBC pertenecen a identity y no a shared.",
+    "Las rutas /p/{projectSlug}/** no deben autenticar NexusAccount."
+  ],
+  "qualityGates": [
+    "./gradlew build",
+    "cd apps/web && npm run lint",
+    "cd apps/web && npm run build",
+    "git diff --check"
+  ],
+  "stories": [
+    {
+      "id": "US-001",
+      "title": "Separar la cadena de seguridad del panel",
+      "status": "done",
+      "dependsOn": [],
+      "description": "Como operador de Nexus, quiero que el panel tenga su propia cadena de seguridad para que NexusAccount no se utilice como identidad OAuth de proyectos.",
+      "acceptanceCriteria": [
+        "Crear una SecurityFilterChain específica para /panel/** y /api/panel/** con prioridad explícita.",
+        "Configurar /panel/login como página de form login y /panel/login?error como destino de error.",
+        "Conectar NexusAccountUserDetailsService únicamente al AuthenticationProvider de la cadena del panel.",
+        "La cadena del Authorization Server no debe depender implícitamente de NexusAccountUserDetailsService.",
+        "Ejemplo: autenticar owner@example.com en /panel/login crea una sesión del panel.",
+        "Caso negativo: acceder a /p/demo/oauth2/authorize no debe mostrar ni usar el login de NexusAccount.",
+        "Añadir pruebas de seguridad que demuestren qué cadena procesa cada ruta."
+      ]
+    },
+    {
+      "id": "US-002",
+      "title": "Activar CSRF completo para el panel",
+      "status": "done",
+      "dependsOn": [
+        "US-001"
+      ],
+      "description": "Como operador de Nexus, quiero protección CSRF en las operaciones con sesión para impedir acciones iniciadas desde sitios externos.",
+      "acceptanceCriteria": [
+        "Eliminar todas las exclusiones CSRF de /api/panel/**, incluido POST /api/panel/v1/accounts.",
+        "Configurar CookieCsrfTokenRepository con cookie XSRF-TOKEN y cabecera X-XSRF-TOKEN.",
+        "Añadir GET /api/panel/v1/csrf o un mecanismo equivalente que materialice el token y devuelva 204 o una vista segura.",
+        "Configurar la cookie de sesión como HttpOnly, SameSite=Lax y Secure mediante configuración de producción.",
+        "Ejemplo: POST de registro con cookie XSRF-TOKEN y cabecera coincidente devuelve 201.",
+        "Caso negativo: el mismo POST sin X-XSRF-TOKEN devuelve 403.",
+        "Añadir pruebas MockMvc para petición válida, token ausente y token incorrecto."
+      ]
+    },
+    {
+      "id": "US-003",
+      "title": "Actualizar Next.js para CSRF",
+      "status": "done",
+      "dependsOn": [
+        "US-002"
+      ],
+      "description": "Como usuario que crea una cuenta Nexus, quiero que el frontend gestione CSRF automáticamente para poder registrarme de forma segura.",
+      "acceptanceCriteria": [
+        "Antes de una mutación, obtener o renovar XSRF-TOKEN desde /api/panel/v1/csrf.",
+        "Enviar cookies con credentials: include cuando la llamada se realice desde el navegador.",
+        "Leer XSRF-TOKEN y enviarlo en X-XSRF-TOKEN.",
+        "Si el registro sigue ejecutándose mediante Server Action, propagar de forma segura cookie y token o mover la mutación al cliente; documentar la elección.",
+        "Ejemplo: el formulario /register crea una cuenta y conserva el manejo actual de errores.",
+        "Caso negativo: un 403 CSRF muestra un mensaje de sesión o formulario expirado sin exponer detalles internos.",
+        "No instalar nuevas dependencias salvo necesidad demostrada; si se instala alguna, documentar el comando npm install."
+      ]
+    },
+    {
+      "id": "US-004",
+      "title": "Persistir clientes OAuth",
+      "status": "done",
+      "dependsOn": [
+        "US-001"
+      ],
+      "description": "Como plataforma, quiero almacenar RegisteredClient en PostgreSQL para que los clientes OAuth sobrevivan a reinicios.",
+      "acceptanceCriteria": [
+        "Añadir migración Flyway compatible con la versión instalada de Spring Authorization Server para registered clients.",
+        "Sustituir InMemoryRegisteredClientRepository por JdbcRegisteredClientRepository o un adaptador JPA equivalente bien justificado.",
+        "Configurar los parámetros OAuth mediante datos persistidos, sin recrear IDs aleatorios en cada arranque.",
+        "Crear un bootstrap idempotente del cliente oidc-client actual.",
+        "Ejemplo: reiniciar la aplicación conserva el mismo registered client.",
+        "Caso negativo: un client_id duplicado no crea una segunda fila ni produce configuración ambigua.",
+        "Añadir prueba de integración de persistencia usando PostgreSQL/Testcontainers cuando Docker esté disponible."
+      ]
+    },
+    {
+      "id": "US-005",
+      "title": "Persistir autorizaciones y consentimientos OAuth",
+      "status": "done",
+      "dependsOn": [
+        "US-004"
+      ],
+      "description": "Como Authorization Server, quiero persistir códigos, tokens y consentimientos para conservar el estado OAuth entre peticiones y reinicios.",
+      "acceptanceCriteria": [
+        "Añadir migraciones Flyway para OAuth2Authorization y OAuth2AuthorizationConsent según el esquema oficial de la versión instalada.",
+        "Registrar JdbcOAuth2AuthorizationService y JdbcOAuth2AuthorizationConsentService o adaptadores equivalentes.",
+        "No persistir tokens en logs ni respuestas administrativas.",
+        "Ejemplo: una autorización guardada puede volver a cargarse por ID y token.",
+        "Caso negativo: buscar un token desconocido no devuelve autorizaciones de otro registro.",
+        "Añadir pruebas de integración de lectura y escritura."
+      ]
+    },
+    {
+      "id": "US-006",
+      "title": "Reservar el contexto de autenticación por proyecto",
+      "status": "done",
+      "dependsOn": [
+        "US-001"
+      ],
+      "description": "Como futura implementación multi-issuer, quiero resolver projectSlug antes de autenticar ProjectUser para impedir búsquedas globales de usuarios.",
+      "acceptanceCriteria": [
+        "Crear un ProjectAuthenticationContext o nombre equivalente que represente projectId y projectSlug resueltos.",
+        "Definir el contrato ProjectUserUserDetailsService con una operación que exija projectId además del login; no registrarlo como UserDetailsService global.",
+        "Reservar /p/{projectSlug}/login sin implementar todavía el formulario funcional.",
+        "Ningún repositorio de ProjectUser añade búsquedas globales por email, username o ID.",
+        "Ejemplo: el slug f-shop se resuelve al projectId correspondiente antes de buscar un usuario.",
+        "Caso negativo: un slug inexistente o un usuario perteneciente a otro proyecto falla sin filtrar existencia de cuentas.",
+        "Añadir pruebas unitarias del aislamiento del contrato."
+      ]
+    },
+    {
+      "id": "US-007",
+      "title": "Documentar la arquitectura completa multi-issuer",
+      "status": "done",
+      "dependsOn": [
+        "US-004",
+        "US-005",
+        "US-006"
+      ],
+      "description": "Como futuro contribuidor, quiero una especificación completa para terminar OAuth por proyecto sin mezclarlo con el panel.",
+      "acceptanceCriteria": [
+        "Actualizar docs/modules/identity.md, docs/auth/accounts-and-project-users.md y docs/nexus-technical-spec.md.",
+        "Documentar las dos cadenas de autenticación, cookies, CSRF y límites de UserDetailsService.",
+        "Documentar la implementación futura de issuer por proyecto, discovery, JWKS, claves, clientes asociados a projectId, login ProjectUser, consentimientos, JWT claims y revocación.",
+        "Marcar claramente qué partes están implementadas y cuáles son diseño futuro.",
+        "Ejemplo documentado: issuer https://nexus.example.com/p/f-shop y búsqueda de usuario por projectId más email.",
+        "Caso negativo documentado: NexusAccount nunca puede recibir tokens del realm de f-shop y ProjectUser nunca puede abrir el panel.",
+        "Actualizar AGENTS.md si aparecen nuevos paquetes o reglas estructurales."
+      ]
+    },
+    {
+      "id": "US-008",
+      "title": "Verificar el flujo de extremo a extremo",
+      "status": "done",
+      "dependsOn": [
+        "US-003",
+        "US-005",
+        "US-006",
+        "US-007"
+      ],
+      "description": "Como mantenedor, quiero pruebas y comprobaciones finales que demuestren la separación entre panel, CSRF y persistencia OAuth.",
+      "acceptanceCriteria": [
+        "Ejecutar ./gradlew build.",
+        "Ejecutar cd apps/web && npm run lint.",
+        "Ejecutar cd apps/web && npm run build.",
+        "Ejecutar git diff --check.",
+        "Ejemplo: registro con CSRF, login en /panel/login y acceso autenticado al dashboard funcionan.",
+        "Caso negativo: mutación sin CSRF, login NexusAccount en ruta de proyecto y acceso ProjectUser al panel son rechazados.",
+        "Documentar cualquier prueba de integración no ejecutada por ausencia de Docker."
+      ]
+    }
+  ]
+}
