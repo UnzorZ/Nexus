@@ -8,18 +8,30 @@ export default function Home() {
           Nexus control plane
         </p>
         <h1 className="max-w-2xl text-5xl font-semibold tracking-tight sm:text-7xl">
-          Sign in through Nexus OIDC
+          Panel de control Nexus
         </h1>
         <p className="mt-6 max-w-xl text-base leading-7 text-[#5e554a]">
-          Start the authorization code flow with state, nonce, and PKCE generated
-          by the client before redirecting to the Authorization Server.
+          Crea una cuenta Nexus, inicia sesión con sesión HTTP segura en la API y
+          accede al dashboard del panel.
         </p>
-        <div className="mt-9">
+        <div className="mt-9 flex flex-wrap gap-3">
           <Link
             href="/login"
             className="inline-flex h-12 items-center border border-[#181612] bg-[#181612] px-5 text-sm font-medium text-[#f7f4ef] transition hover:bg-transparent hover:text-[#181612]"
           >
-            Start login
+            Iniciar sesión
+          </Link>
+          <Link
+            href="/register"
+            className="inline-flex h-12 items-center border border-[#d8d0c4] bg-white/70 px-5 text-sm font-medium text-[#3d352b] transition hover:border-[#181612]"
+          >
+            Crear cuenta
+          </Link>
+          <Link
+            href="/dashboard"
+            className="inline-flex h-12 items-center border border-transparent px-5 text-sm font-medium text-[#796d5f] underline transition hover:text-[#181612]"
+          >
+            Ir al dashboard
           </Link>
         </div>
       </section>
