@@ -39,9 +39,6 @@ public record ProjectUserPrincipal(
         authorities = List.copyOf(authorities);
     }
 
-    /**
-     * Adapta un usuario de proyecto a un principal de Spring Security.
-     */
     public static ProjectUserPrincipal from(
             ProjectUser user,
             Collection<? extends GrantedAuthority> authorities

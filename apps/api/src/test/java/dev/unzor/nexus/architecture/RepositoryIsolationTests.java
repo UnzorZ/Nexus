@@ -3,6 +3,7 @@ package dev.unzor.nexus.architecture;
 import dev.unzor.nexus.admin.persistence.repository.NexusAccountRepository;
 import dev.unzor.nexus.identity.persistence.repository.ProjectUserRepository;
 import dev.unzor.nexus.projects.persistence.repository.ProjectMembershipRepository;
+import dev.unzor.nexus.projects.persistence.repository.ProjectRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -15,6 +16,7 @@ class RepositoryIsolationTests {
     @Test
     void nexusAccountsMayExposeGlobalJpaOperations() {
         assertThat(JpaRepository.class).isAssignableFrom(NexusAccountRepository.class);
+        assertThat(JpaRepository.class).isAssignableFrom(ProjectRepository.class);
     }
 
     @Test

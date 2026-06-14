@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Project login reserved</title>
+    <link rel="stylesheet" th:href="@{/identity/login.css}">
+</head>
+<body>
+<main class="nexus-login-container">
+    <section class="login-panel">
+        <div class="login-card">
+            <div class="header-text">
+                <h2 th:text="'Login reservado: ' + ${projectSlug}">Login reservado</h2>
+                <p>El login OAuth de usuarios finales se implementará aquí. Por ahora no hay autenticación funcional de ProjectUser.</p>
+            </div>
+        </div>
+    </section>
+</main>
+</body>
+</html>

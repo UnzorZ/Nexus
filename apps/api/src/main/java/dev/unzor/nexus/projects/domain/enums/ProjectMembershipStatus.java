@@ -1,8 +1,5 @@
 package dev.unzor.nexus.projects.domain.enums;
 
-/**
- * Estado operativo de la relación entre una cuenta Nexus y un proyecto.
- */
 public enum ProjectMembershipStatus {
     /** Invitación creada pero todavía no aceptada. */
     INVITED,
