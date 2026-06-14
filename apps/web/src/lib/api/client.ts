@@ -106,4 +106,6 @@ export const apiClient = {
     body?: RequestOptions["body"],
     options: RequestOptions = {},
   ) => apiRequest<T>(url, { ...options, method: "POST", body }),
+  delete: <T>(url: string, options: RequestOptions = {}) =>
+    apiRequest<T>(url, { ...options, method: "DELETE" }),
 };
