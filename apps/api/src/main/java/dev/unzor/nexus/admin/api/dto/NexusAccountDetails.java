@@ -19,16 +19,13 @@ public record NexusAccountDetails(
         String displayName,
         NexusAccountStatus status,
         boolean mfaEnabled,
+        boolean instanceAdmin,
         Instant emailVerifiedAt,
         Instant lastLoginAt,
         Instant createdAt,
         Instant updatedAt
 ) {
 
-    /**
-     * Convierte la entidad persistida en un modelo de lectura apto para devolver a
-     * otros servicios o controladores.
-     */
     public static NexusAccountDetails from(NexusAccount account) {
         return new NexusAccountDetails(
                 account.getId(),
@@ -36,6 +33,7 @@ public record NexusAccountDetails(
                 account.getDisplayName(),
                 account.getStatus(),
                 account.isMfaEnabled(),
+                account.isInstanceAdmin(),
                 account.getEmailVerifiedAt(),
                 account.getLastLoginAt(),
                 account.getCreatedAt(),

@@ -20,7 +20,6 @@ import java.util.UUID;
 public class GetNexusAccountService {
 
     private final NexusAccountRepository accountRepository;
-
     public GetNexusAccountService(NexusAccountRepository accountRepository) {
         this.accountRepository = accountRepository;
     }

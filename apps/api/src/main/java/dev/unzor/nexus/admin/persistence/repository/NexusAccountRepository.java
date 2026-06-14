@@ -2,6 +2,7 @@ package dev.unzor.nexus.admin.persistence.repository;
 
 import dev.unzor.nexus.admin.domain.entity.NexusAccount;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -18,4 +19,12 @@ public interface NexusAccountRepository extends JpaRepository<NexusAccount, UUID
     Optional<NexusAccount> findByEmailIgnoreCase(String email);
 
     boolean existsByEmailIgnoreCase(String email);
+
+    boolean existsByInstanceAdminTrue();
+
+    /**
+     * Serializes the first-account bootstrap within the current transaction.
+     */
+    @Query(value = "SELECT pg_advisory_xact_lock(721940317)", nativeQuery = true)
+    void acquireInstanceAdminBootstrapLock();
 }

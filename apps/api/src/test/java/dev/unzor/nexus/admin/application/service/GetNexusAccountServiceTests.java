@@ -36,28 +36,25 @@ class GetNexusAccountServiceTests {
         when(account.getDisplayName()).thenReturn("Project Owner");
         when(account.getStatus()).thenReturn(NexusAccountStatus.ACTIVE);
         when(account.isMfaEnabled()).thenReturn(true);
+        when(account.isInstanceAdmin()).thenReturn(false);
         when(account.getCreatedAt()).thenReturn(createdAt);
+        when(account.getUpdatedAt()).thenReturn(createdAt);
 
+        NexusAccountDetails expectedDetails = new NexusAccountDetails(
+                accountId,
+                "owner@example.com",
+                "Project Owner",
+                NexusAccountStatus.ACTIVE,
+                true,
+                false,
+                null,
+                null,
+                createdAt,
+                createdAt
+        );
         NexusAccountDetails result = service.getById(accountId);
 
-        assertThat(result)
-                .isNotSameAs(account)
-                .extracting(
-                        NexusAccountDetails::id,
-                        NexusAccountDetails::email,
-                        NexusAccountDetails::displayName,
-                        NexusAccountDetails::status,
-                        NexusAccountDetails::mfaEnabled,
-                        NexusAccountDetails::createdAt
-                )
-                .containsExactly(
-                        accountId,
-                        "owner@example.com",
-                        "Project Owner",
-                        NexusAccountStatus.ACTIVE,
-                        true,
-                        createdAt
-                );
+        assertThat(result).isEqualTo(expectedDetails);
         verify(accountRepository).findById(accountId);
     }
 
@@ -74,28 +71,25 @@ class GetNexusAccountServiceTests {
         when(account.getDisplayName()).thenReturn("Project Owner");
         when(account.getStatus()).thenReturn(NexusAccountStatus.ACTIVE);
         when(account.isMfaEnabled()).thenReturn(true);
+        when(account.isInstanceAdmin()).thenReturn(true);
         when(account.getCreatedAt()).thenReturn(createdAt);
+        when(account.getUpdatedAt()).thenReturn(createdAt);
 
+        NexusAccountDetails expectedDetails = new NexusAccountDetails(
+                randomId,
+                email,
+                "Project Owner",
+                NexusAccountStatus.ACTIVE,
+                true,
+                true,
+                null,
+                null,
+                createdAt,
+                createdAt
+        );
         NexusAccountDetails result = service.getByEmail(email);
 
-        assertThat(result)
-                .isNotSameAs(account)
-                .extracting(
-                        NexusAccountDetails::id,
-                        NexusAccountDetails::email,
-                        NexusAccountDetails::displayName,
-                        NexusAccountDetails::status,
-                        NexusAccountDetails::mfaEnabled,
-                        NexusAccountDetails::createdAt
-                )
-                .containsExactly(
-                        randomId,
-                        email,
-                        "Project Owner",
-                        NexusAccountStatus.ACTIVE,
-                        true,
-                        createdAt
-                );
+        assertThat(result).isEqualTo(expectedDetails);
         verify(accountRepository).findByEmailIgnoreCase(email);
     }
 

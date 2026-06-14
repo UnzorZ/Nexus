@@ -36,9 +36,6 @@ public record NexusAccountPrincipal(
         authorities = List.copyOf(authorities);
     }
 
-    /**
-     * Adapta una cuenta de dominio a un principal de Spring Security.
-     */
     public static NexusAccountPrincipal from(
             NexusAccount account,
             Collection<? extends GrantedAuthority> authorities

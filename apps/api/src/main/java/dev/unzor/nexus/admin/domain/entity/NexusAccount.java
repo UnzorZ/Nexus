@@ -11,6 +11,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -32,7 +33,13 @@ import java.util.UUID;
  * combinan.</p>
  */
 @Entity
-@Table(name = "nexus_accounts")
+@Table(
+        name = "nexus_accounts",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_nexus_accounts_email",
+                columnNames = "email"
+        )
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class NexusAccount {
@@ -41,7 +48,7 @@ public class NexusAccount {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(nullable = false, unique = true, length = 320)
+    @Column(nullable = false, length = 320)
     private String email;
 
     @Column(name = "password_hash", nullable = false)
@@ -56,6 +63,9 @@ public class NexusAccount {
 
     @Column(name = "mfa_enabled", nullable = false)
     private boolean mfaEnabled;
+
+    @Column(name = "instance_admin", nullable = false)
+    private boolean instanceAdmin;
 
     @Column(name = "email_verified_at")
     private Instant emailVerifiedAt;
@@ -127,6 +137,10 @@ public class NexusAccount {
 
     public void disableMfa() {
         mfaEnabled = false;
+    }
+
+    public void grantInstanceAdmin() {
+        instanceAdmin = true;
     }
 
     @PrePersist
