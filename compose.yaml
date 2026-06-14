@@ -18,6 +18,32 @@ services:
       retries: 5
       start_period: 10s
 
+  redis:
+    image: redis:8.8.0-alpine
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+      - --maxmemory
+      - 96mb
+      - --maxmemory-policy
+      - noeviction
+      - --notify-keyspace-events
+      - Egx
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - nexus-redis-data:/data
+    mem_limit: 160m
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   web:
     image: node:22-alpine
     working_dir: /app
@@ -38,5 +64,6 @@ services:
 
 volumes:
   nexus-postgres-data:
+  nexus-redis-data:
   nexus-web-node-modules:
   nexus-web-npm-cache:

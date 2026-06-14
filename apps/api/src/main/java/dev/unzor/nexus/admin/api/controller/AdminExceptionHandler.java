@@ -1,6 +1,7 @@
 package dev.unzor.nexus.admin.api.controller;
 
 import dev.unzor.nexus.admin.domain.exception.NexusAccountEmailAlreadyExistsException;
+import dev.unzor.nexus.admin.domain.exception.SessionNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -24,6 +25,17 @@ class AdminExceptionHandler {
         problem.setProperty("code", "conflict");
         problem.setProperty("email", exception.getEmail());
         return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler(SessionNotFoundException.class)
+    ResponseEntity<ProblemDetail> handleSessionNotFound(SessionNotFoundException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.NOT_FOUND,
+                "Session not found."
+        );
+        problem.setTitle("Not found");
+        problem.setProperty("code", "session_not_found");
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
