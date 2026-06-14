@@ -12,7 +12,7 @@ Módulo de autenticación y autorización de Nexus. Implementa un **Authorizatio
 | **Tipo** | Módulo Spring Modulith (`@ApplicationModule(displayName = "Identity")`) |
 | **Protocolo** | OAuth 2.0 + OpenID Connect 1.0 |
 | **Flujos soportados** | Authorization Code, Refresh Token |
-| **Estado** | MVP funcional con almacenamiento en memoria |
+| **Estado** | OAuth persistente en PostgreSQL; login de panel separado en `admin` |
 
 ---
 
@@ -78,8 +78,15 @@ Request
    │
    ├─ /oauth2/**, /userinfo, …     → @Order(1) SecurityConfig (Authorization Server)
    ├─ /internal/**, /actuator/**   → @Order(2) shared/SecurityConfiguration
-   └─ todo lo demás                → @Order(3) SecurityConfig (default + form login)
+   ├─ /panel/**, /api/panel/**     → @Order(3) admin/PanelSecurityConfiguration (NexusAccount + CSRF)
+   ├─ /p/**                         → @Order(4) identity/ProjectSecurityConfiguration (reservado ProjectUser)
+   └─ resto                         → @Order(5) SecurityConfig (denyAll por defecto)
 ```
+
+El panel Nexus **no** usa el Authorization Server global. Las cuentas
+`NexusAccount` inician sesión en `/panel/login` con sesión HTTP y CSRF
+(`XSRF-TOKEN` / `X-XSRF-TOKEN`). Los flujos OAuth persistentes preparan
+`ProjectUser` por proyecto bajo `/p/{projectSlug}/**` (diseño futuro).
 
 ### Cadena 1 — Authorization Server (`@Order(1)`)
 
@@ -87,7 +94,7 @@ Gestiona los endpoints del Authorization Server (`/oauth2/authorize`, `/oauth2/t
 
 - Activa **OpenID Connect 1.0** (`oidc(Customizer.withDefaults())`).
 - Requiere autenticación en todas las solicitudes antes de emitir códigos o tokens.
-- Si el cliente es un navegador (`Accept: text/html`) y el usuario no está autenticado, redirige a `/login` para continuar el flujo Authorization Code.
+- Si el cliente es un navegador (`Accept: text/html`) y el usuario no está autenticado, redirige a `/oauth2/authentication-required`. **No** usa `/panel/login` ni `NexusAccountUserDetailsService`.
 
 ### Cadena 2 — Endpoints internos (`@Order(2)`)
 
@@ -100,56 +107,66 @@ Definida en [`SecurityConfiguration`](../../apps/api/src/main/java/dev/unzor/nex
 
 Esta cadena existe en `shared` porque los endpoints `/internal/**` los exponen varios módulos (Identity, Projects, Permissions, etc.), no solo Identity.
 
-### Cadena 3 — Default (`@Order(3)`)
+### Cadena 3 — Panel admin (`@Order(3)`)
 
-Cubre el resto de rutas de la aplicación.
+Definida en [`PanelSecurityConfiguration`](../../apps/api/src/main/java/dev/unzor/nexus/admin/application/configuration/PanelSecurityConfiguration.java).
 
-- Permite sin autenticación: `/login`, `/identity/login.css`, `/.well-known/appspecific/**`, `/error`.
-- Requiere autenticación en todo lo demás.
-- Habilita **form login** con página personalizada (`LoginController` → plantilla Thymeleaf `identity/login`).
+- Aplica a `/panel/**` y `/api/panel/**`.
+- Autentica `NexusAccount` con form login en `/panel/login` y sesión HTTP.
+- CSRF activo con cookie `XSRF-TOKEN` y cabecera `X-XSRF-TOKEN`.
+- La sesión del panel y la cookie persistente `JSESSIONID` duran siete días por
+  defecto (`NEXUS_SESSION_TIMEOUT` y `NEXUS_SESSION_COOKIE_MAX_AGE`).
+- `/api/panel/**` sin sesión responde **401** (sin redirección HTML).
+- `/panel/**` HTML sin sesión redirige a `/panel/login`.
+- Logout API: `POST /api/panel/v1/session/logout` (204, CSRF). Logout HTML: `POST /panel/logout`.
+- `/admin/**` y `/api/admin/**` quedan reservados para un futuro panel exclusivo de `INSTANCE_ADMIN`.
 
-### Beans OAuth2 definidos en `SecurityConfig`
+### Cadena 4 — Proyecto reservado (`@Order(4)`)
 
-| Bean | Responsabilidad | Estado MVP |
-|------|-----------------|------------|
-| `userDetailsService` | Usuarios que pueden iniciar sesión en `/login` | Un usuario en memoria (`user` / `password`) |
-| `registeredClientRepository` | Clientes OAuth registrados | Un cliente `oidc-client` para el frontend Next.js |
-| `jwkSource` | Claves RSA para firmar JWT (access token, id token) | Par de claves nuevo en cada arranque |
-| `jwtDecoder` | Valida JWT firmados con `jwkSource` | Derivado de las mismas claves |
-| `authorizationServerSettings` | Rutas e issuer del Authorization Server | Valores por defecto de Spring |
+Definida en [`ProjectSecurityConfiguration`](../../apps/api/src/main/java/dev/unzor/nexus/identity/application/configuration/ProjectSecurityConfiguration.java).
 
-La URL base del frontend (`nexus.frontend-base-url`) se usa al construir el `RegisteredClient` para las redirect URIs de login y logout.
+- Aplica a `/p/**` sin deshabilitar CSRF globalmente.
+- `GET /p/{projectSlug}/login` es público y reservado; no hay login funcional de `ProjectUser`.
+- No registra `ProjectUserUserDetailsService` como bean global.
+
+### Cadena 5 — Residual (`@Order(5)`)
+
+- Permite recursos estáticos, `/oauth2/authentication-required`, `/oauth2/bootstrap/callback` y `/error`.
+- Deniega el resto (`denyAll`).
+
+### Beans OAuth2 JDBC (`identity`)
+
+| Bean | Responsabilidad | Estado |
+|------|-----------------|--------|
+| `RegisteredClientRepository` | Clientes OAuth en PostgreSQL | `JdbcRegisteredClientRepository` |
+| `OAuth2AuthorizationService` | Autorizaciones OAuth | `JdbcOAuth2AuthorizationService` |
+| `OAuth2AuthorizationConsentService` | Consentimientos | `JdbcOAuth2AuthorizationConsentService` |
+| `OidcRegisteredClientBootstrap` | Cliente técnico idempotente | Bootstrap, no consumido por el panel |
+| `jwkSource` | Firma JWT del Authorization Server | Par RSA en memoria por arranque (pendiente persistir) |
+
+El cliente bootstrap se configura con `nexus.oauth.bootstrap.*`. El secreto se
+almacena como `{bcrypt}…`. En cada arranque se reconcilian secreto, métodos de
+autenticación, grants, redirects, scopes y consentimiento con la configuración
+actual, conservando el ID interno del cliente persistido. La redirect URI por
+defecto es `/oauth2/bootstrap/callback` en la API, no una ruta del panel Next.js.
+El `client-id` público no se cambia automáticamente: si se modifica conservando
+el mismo `registered-client-id`, el arranque falla con un mensaje explícito.
 
 ---
 
 ## Componentes OAuth2/OIDC
 
-### Usuario en memoria
+### Cliente bootstrap (técnico)
 
-```java
-UserDetails user = User.withDefaultPasswordEncoder()
-    .username("user")
-    .password("password")
-    .roles("USER")
-    .build();
-```
-
-> **Nota:** Este usuario es temporal para el MVP. La implementación final debe usar un `UserDetailsService` respaldado por la base de datos.
-
-### Cliente OIDC registrado
-
-| Parámetro | Valor |
-|-----------|-------|
+| Parámetro | Valor por defecto |
+|-----------|-------------------|
+| **Registered client ID** | `nexus-oidc-client` |
 | **Client ID** | `oidc-client` |
-| **Client Secret** | `secret` (codificación `{noop}`) |
-| **Auth Method** | `client_secret_basic` |
-| **Grant Types** | `authorization_code`, `refresh_token` |
-| **Redirect URI** | `{frontend-url}/login/oauth2/code/oidc-client` |
-| **Post-logout URI** | `{frontend-url}/` |
+| **Client Secret** | `NEXUS_OAUTH_BOOTSTRAP_CLIENT_SECRET` (codificado `{bcrypt}`) |
+| **Redirect URI** | `http://127.0.0.1:8080/oauth2/bootstrap/callback` |
 | **Scopes** | `openid`, `profile` |
-| **Consent** | Requerido (`requireAuthorizationConsent = true`) |
 
-La URL base del frontend se configura con la variable de entorno `NEXUS_FRONTEND_BASE_URL` (por defecto `http://127.0.0.1:3000`).
+> **Nota:** Este cliente prepara la persistencia OAuth para futuros flujos multi-issuer por proyecto. El panel Next.js **no** lo consume; usa sesión HTTP en `/panel/login`.
 
 ### Firma de tokens (JWK)
 
@@ -197,28 +214,31 @@ Gestionados automáticamente por Spring Authorization Server:
 
 ---
 
-## Flujo de Autenticación
+## Flujo del panel (implementado)
 
 ```
-┌──────────┐    1. GET /oauth2/authorize    ┌──────────────────┐
-│  Frontend │ ──────────────────────────────► │  Nexus (Identity) │
-│  (Next.js) │                                │  Authorization    │
-│           │ ◄────────────────────────────── │  Server           │
-│           │    2. 302 → /login              │                   │
-│           │ ──────────────────────────────► │                   │
-│           │    3. POST /login (credentials) │                   │
-│           │ ◄────────────────────────────── │                   │
-│           │    4. Consent screen            │                   │
-│           │ ──────────────────────────────► │                   │
-│           │    5. Approve scopes            │                   │
-│           │ ◄────────────────────────────── │                   │
-│           │    6. 302 → redirect_uri?code=  │                   │
-│           │ ──────────────────────────────► │                   │
-│           │    7. POST /oauth2/token        │                   │
-│           │ ◄────────────────────────────── │                   │
-│           │    8. { access_token, id_token, │                   │
-│           │       refresh_token }           │                   │
-└──────────┘                                 └──────────────────┘
+Next.js /register  ──POST /api/panel/v1/accounts + CSRF──►  API del panel
+Next.js /login     ──redirect──►  GET /panel/login?continue=…
+Usuario            ──POST /panel/login + CSRF──►  sesión HTTP (JSESSIONID)
+Next.js /dashboard ──GET /api/panel/v1/me + cookies──►  401 → redirect login
+                   ──POST /api/panel/v1/session/logout + CSRF──►  204
+```
+
+`POST /api/panel/v1/accounts` permanece público por diseño. Si todavía no existe
+una cuenta administradora de instancia, la primera cuenta registrada recibe
+automáticamente `instanceAdmin = true`.
+El operador debe reclamar una instalación nueva antes de exponerla de forma general.
+
+### Limitación CSRF cross-host
+
+Si el frontend (`localhost:3000`) y la API (`localhost:8080`) usan hosts distintos, el navegador trata las cookies por origen. Las mutaciones deben usar `credentials: "include"` y la API debe exponer CORS con `allowCredentials`. En producción, alinear dominio/parent domain o usar un proxy same-origin.
+
+## Flujo OAuth por proyecto (reservado)
+
+```
+/p/{slug}/oauth2/*  → issuer futuro por proyecto
+/p/{slug}/login     → placeholder (sin ProjectUser funcional)
+/oauth2/authorize   → redirige a /oauth2/authentication-required (no panel)
 ```
 
 ---
@@ -226,39 +246,27 @@ Gestionados automáticamente por Spring Authorization Server:
 ## Configuración (application.properties)
 
 ```properties
-# ── Usuario por defecto (en memoria) ──────────────────────
-spring.security.user.name=user
-spring.security.user.password=password
+nexus.frontend-base-url=${NEXUS_FRONTEND_BASE_URL:http://localhost:3000}
 
-# ── URL base del frontend ─────────────────────────────────
-nexus.frontend-base-url=${NEXUS_FRONTEND_BASE_URL:http://127.0.0.1:3000}
-
-# ── Cliente OIDC ──────────────────────────────────────────
-spring.security.oauth2.authorizationserver.client.oidc-client.registration.client-id=oidc-client
-spring.security.oauth2.authorizationserver.client.oidc-client.registration.client-secret={noop}secret
-spring.security.oauth2.authorizationserver.client.oidc-client.registration.redirect-uris[0]=${nexus.frontend-base-url}/login/oauth2/code/oidc-client
-spring.security.oauth2.authorizationserver.client.oidc-client.registration.scopes[0]=openid
-spring.security.oauth2.authorizationserver.client.oidc-client.registration.scopes[1]=profile
-spring.security.oauth2.authorizationserver.client.oidc-client.require-authorization-consent=true
+nexus.oauth.bootstrap.registered-client-id=nexus-oidc-client
+nexus.oauth.bootstrap.client-id=oidc-client
+nexus.oauth.bootstrap.client-secret=${NEXUS_OAUTH_BOOTSTRAP_CLIENT_SECRET:changeme-local-dev}
+nexus.oauth.bootstrap.redirect-uri=${NEXUS_OAUTH_BOOTSTRAP_REDIRECT_URI:http://127.0.0.1:8080/oauth2/bootstrap/callback}
+nexus.oauth.bootstrap.post-logout-redirect-uri=${nexus.frontend-base-url}/
 ```
 
 ### Variables de entorno
 
 | Variable | Default | Descripción |
 |----------|---------|-------------|
-| `NEXUS_FRONTEND_BASE_URL` | `http://127.0.0.1:3000` | URL base del frontend para redirects OIDC |
+| `NEXUS_FRONTEND_BASE_URL` | `http://localhost:3000` | URL base del panel Next.js (redirect post-login, validación `continue`) |
+| `NEXUS_OAUTH_BOOTSTRAP_CLIENT_SECRET` | `changeme-local-dev` | Secreto del cliente bootstrap (se persiste como `{bcrypt}…`) |
 
 ---
 
 ## Testing con Postman
 
-Existe una colección Postman en [`docs/api/postman/`](../api/postman/README.md) para probar el flujo OIDC completo:
-
-1. Discovery → obtener el documento OIDC.
-2. Authorize → iniciar sesión en el navegador.
-3. Token → intercambiar el código por tokens.
-4. UserInfo → obtener datos del usuario.
-5. Refresh → renovar el access token.
+Existe una colección Postman en [`docs/api/postman/`](../api/postman/README.md) para probar el Authorization Server OAuth2/OIDC (discovery, authorize, token, userinfo, refresh). El panel Nexus usa sesión HTTP en `/panel/login`, no este flujo OIDC.
 
 ---
 
@@ -275,27 +283,24 @@ testImplementation 'org.springframework.boot:spring-boot-starter-security-oauth2
 
 ## Estado actual y roadmap
 
-### ✅ Implementado (MVP)
+### ✅ Implementado
 
 - [x] Authorization Server OAuth2/OIDC funcional.
 - [x] Flujo Authorization Code + Refresh Token.
 - [x] Firma de tokens JWT con RSA 2048.
-- [x] Cliente OIDC configurado para el frontend Next.js.
+- [x] Persistencia JDBC de clientes, autorizaciones y consentimientos OAuth2.
+- [x] Cliente bootstrap técnico idempotente (`nexus.oauth.bootstrap.*`).
+- [x] Panel Nexus con `NexusAccount`, sesión HTTP, CSRF y `/panel/login`.
 - [x] Health-check interno del módulo.
-- [x] Colección Postman para pruebas manuales.
 
-### 🔲 Pendiente
+### 🔲 Pendiente (multi-issuer)
 
-- [ ] **Persistencia de usuarios** — Migrar de `InMemoryUserDetailsManager` a JPA con entidades de dominio (`domain/entity/`).
-- [ ] **Persistencia de clientes** — Migrar de `InMemoryRegisteredClientRepository` a repositorio JPA (`persistence/repository/`).
-- [ ] **Persistencia de tokens/autorizaciones** — Almacenar autorizaciones OAuth2 en base de datos.
-- [ ] **Persistencia de claves JWK** — Evitar invalidar tokens al reiniciar la aplicación.
-- [ ] **Gestión de usuarios** — Registro, edición de perfil, cambio de contraseña.
-- [ ] **Roles y permisos** — Integración con el módulo `permissions` (ver [ADR-0003](../adr/0003-positive-permissions-in-mvp.md)).
-- [ ] **Eventos de dominio** — Publicar eventos de registro/login/logout para otros módulos (`application/events/`).
-- [ ] **Observabilidad** — Métricas de login, fallos, tokens emitidos (`application/observability/`).
-- [ ] **Gestión de sesiones** — Revocación, listado de sesiones activas (`sessions/`).
-- [ ] **Migraciones de base de datos** — Flyway/Liquibase para las tablas de identidad.
+- [ ] Issuer dinámico por proyecto (`/p/{slug}`).
+- [ ] `ProjectUserUserDetailsService` con `projectId` obligatorio.
+- [ ] Discovery/JWKS/claves de firma por proyecto.
+- [ ] Login funcional de `ProjectUser` en `/p/{slug}/login`.
+- [ ] Persistencia de claves JWK del Authorization Server.
+- [ ] Integración con `permissions` y eventos de dominio de auth.
 
 ---
 

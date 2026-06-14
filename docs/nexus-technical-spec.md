@@ -114,8 +114,8 @@ Important rules:
 
 - A Nexus account is not a project user.
 - Most Nexus accounts are not instance administrators.
-- `INSTANCE_ADMIN` is a global grant assigned to a Nexus account, not a separate
-  account type.
+- Instance administration is represented by `NexusAccount.instanceAdmin`, not a
+  separate account type or extensible role catalog.
 - An instance administrator can manage all projects and global settings.
 - Project access is granted through project memberships.
 
@@ -131,7 +131,7 @@ Recommended membership roles:
 - `MEMBER`: has limited dashboard access defined by project policy.
 
 The account that creates a project receives its first `OWNER` membership.
-Project administration is not represented by an `INSTANCE_ADMIN` grant.
+Project administration is not represented by the `instanceAdmin` flag.
 
 ### 5.4 Project
 
@@ -349,14 +349,6 @@ nexus_accounts
 ```
 
 ```text
-nexus_instance_roles
-- id
-- nexus_account_id
-- role
-- created_at
-```
-
-```text
 project_memberships
 - id
 - project_id
@@ -370,7 +362,7 @@ project_memberships
 Rules:
 
 - `nexus_accounts.email` is globally unique.
-- `INSTANCE_ADMIN` is an instance role and has global access.
+- `nexus_accounts.instance_admin = true` grants global instance access.
 - Project roles are `OWNER`, `ADMIN`, or `MEMBER` and belong to
   `project_memberships`.
 - Unique `(project_id, nexus_account_id)`.
@@ -665,26 +657,29 @@ Rules:
 
 Nexus has two API categories:
 
-### 10.1 Admin API
+### 10.1 Panel API
 
 Used by the Next.js dashboard.
 
 Recommended path:
 
 ```text
-/api/admin/v1/...
+/api/panel/v1/...
 ```
 
 Authentication:
 
-- Nexus account login using secure HTTP-only cookies, or
-- short-lived dashboard JWTs with refresh handled by secure cookie.
-
-MVP recommendation:
-
-- Use HTTP-only session cookie for dashboard.
-- Use Spring Security session support.
-- Keep dashboard auth separate from project OAuth.
+- Nexus account login via HTTP-only session cookie (`JSESSIONID`).
+- Server-side session timeout and persistent cookie lifetime default to seven
+  days; deployments may override `NEXUS_SESSION_TIMEOUT` and
+  `NEXUS_SESSION_COOKIE_MAX_AGE`.
+- Form login at `{api}/panel/login`; Next.js `/login` redirects there with optional `continue`.
+- Panel API at `/api/panel/**` returns **401** when unauthenticated (no HTML redirect).
+- Panel HTML at `/panel/**` redirects unauthenticated users to `/panel/login`.
+- CSRF via cookie `XSRF-TOKEN` and header `X-XSRF-TOKEN` on mutating requests.
+- Logout: `POST /api/panel/v1/session/logout` (204) or `POST /panel/logout` for HTML navigation.
+- `/admin/**` and `/api/admin/**` are reserved for a future `INSTANCE_ADMIN`-only surface.
+- Keep dashboard auth separate from project OAuth (`/p/{projectSlug}/**`).
 
 ### 10.2 Project API
 
@@ -746,10 +741,10 @@ Common codes:
 
 ### 12.1 Create Project
 
-Admin API:
+Panel API:
 
 ```http
-POST /api/admin/v1/projects
+POST /api/panel/v1/projects
 Content-Type: application/json
 ```
 
@@ -776,10 +771,10 @@ Response:
 
 ### 12.2 Create API Key
 
-Admin API:
+Panel API:
 
 ```http
-POST /api/admin/v1/projects/{projectId}/api-keys
+POST /api/panel/v1/projects/{projectId}/api-keys
 Content-Type: application/json
 ```
 
@@ -1162,6 +1157,8 @@ The same email in two projects represents two separate project users.
 
 Use Spring Authorization Server for production implementation.
 
+**Implemented:** JDBC-backed `RegisteredClientRepository`, `OAuth2AuthorizationService`, and `OAuth2AuthorizationConsentService` (PostgreSQL). A technical bootstrap client is seeded idempotently via `nexus.oauth.bootstrap.*`; it is not used by the dashboard.
+
 Nexus should document the low-level concepts it relies on:
 
 - `RegisteredClientRepository`: stores OAuth clients.
@@ -1319,7 +1316,8 @@ It must allow:
 Recommended Next.js routes:
 
 ```text
-/login
+/register
+/login          # redirects to API /panel/login?continue=…
 /dashboard
 /projects
 /projects/new
@@ -1337,6 +1335,8 @@ Recommended Next.js routes:
 /settings/accounts
 /settings/system
 ```
+
+Panel session is established on the API host (`/panel/login`). The dashboard calls `/api/panel/v1/me` with `credentials: "include"`. When frontend and API run on different hosts (e.g. `:3000` vs `:8080`), CSRF cookies are origin-scoped; use CORS with credentials or a same-origin reverse proxy in production.
 
 ### 17.3 UI Principles
 
@@ -1398,14 +1398,25 @@ The Java SDK should:
 ### 18.4 SDK Client Shape
 
 ```java
-@Autowired
-NexusClient nexus;
+@Service
+public class OrderAuthorizationService {
 
-boolean allowed = nexus.permissions()
-    .can(userId, "orders.cancel");
+    private final NexusClient nexus;
 
-nexus.notify()
-    .send("Archivo subido correctamente");
+    public OrderAuthorizationService(NexusClient nexus) {
+        this.nexus = nexus;
+    }
+
+    public boolean canCancelOrder(String userId) {
+        return nexus.permissions()
+                .can(userId, "orders.cancel");
+    }
+
+    public void notifyUploadCompleted() {
+        nexus.notify()
+                .send("Archivo subido correctamente");
+    }
+}
 ```
 
 ### 18.5 Future SDKs
@@ -1502,6 +1513,12 @@ MVP should include:
 - backup instructions for PostgreSQL,
 - bootstrap Nexus account and instance administrator flow.
 
+The account registration endpoint is intentionally public. On an uninitialized
+instance, the first successfully created Nexus account receives the single
+`instanceAdmin` privilege. Operators must claim a new instance before exposing it
+generally; concurrent registrations are serialized so only one account receives
+the grant.
+
 ## 21. Security Requirements
 
 ### 21.1 API Keys
@@ -1531,10 +1548,11 @@ MVP should include:
 
 ### 21.4 Admin Dashboard
 
-- HTTP-only secure cookies.
-- CSRF protection if cookie-based sessions are used.
-- SameSite cookie settings.
-- Session revocation.
+- HTTP-only secure cookies for panel session.
+- CSRF protection on panel and admin API mutations (`XSRF-TOKEN` / `X-XSRF-TOKEN`).
+- Validate `continue` redirect targets against `nexus.frontend-base-url` to prevent open redirects.
+- SameSite cookie settings; note cross-host limitations when Next.js and API differ by origin.
+- Session revocation via `POST /api/panel/v1/session/logout`.
 - Audit sensitive changes.
 
 ### 21.5 Authorization
@@ -1630,7 +1648,7 @@ Goal: create the control plane base.
 Deliverables:
 
 - Nexus account model.
-- Bootstrap Nexus account with `INSTANCE_ADMIN`.
+- Bootstrap Nexus account with `instanceAdmin = true`.
 - Nexus account login/session.
 - Instance administrator grants.
 - Project CRUD.
