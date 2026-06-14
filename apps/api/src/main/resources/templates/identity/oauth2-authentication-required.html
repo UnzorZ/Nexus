@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>OAuth authentication required</title>
+    <link rel="stylesheet" th:href="@{/identity/login.css}">
+</head>
+<body>
+<main class="nexus-login-container">
+    <section class="login-panel">
+        <div class="login-card">
+            <div class="header-text">
+                <h2>Autenticación de proyecto requerida</h2>
+                <p>Este endpoint OAuth pertenece a un realm de ProjectUser. Las cuentas Nexus del panel no pueden autorizar esta petición.</p>
+            </div>
+        </div>
+    </section>
+</main>
+</body>
+</html>

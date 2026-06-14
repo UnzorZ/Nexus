@@ -5,15 +5,17 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
  * Configuración de seguridad compartida para endpoints internos y de operaciones.
  * <p>
- * Forma parte del esquema de tres cadenas de filtros de Nexus. Esta es la cadena
- * {@code @Order(2)}: se evalúa después del Authorization Server ({@code @Order(1)} en
- * {@link dev.unzor.nexus.identity.application.configuration.SecurityConfig}) y antes
- * de la cadena por defecto ({@code @Order(3)}).
+ * Forma parte del esquema ordenado de cadenas de filtros de Nexus. Esta es la cadena
+ * {@code @Order(2)}: se evalúa después del Authorization Server ({@code @Order(1)}) y
+ * antes del panel Nexus ({@code @Order(3)}), las rutas de proyecto ({@code @Order(4)})
+ * y la cadena residual ({@code @Order(5)}).
  * <p>
  * Los health-checks de módulos bajo {@code /internal/**} deben ser accesibles sin
  * credenciales para facilitar comprobaciones locales y de despliegue. El resto de
@@ -23,6 +25,11 @@ import org.springframework.security.web.SecurityFilterChain;
  */
 @Configuration
 public class SecurityConfiguration {
+
+    @Bean
+    PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
 
     /**
      * Cadena de filtros para rutas internas y Actuator ({@code @Order(2)}).

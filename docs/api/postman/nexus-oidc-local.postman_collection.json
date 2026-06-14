@@ -1,0 +1,200 @@
+{
+  "info": {
+    "_postman_id": "4a8e7e2b-2f9a-4fd5-bb2e-9120838d6a7c",
+    "name": "Nexus OIDC Local",
+    "description": "Coleccion para probar Authorization Server OIDC de Nexus en local.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Discovery",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{auth_base_url}}/.well-known/openid-configuration",
+        "description": "Descubre endpoints OIDC y los guarda en variables de entorno."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "const body = pm.response.json();",
+              "pm.environment.set('authorization_endpoint', body.authorization_endpoint);",
+              "pm.environment.set('token_endpoint', body.token_endpoint);",
+              "pm.environment.set('userinfo_endpoint', body.userinfo_endpoint);",
+              "pm.environment.set('jwks_uri', body.jwks_uri);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Authorize (browser)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{authorization_endpoint}}?response_type=code&client_id={{client_id}}&scope={{scope}}&redirect_uri={{redirect_uri}}&state={{state}}&nonce={{nonce}}",
+        "description": "Abre login/consent. Copia el valor de ?code=... de la URL de redireccion y guardalo en authorization_code."
+      }
+    },
+    {
+      "name": "3. Token (authorization_code)",
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            {
+              "key": "username",
+              "value": "{{client_id}}",
+              "type": "string"
+            },
+            {
+              "key": "password",
+              "value": "{{client_secret}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/x-www-form-urlencoded"
+          }
+        ],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            {
+              "key": "grant_type",
+              "value": "authorization_code",
+              "type": "text"
+            },
+            {
+              "key": "code",
+              "value": "{{authorization_code}}",
+              "type": "text"
+            },
+            {
+              "key": "redirect_uri",
+              "value": "{{redirect_uri}}",
+              "type": "text"
+            }
+          ]
+        },
+        "url": "{{token_endpoint}}",
+        "description": "Intercambia el authorization code por access_token, id_token y refresh_token."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "const body = pm.response.json();",
+              "if (body.access_token) pm.environment.set('access_token', body.access_token);",
+              "if (body.refresh_token) pm.environment.set('refresh_token', body.refresh_token);",
+              "if (body.id_token) pm.environment.set('id_token', body.id_token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. UserInfo",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{access_token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [],
+        "url": "{{userinfo_endpoint}}",
+        "description": "Consulta claims de usuario con access token."
+      }
+    },
+    {
+      "name": "5. Token (refresh_token)",
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            {
+              "key": "username",
+              "value": "{{client_id}}",
+              "type": "string"
+            },
+            {
+              "key": "password",
+              "value": "{{client_secret}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/x-www-form-urlencoded"
+          }
+        ],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            {
+              "key": "grant_type",
+              "value": "refresh_token",
+              "type": "text"
+            },
+            {
+              "key": "refresh_token",
+              "value": "{{refresh_token}}",
+              "type": "text"
+            }
+          ]
+        },
+        "url": "{{token_endpoint}}",
+        "description": "Renueva access token usando refresh token."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "const body = pm.response.json();",
+              "if (body.access_token) pm.environment.set('access_token', body.access_token);",
+              "if (body.refresh_token) pm.environment.set('refresh_token', body.refresh_token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. JWKS",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{jwks_uri}}",
+        "description": "Obtiene las claves publicas del Authorization Server."
+      }
+    }
+  ]
+}
