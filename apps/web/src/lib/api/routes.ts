@@ -23,6 +23,13 @@ export const apiRoutes = {
       logout: apiUrl("/api/panel/v1/session/logout"),
       me: apiUrl("/api/panel/v1/me"),
     },
+    sessions: {
+      root: apiUrl("/api/panel/v1/sessions"),
+      byId: (publicSessionId: string) =>
+        apiUrl(
+          `/api/panel/v1/sessions/${encodeURIComponent(publicSessionId)}`,
+        ),
+    },
   },
 } as const;
 

@@ -26,3 +26,63 @@ export async function logoutPanelSession() {
     errorMessage: "No se pudo cerrar la sesión.",
   });
 }
+
+export type PanelSessionSummary = {
+  id: string;
+  current: boolean;
+  userAgent: string;
+  createdAt: string;
+  lastAccessedAt: string;
+  expiresAt: string;
+  maxInactiveIntervalSeconds: number;
+};
+
+export async function fetchPanelSessions(): Promise<PanelSessionSummary[]> {
+  return apiClient.get<PanelSessionSummary[]>(apiRoutes.panel.sessions.root, {
+    redirect: "manual",
+    errorMessage: "No se pudieron cargar las sesiones.",
+  });
+}
+
+export async function revokePanelSession(publicSessionId: string) {
+  const csrfToken = await ensureCsrfToken();
+
+  try {
+    await apiClient.delete<null>(
+      apiRoutes.panel.sessions.byId(publicSessionId),
+      {
+        headers: { [CSRF_HEADER_NAME]: csrfToken },
+        redirect: "manual",
+        errorMessage: "No se pudo revocar la sesión.",
+      },
+    );
+  } catch (error) {
+    if (error instanceof NexusApiError && error.status === 403) {
+      throw new NexusApiError(
+        "El formulario expiró o falta protección CSRF. Recarga e inténtalo de nuevo.",
+        { status: error.status, code: "csrf_rejected", data: error.data },
+      );
+    }
+    throw error;
+  }
+}
+
+export async function revokeAllPanelSessions() {
+  const csrfToken = await ensureCsrfToken();
+
+  try {
+    await apiClient.delete<null>(apiRoutes.panel.sessions.root, {
+      headers: { [CSRF_HEADER_NAME]: csrfToken },
+      redirect: "manual",
+      errorMessage: "No se pudieron cerrar todas las sesiones.",
+    });
+  } catch (error) {
+    if (error instanceof NexusApiError && error.status === 403) {
+      throw new NexusApiError(
+        "El formulario expiró o falta protección CSRF. Recarga e inténtalo de nuevo.",
+        { status: error.status, code: "csrf_rejected", data: error.data },
+      );
+    }
+    throw error;
+  }
+}
