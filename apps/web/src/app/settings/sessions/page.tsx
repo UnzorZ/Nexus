@@ -41,7 +41,7 @@ export default function SessionsPage() {
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [revokingAll, setRevokingAll] = useState(false);
 
-  const loadSessions = useCallback(async () => {
+  const refreshSessions = useCallback(async () => {
     try {
       setSessions(await fetchPanelSessions());
       setError(null);
@@ -61,8 +61,9 @@ export default function SessionsPage() {
   useEffect(() => {
     let cancelled = false;
 
-    fetchCurrentAccount()
-      .then(async (currentAccount) => {
+    async function load() {
+      try {
+        const currentAccount = await fetchCurrentAccount();
         if (cancelled) {
           return;
         }
@@ -72,28 +73,41 @@ export default function SessionsPage() {
           return;
         }
 
-        await loadSessions();
-      })
-      .catch((loadError) => {
+        const currentSessions = await fetchPanelSessions();
         if (cancelled) {
           return;
         }
+
+        setSessions(currentSessions);
+        setError(null);
+      } catch (loadError) {
+        if (cancelled) {
+          return;
+        }
+
+        if (loadError instanceof NexusApiError && loadError.status === 401) {
+          window.location.href = buildPanelLoginUrl("/settings/sessions");
+          return;
+        }
+
         if (loadError instanceof NexusApiError) {
           setError(loadError.message);
         } else {
           setError("No se pudo comprobar la sesión del panel.");
         }
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) {
           setReady(true);
         }
-      });
+      }
+    }
+
+    load();
 
     return () => {
       cancelled = true;
     };
-  }, [loadSessions]);
+  }, []);
 
   async function handleRevoke(session: PanelSessionSummary) {
     setError(null);
@@ -105,7 +119,7 @@ export default function SessionsPage() {
         router.push("/login");
         return;
       }
-      await loadSessions();
+      await refreshSessions();
     } catch (revokeError) {
       if (revokeError instanceof NexusApiError) {
         setError(revokeError.message);

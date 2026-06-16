@@ -47,14 +47,15 @@ services:
   web:
     image: node:22-alpine
     working_dir: /app
-    command: sh -c "node -e \"require('next/package.json'); require('lightningcss')\" >/dev/null 2>&1 || npm install --include=optional; npm run dev -- --hostname 0.0.0.0"
+    command: sh -c "node -e \"require('next/package.json'); require('lightningcss')\" >/dev/null 2>&1 || npm install --include=optional; rm -rf .next; npm run dev -- --hostname 0.0.0.0"
     environment:
       NEXT_TELEMETRY_DISABLED: "1"
-      NEXT_PUBLIC_NEXUS_API_BASE_URL: "http://localhost:8080"
+      NEXT_PUBLIC_NEXUS_API_BASE_URL: "${NEXT_PUBLIC_NEXUS_API_BASE_URL:-http://localhost:8080}"
       NEXUS_API_BASE_URL: "http://host.docker.internal:8080"
-      NEXUS_AUTH_BASE_URL: "http://localhost:8080"
+      NEXUS_AUTH_BASE_URL: "${NEXT_PUBLIC_NEXUS_API_BASE_URL:-http://localhost:8080}"
       NEXUS_AUTH_INTERNAL_BASE_URL: "http://host.docker.internal:8080"
-      NEXUS_FRONTEND_BASE_URL: "http://localhost:3000"
+      NEXUS_FRONTEND_BASE_URL: "${NEXUS_FRONTEND_BASE_URL:-http://localhost:3000}"
+      NEXUS_ALLOWED_DEV_ORIGINS: "${NEXUS_ALLOWED_DEV_ORIGINS:-127.0.0.1}"
     ports:
       - "3000:3000"
     volumes:
