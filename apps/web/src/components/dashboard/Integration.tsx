@@ -1,6 +1,18 @@
 "use client";
 
-import { Copy } from "lucide-react";
+import { useRef, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import { Check } from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { CopyIcon } from "@/components/ui/copy";
+import { MotionCard, SPRING_SNAPPY, animHandlers, type AnimIconHandle } from "./anim";
 
 const integrationData = {
   sdk: "Spring Boot starter",
@@ -15,60 +27,102 @@ const configSnippet = `nexus:
   api-key: \${NEXUS_API_KEY}`;
 
 export function Integration() {
+  const [copied, setCopied] = useState(false);
+  const copyRef = useRef<AnimIconHandle>(null);
+
+  async function copyApiKey() {
+    try {
+      await navigator.clipboard?.writeText(integrationData.apiKey);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch {
+      /* clipboard unavailable — ignore */
+    }
+  }
+
   return (
-    <div className="flex flex-col rounded-xl border border-slate-200 bg-white p-5">
-      <h2 className="text-sm font-semibold text-slate-900">Integration</h2>
+    <MotionCard className="h-full">
+      <Card className="h-full">
+        <CardHeader>
+          <CardTitle>Integration</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col gap-2.5 text-sm">
+            <Row label="SDK" value={integrationData.sdk} />
+            <Row label="Application" value={integrationData.application} />
+            <Row label="Version" value={integrationData.version} />
+            <div className="flex items-center gap-3">
+              <span className="w-24 shrink-0 text-xs text-muted-foreground">
+                Last heartbeat
+              </span>
+              <span className="flex items-center gap-1.5 font-medium">
+                <span className="nexus-live relative h-2 w-2 rounded-full bg-emerald-500 text-emerald-500" />
+                {integrationData.lastHeartbeat}
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="w-24 shrink-0 text-xs text-muted-foreground">
+                API key
+              </span>
+              <span className="flex min-w-0 flex-1 items-center gap-2 font-medium">
+                <span className="truncate">{integrationData.apiKey}</span>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={copied ? "Copied" : "Copy API key"}
+                  onClick={copyApiKey}
+                  {...animHandlers(copyRef)}
+                  className="relative shrink-0"
+                >
+                  <AnimatePresence mode="wait" initial={false}>
+                    {copied ? (
+                      <motion.span
+                        key="check"
+                        initial={{ opacity: 0, scale: 0.4 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.4 }}
+                        transition={SPRING_SNAPPY}
+                      >
+                        <Check className="size-3.5 text-emerald-600" />
+                      </motion.span>
+                    ) : (
+                      <motion.span
+                        key="copy"
+                        initial={{ opacity: 0, scale: 0.4 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.4 }}
+                        transition={SPRING_SNAPPY}
+                      >
+                        <CopyIcon ref={copyRef} size={14} />
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
+                </Button>
+              </span>
+            </div>
+          </div>
 
-      <div className="mt-4 flex flex-1 flex-col gap-4">
-        <div className="min-w-0 space-y-2.5">
-          <div className="flex items-center gap-3 text-sm">
-            <span className="w-24 shrink-0 text-slate-500">SDK</span>
-            <span className="font-medium text-slate-900">{integrationData.sdk}</span>
-          </div>
-          <div className="flex items-center gap-3 text-sm">
-            <span className="w-24 shrink-0 text-slate-500">Application</span>
-            <span className="font-medium text-slate-900">
-              {integrationData.application}
-            </span>
-          </div>
-          <div className="flex items-center gap-3 text-sm">
-            <span className="w-24 shrink-0 text-slate-500">Version</span>
-            <span className="font-medium text-slate-900">
-              {integrationData.version}
-            </span>
-          </div>
-          <div className="flex items-center gap-3 text-sm">
-            <span className="w-24 shrink-0 text-slate-500">Last heartbeat</span>
-            <span className="flex items-center gap-1.5 font-medium text-slate-900">
-              <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              {integrationData.lastHeartbeat}
-            </span>
-          </div>
-          <div className="flex items-center gap-3 text-sm">
-            <span className="w-24 shrink-0 text-slate-500">API key</span>
-            <span className="flex min-w-0 flex-1 items-center gap-2 font-medium text-slate-900">
-              <span className="truncate">{integrationData.apiKey}</span>
-              <button
-                type="button"
-                className="rounded p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
-              >
-                <Copy className="h-3.5 w-3.5" />
-              </button>
-            </span>
-          </div>
-        </div>
+          <pre className="mt-4 w-full overflow-x-auto rounded-md bg-muted p-3 font-mono text-[11px] leading-relaxed text-muted-foreground">
+            {configSnippet}
+          </pre>
+        </CardContent>
+        <CardFooter className="border-t">
+          <Button variant="secondary" size="sm" className="ml-auto">
+            View credentials
+          </Button>
+        </CardFooter>
+      </Card>
+    </MotionCard>
+  );
+}
 
-        <div className="w-full rounded-lg border border-slate-200 bg-slate-50 p-3 font-mono text-[11px] leading-relaxed text-slate-700">
-          <pre className="overflow-x-auto">{configSnippet}</pre>
-        </div>
-      </div>
-
-      <button
-        type="button"
-        className="mt-5 inline-flex h-8 items-center rounded-lg border border-indigo-200 bg-indigo-50 px-3 text-xs font-medium text-indigo-700 transition hover:bg-indigo-100"
-      >
-        View credentials
-      </button>
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="w-24 shrink-0 text-xs text-muted-foreground">
+        {label}
+      </span>
+      <span className="font-medium">{value}</span>
     </div>
   );
 }

@@ -1,82 +1,109 @@
 "use client";
 
+import { useRef } from "react";
 import {
-  BookOpen,
-  FileText,
-  KeyRound,
-  Plus,
-  Users,
-  Zap,
-} from "lucide-react";
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { BookTextIcon } from "@/components/ui/book-text";
+import { FileCogIcon } from "@/components/ui/file-cog";
+import { KeyCircleIcon } from "@/components/ui/key-circle";
+import { PlusIcon } from "@/components/ui/plus";
+import { UsersRoundIcon } from "@/components/ui/users-round";
+import { ZapIcon } from "@/components/ui/zap-icon";
+import { MotionCard, animHandlers, tint, type AnimIconHandle } from "./anim";
 
-const actions = [
+type ActionItem = {
+  id: string;
+  label: string;
+  description: string;
+  Icon: React.ElementType;
+  iconBg: string;
+  iconColor: string;
+};
+
+const actions: ActionItem[] = [
   {
     id: "api-key",
     label: "Create API key",
     description: "Generate a new project key",
-    icon: KeyRound,
-    iconBg: "bg-indigo-50",
-    iconColor: "text-indigo-600",
+    Icon: KeyCircleIcon,
+    iconBg: tint.indigo.bg,
+    iconColor: tint.indigo.text,
   },
   {
     id: "member",
     label: "Add member",
     description: "Invite someone to the project",
-    icon: Users,
-    iconBg: "bg-emerald-50",
-    iconColor: "text-emerald-600",
+    Icon: UsersRoundIcon,
+    iconBg: tint.emerald.bg,
+    iconColor: tint.emerald.text,
   },
   {
     id: "guide",
     label: "Integration guide",
     description: "Connect your application",
-    icon: BookOpen,
-    iconBg: "bg-violet-50",
-    iconColor: "text-violet-600",
+    Icon: BookTextIcon,
+    iconBg: tint.violet.bg,
+    iconColor: tint.violet.text,
   },
   {
     id: "docs",
     label: "API docs",
     description: "Browse the API reference",
-    icon: FileText,
-    iconBg: "bg-amber-50",
-    iconColor: "text-amber-600",
+    Icon: FileCogIcon,
+    iconBg: tint.amber.bg,
+    iconColor: tint.amber.text,
   },
 ];
 
+function ActionButton({ action }: { action: ActionItem }) {
+  const iconRef = useRef<AnimIconHandle>(null);
+  return (
+    <Button
+      variant="ghost"
+      {...animHandlers(iconRef)}
+      className="h-auto w-full justify-start gap-3 px-2 py-2"
+    >
+      <div
+        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${action.iconBg}`}
+      >
+        <action.Icon ref={iconRef} size={16} className={action.iconColor} />
+      </div>
+      <span className="flex-1 text-left">
+        <span className="block text-sm font-medium text-foreground">
+          {action.label}
+        </span>
+        <span className="block text-xs font-normal text-muted-foreground">
+          {action.description}
+        </span>
+      </span>
+      <PlusIcon size={16} className="shrink-0 text-muted-foreground/60" />
+    </Button>
+  );
+}
+
 export function QuickActions() {
   return (
-    <div className="flex flex-1 flex-col rounded-xl border border-slate-200 bg-white p-5">
-      <div className="flex items-center gap-2">
-        <Zap className="h-4 w-4 text-slate-500" />
-        <h2 className="text-sm font-semibold text-slate-900">Quick actions</h2>
-      </div>
-
-      <div className="mt-4 flex-1 space-y-2">
-        {actions.map((action) => {
-          const Icon = action.icon;
-          return (
-            <button
-              key={action.id}
-              type="button"
-              className="flex w-full items-center gap-3 rounded-lg p-2 text-left transition hover:bg-slate-50"
-            >
-              <div
-                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${action.iconBg}`}
-              >
-                <Icon className={`h-4 w-4 ${action.iconColor}`} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-slate-900">
-                  {action.label}
-                </p>
-                <p className="text-xs text-slate-500">{action.description}</p>
-              </div>
-              <Plus className="h-4 w-4 shrink-0 text-slate-300" />
-            </button>
-          );
-        })}
-      </div>
-    </div>
+    <MotionCard className="h-full">
+      <Card className="h-full">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ZapIcon size={16} className="text-muted-foreground" />
+            Quick actions
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col gap-1">
+            {actions.map((action) => (
+              <ActionButton key={action.id} action={action} />
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </MotionCard>
   );
 }

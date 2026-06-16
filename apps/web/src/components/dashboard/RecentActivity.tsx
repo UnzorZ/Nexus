@@ -1,88 +1,121 @@
 "use client";
 
-import { Activity, ArrowRight, KeyRound, ShieldCheck, User } from "lucide-react";
+import { useRef } from "react";
+import { ArrowBigRightIcon } from "@/components/ui/arrow-big-right";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { ActivityIcon } from "@/components/ui/activity";
+import { KeyCircleIcon } from "@/components/ui/key-circle";
+import { ShieldCheckIcon } from "@/components/ui/shield-check";
+import { UserIcon } from "@/components/ui/user";
+import { MotionCard, animHandlers, tint, type AnimIconHandle } from "./anim";
 
-const activities = [
+type ActivityItem = {
+  id: number;
+  message: string;
+  actor: string;
+  time: string;
+  Icon: React.ElementType;
+  iconColor: string;
+  iconBg: string;
+};
+
+const activities: ActivityItem[] = [
   {
     id: 1,
     message: "Permissions synchronized",
     actor: "f-shop-api",
     time: "2 minutes ago",
-    icon: ShieldCheck,
-    iconColor: "text-indigo-600",
-    iconBg: "bg-indigo-50",
+    Icon: ShieldCheckIcon,
+    iconColor: tint.indigo.text,
+    iconBg: tint.indigo.bg,
   },
   {
     id: 2,
     message: "Heartbeat received",
     actor: "f-shop-api",
     time: "42 seconds ago",
-    icon: Activity,
-    iconColor: "text-emerald-600",
-    iconBg: "bg-emerald-50",
+    Icon: ActivityIcon,
+    iconColor: tint.emerald.text,
+    iconBg: tint.emerald.bg,
   },
   {
     id: 3,
     message: "API key created",
     actor: "Marcos",
     time: "3 days ago",
-    icon: KeyRound,
-    iconColor: "text-amber-600",
-    iconBg: "bg-amber-50",
+    Icon: KeyCircleIcon,
+    iconColor: tint.amber.text,
+    iconBg: tint.amber.bg,
   },
   {
     id: 4,
     message: "Identity module enabled",
     actor: "Marcos",
     time: "5 days ago",
-    icon: User,
-    iconColor: "text-violet-600",
-    iconBg: "bg-violet-50",
+    Icon: UserIcon,
+    iconColor: tint.violet.text,
+    iconBg: tint.violet.bg,
   },
 ];
 
-export function RecentActivity() {
+function ActivityRow({ item }: { item: ActivityItem }) {
+  const iconRef = useRef<AnimIconHandle>(null);
   return (
-    <div className="flex flex-col rounded-xl border border-slate-200 bg-white p-5">
-      <h2 className="text-sm font-semibold text-slate-900">Recent activity</h2>
-
-      <ul className="mt-4 flex-1 space-y-3">
-        {activities.map((activity) => {
-          const Icon = activity.icon;
-          return (
-            <li
-              key={activity.id}
-              className="flex items-center justify-between gap-3"
-            >
-              <div className="flex items-center gap-3">
-                <div
-                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${activity.iconBg}`}
-                >
-                  <Icon className={`h-4 w-4 ${activity.iconColor}`} />
-                </div>
-                <p className="text-sm font-medium text-slate-900">
-                  {activity.message}
-                </p>
-              </div>
-              <div className="flex shrink-0 items-center gap-3 text-xs text-slate-500">
-                <span>{activity.actor}</span>
-                <span className="text-slate-300">·</span>
-                <span>{activity.time}</span>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-
-      <div className="mt-auto border-t border-slate-100 pt-4">
-        <button
-          type="button"
-          className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 transition hover:text-indigo-700"
+    <li
+      {...animHandlers(iconRef)}
+      className="-mx-2 flex items-center justify-between gap-3 rounded-md px-2 py-1.5 transition-colors hover:bg-muted/60"
+    >
+      <div className="flex min-w-0 items-center gap-3">
+        <div
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${item.iconBg}`}
         >
-          View audit log
-          <ArrowRight className="h-3 w-3" />
-        </button>
+          <item.Icon ref={iconRef} size={16} className={item.iconColor} />
+        </div>
+        <p className="truncate text-sm font-medium">{item.message}</p>
       </div>
-    </div>
+      <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+        <span>{item.actor}</span>
+        <span className="opacity-40">·</span>
+        <span>{item.time}</span>
+      </div>
+    </li>
+  );
+}
+
+export function RecentActivity() {
+  const auditRef = useRef<AnimIconHandle>(null);
+  return (
+    <MotionCard className="h-full">
+      <Card className="h-full">
+        <CardHeader>
+          <CardTitle>Recent activity</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ul className="flex flex-col gap-1">
+            {activities.map((item) => (
+              <ActivityRow key={item.id} item={item} />
+            ))}
+          </ul>
+        </CardContent>
+        <CardFooter className="border-t">
+          <Button
+            variant="link"
+            size="sm"
+            {...animHandlers(auditRef)}
+            className="ml-auto h-auto gap-1 px-0"
+          >
+            View audit log
+            <ArrowBigRightIcon ref={auditRef} size={14} />
+          </Button>
+        </CardFooter>
+      </Card>
+    </MotionCard>
   );
 }

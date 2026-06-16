@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { motion } from "motion/react";
 import type { NexusAccount } from "@/features/accounts/api";
 import { fetchCurrentAccount } from "@/features/session/api";
 import { NexusApiError } from "@/lib/api/client";
@@ -132,16 +133,29 @@ export function DashboardShell({
 
   if (session.status === "checking") {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6 py-10">
-        <p className="font-mono text-sm text-slate-500">Comprobando sesión...</p>
+      <main className="flex min-h-screen items-center justify-center bg-muted/40 px-6 py-10">
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="flex items-center gap-2 font-mono text-sm text-slate-500"
+        >
+          <span className="nexus-live relative h-2 w-2 rounded-full bg-primary text-primary" />
+          Comprobando sesión...
+        </motion.p>
       </main>
     );
   }
 
   if (session.status === "error") {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6 py-10">
-        <p className="text-sm text-red-600">{session.message}</p>
+      <main className="flex min-h-screen items-center justify-center bg-muted/40 px-6 py-10">
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="text-sm text-red-600"
+        >
+          {session.message}
+        </motion.p>
       </main>
     );
   }
@@ -156,14 +170,14 @@ export function DashboardShell({
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-muted/40">
       <Sidebar width={sidebarWidth} />
       <div
         role="separator"
         aria-orientation="vertical"
         aria-label="Resize sidebar"
         onMouseDown={handleMouseDown}
-        className="fixed top-0 z-50 h-screen w-4 -translate-x-1/2 cursor-col-resize bg-transparent transition-colors hover:bg-indigo-500/20 active:bg-indigo-500/40"
+        className="fixed top-0 z-50 h-screen w-4 -translate-x-1/2 cursor-col-resize bg-transparent transition-colors hover:bg-primary/20 active:bg-primary/40"
         style={{ left: `${sidebarWidth}px` }}
       />
       <Topbar account={session.account} leftOffset={sidebarWidth} />
