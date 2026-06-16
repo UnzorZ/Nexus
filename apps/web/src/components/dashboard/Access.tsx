@@ -1,80 +1,109 @@
 "use client";
 
-import { ArrowRight, Lock, User, Users } from "lucide-react";
+import { useRef } from "react";
+import { ArrowBigRightIcon } from "@/components/ui/arrow-big-right";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { LockIcon } from "@/components/ui/lock";
+import { UserIcon } from "@/components/ui/user";
+import { UsersRoundIcon } from "@/components/ui/users-round";
+import { MotionCard, animHandlers, tint, type AnimIconHandle } from "./anim";
 
-const accessItems = [
+type AccessItem = {
+  id: string;
+  title: string;
+  value: string;
+  subtitle: string;
+  Icon: React.ElementType;
+  iconBg: string;
+  iconColor: string;
+};
+
+const accessItems: AccessItem[] = [
   {
     id: "members",
     title: "Nexus members",
     value: "3",
     subtitle: "1 Owner · 2 Members",
-    icon: Users,
-    iconBg: "bg-indigo-50",
-    iconColor: "text-indigo-600",
+    Icon: UsersRoundIcon,
+    iconBg: tint.indigo.bg,
+    iconColor: tint.indigo.text,
   },
   {
     id: "users",
     title: "Project users",
     value: "248",
     subtitle: "Identity realm",
-    icon: User,
-    iconBg: "bg-violet-50",
-    iconColor: "text-violet-600",
+    Icon: UserIcon,
+    iconBg: tint.violet.bg,
+    iconColor: tint.violet.text,
   },
   {
     id: "clients",
     title: "OAuth clients",
     value: "2",
     subtitle: "Web app · Backend",
-    icon: Lock,
-    iconBg: "bg-amber-50",
-    iconColor: "text-amber-600",
+    Icon: LockIcon,
+    iconBg: tint.amber.bg,
+    iconColor: tint.amber.text,
   },
 ];
 
-export function Access() {
+function AccessStat({ item }: { item: AccessItem }) {
+  const iconRef = useRef<AnimIconHandle>(null);
   return (
-    <div className="flex flex-col rounded-xl border border-slate-200 bg-white p-5">
-      <h2 className="text-sm font-semibold text-slate-900">Access</h2>
-
-      <div className="mt-4 grid flex-1 grid-cols-3 gap-4 divide-x divide-slate-100">
-        {accessItems.map((item) => {
-          const Icon = item.icon;
-          return (
-            <div
-              key={item.id}
-              className="flex flex-col px-2 first:pl-0 last:pr-0"
-            >
-              <div className="flex h-10 items-center gap-2">
-                <div
-                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${item.iconBg}`}
-                >
-                  <Icon className={`h-4 w-4 ${item.iconColor}`} />
-                </div>
-                <p className="text-xs font-medium leading-tight text-slate-600">
-                  {item.title}
-                </p>
-              </div>
-              <p className="mt-1 text-2xl font-semibold text-slate-900">
-                {item.value}
-              </p>
-              <p className="mt-auto h-8 text-[11px] leading-tight text-slate-500">
-                {item.subtitle}
-              </p>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="mt-auto border-t border-slate-100 pt-4">
-        <button
-          type="button"
-          className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 transition hover:text-indigo-700"
+    <div {...animHandlers(iconRef)} className="flex flex-col gap-2 px-3 first:pl-0 last:pr-0">
+      <div className="flex items-center gap-2">
+        <div
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${item.iconBg}`}
         >
-          Manage access
-          <ArrowRight className="h-3 w-3" />
-        </button>
+          <item.Icon ref={iconRef} size={16} className={item.iconColor} />
+        </div>
+        <p className="text-xs font-medium leading-tight text-muted-foreground">
+          {item.title}
+        </p>
       </div>
+      <p className="text-2xl font-semibold tracking-tight">{item.value}</p>
+      <p className="text-[11px] leading-tight text-muted-foreground">
+        {item.subtitle}
+      </p>
     </div>
+  );
+}
+
+export function Access() {
+  const manageRef = useRef<AnimIconHandle>(null);
+  return (
+    <MotionCard className="h-full">
+      <Card className="h-full">
+        <CardHeader>
+          <CardTitle>Access</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-3 gap-4 divide-x divide-border">
+            {accessItems.map((item) => (
+              <AccessStat key={item.id} item={item} />
+            ))}
+          </div>
+        </CardContent>
+        <CardFooter className="border-t">
+          <Button
+            variant="link"
+            size="sm"
+            {...animHandlers(manageRef)}
+            className="ml-auto h-auto gap-1 px-0"
+          >
+            Manage access
+            <ArrowBigRightIcon ref={manageRef} size={14} />
+          </Button>
+        </CardFooter>
+      </Card>
+    </MotionCard>
   );
 }

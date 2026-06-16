@@ -1,35 +1,43 @@
 "use client";
 
+import { useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { motion } from "motion/react";
+import { Check } from "lucide-react";
 import {
-  Activity,
-  Box,
-  Check,
-  ChevronDown,
-  ClipboardList,
-  KeyRound,
-  LayoutDashboard,
-  Lock,
-  Settings,
-  Shield,
-  ShieldCheck,
-  User,
-  Users,
-} from "lucide-react";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ActivityIcon } from "@/components/ui/activity";
+import { BoxIcon } from "@/components/ui/box";
+import { ChevronDownIcon } from "@/components/ui/chevron-down";
+import { ClipboardCheckIcon } from "@/components/ui/clipboard-check";
+import { KeyCircleIcon } from "@/components/ui/key-circle";
+import { LayoutGridIcon } from "@/components/ui/layout-grid";
+import { LockIcon } from "@/components/ui/lock";
+import { SettingsIcon } from "@/components/ui/settings";
+import { ShieldCheckIcon } from "@/components/ui/shield-check";
+import { UserCogIcon } from "@/components/ui/user-cog-icon";
+import { UserIcon } from "@/components/ui/user";
+import { UsersRoundIcon } from "@/components/ui/users-round";
+import { SPRING, animHandlers, type AnimIconHandle } from "./anim";
 
-const projectNav = [
-  { label: "Overview", href: "/dashboard", icon: LayoutDashboard, active: true },
-  { label: "Modules", href: "#", icon: Box },
-  { label: "API keys", href: "#", icon: KeyRound },
-  { label: "Members", href: "#", icon: Users },
-  { label: "Project users", href: "#", icon: User },
-  { label: "Permissions", href: "#", icon: ShieldCheck },
-  { label: "Roles", href: "#", icon: Shield },
-  { label: "OAuth clients", href: "#", icon: Lock },
-  { label: "Heartbeat", href: "#", icon: Activity },
-  { label: "Audit", href: "#", icon: ClipboardList },
+type IconType = React.ElementType;
+
+const projectNav: { label: string; href: string; Icon: IconType }[] = [
+  { label: "Overview", href: "/dashboard", Icon: LayoutGridIcon },
+  { label: "Modules", href: "#", Icon: BoxIcon },
+  { label: "API keys", href: "#", Icon: KeyCircleIcon },
+  { label: "Members", href: "#", Icon: UsersRoundIcon },
+  { label: "Project users", href: "#", Icon: UserIcon },
+  { label: "Permissions", href: "#", Icon: ShieldCheckIcon },
+  { label: "Roles", href: "#", Icon: UserCogIcon },
+  { label: "OAuth clients", href: "#", Icon: LockIcon },
+  { label: "Heartbeat", href: "#", Icon: ActivityIcon },
+  { label: "Audit", href: "#", Icon: ClipboardCheckIcon },
 ];
 
 const projects = [
@@ -41,14 +49,58 @@ const projects = [
 
 const COLLAPSE_THRESHOLD = 90;
 
+function NavItem({
+  item,
+  active,
+  collapsed,
+  onSelect,
+}: {
+  item: { label: string; href: string; Icon: IconType };
+  active: boolean;
+  collapsed: boolean;
+  onSelect: (label: string) => void;
+}) {
+  const iconRef = useRef<AnimIconHandle>(null);
+  return (
+    <Link
+      href={item.href}
+      title={collapsed ? item.label : undefined}
+      onClick={() => onSelect(item.label)}
+      {...animHandlers(iconRef)}
+      className={`relative flex items-center rounded-lg text-sm font-medium transition-colors ${
+        active
+          ? "bg-primary/10 text-primary"
+          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+      } ${
+        collapsed
+          ? "h-9 w-9 items-center justify-center p-0"
+          : "gap-3 px-3 py-2"
+      }`}
+    >
+      {active ? (
+        <motion.span
+          layoutId="sidebar-active"
+          aria-hidden
+          transition={SPRING}
+          className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-full bg-primary"
+        />
+      ) : null}
+      <item.Icon size={18} ref={iconRef} />
+      {!collapsed ? item.label : null}
+    </Link>
+  );
+}
+
 export function Sidebar({ width }: { width: number }) {
   const collapsed = width <= COLLAPSE_THRESHOLD;
-  const [isProjectOpen, setIsProjectOpen] = useState(false);
   const [activeProject] = useState(projects[0]);
+  const [activeLabel, setActiveLabel] = useState("Overview");
+  const chevronRef = useRef<AnimIconHandle>(null);
+  const footerRef = useRef<AnimIconHandle>(null);
 
   return (
     <aside
-      className="fixed left-0 top-0 z-30 flex h-screen flex-col border-r border-slate-200 bg-white"
+      className="fixed left-0 top-0 z-30 flex h-screen flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground"
       style={{ width: `${width}px` }}
     >
       <div
@@ -65,121 +117,91 @@ export function Sidebar({ width }: { width: number }) {
           priority
         />
         {!collapsed ? (
-          <span className="text-lg font-semibold tracking-tight text-slate-900">
-            NEXUS
-          </span>
+          <span className="text-lg font-semibold tracking-tight">NEXUS</span>
         ) : null}
       </div>
 
-      <div className={`${collapsed ? "px-2 py-3" : "px-4 py-3"}`}>
-        {!collapsed ? (
-          <p className="px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-            Project
-          </p>
-        ) : null}
-        <div className="relative mt-2">
-          <button
-            type="button"
-            onClick={() => setIsProjectOpen(!isProjectOpen)}
-            className={`flex w-full items-center rounded-lg border border-slate-200 bg-white text-left transition hover:border-slate-300 hover:bg-slate-50 ${
-              collapsed ? "justify-center px-2 py-2" : "gap-3 px-3 py-2.5"
-            }`}
-          >
-            <div
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-sm font-semibold text-white ${activeProject.color}`}
+      <div className={collapsed ? "px-2 py-3" : "px-4 py-3"}>
+        <DropdownMenu modal={false}>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              {...animHandlers(chevronRef)}
+              className={`flex w-full items-center rounded-lg border border-sidebar-border bg-card text-left transition-colors hover:bg-muted ${
+                collapsed ? "justify-center px-2 py-2" : "gap-3 px-3 py-2.5"
+              }`}
             >
-              {activeProject.initial}
-            </div>
-            {!collapsed ? (
-              <>
+              <div
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-sm font-semibold text-white ${activeProject.color}`}
+              >
+                {activeProject.initial}
+              </div>
+              {!collapsed ? (
+                <>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">
+                      {activeProject.name}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {activeProject.slug}
+                    </p>
+                  </div>
+                  <ChevronDownIcon ref={chevronRef} size={16} className="shrink-0 text-muted-foreground" />
+                </>
+              ) : null}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-60">
+            {projects.map((project) => (
+              <DropdownMenuItem key={project.id} className="gap-3">
+                <div
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-xs font-semibold text-white ${project.color}`}
+                >
+                  {project.initial}
+                </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-slate-900">
-                    {activeProject.name}
-                  </p>
-                  <p className="truncate text-xs text-slate-500">
-                    {activeProject.slug}
+                  <p className="truncate text-sm font-medium">{project.name}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {project.slug}
                   </p>
                 </div>
-                <ChevronDown
-                  className={`h-4 w-4 shrink-0 text-slate-400 transition ${
-                    isProjectOpen ? "rotate-180" : ""
-                  }`}
-                />
-              </>
-            ) : null}
-          </button>
-
-          {!collapsed && isProjectOpen ? (
-            <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
-              {projects.map((project) => (
-                <button
-                  key={project.id}
-                  type="button"
-                  className="flex w-full items-center gap-3 px-3 py-2 text-left transition hover:bg-slate-50"
-                >
-                  <div
-                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-xs font-semibold text-white ${project.color}`}
-                  >
-                    {project.initial}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-slate-900">
-                      {project.name}
-                    </p>
-                    <p className="truncate text-xs text-slate-500">
-                      {project.slug}
-                    </p>
-                  </div>
-                  {project.id === activeProject.id ? (
-                    <Check className="h-4 w-4 shrink-0 text-indigo-600" />
-                  ) : null}
-                </button>
-              ))}
-            </div>
-          ) : null}
-        </div>
+                {project.id === activeProject.id ? (
+                  <Check className="size-4 shrink-0 text-primary" />
+                ) : null}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <nav
-        className={`flex-1 space-y-0.5 overflow-y-auto py-2 ${
+        className={`relative flex-1 space-y-0.5 overflow-y-auto py-2 ${
           collapsed ? "px-2" : "px-3"
         }`}
       >
-        {projectNav.map((item) => {
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.label}
-              href={item.href}
-              title={collapsed ? item.label : undefined}
-              className={`flex items-center rounded-lg text-sm font-medium transition ${
-                item.active
-                  ? "bg-indigo-50 text-indigo-700"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-              } ${
-                collapsed
-                  ? "h-9 w-9 items-center justify-center p-0"
-                  : "gap-3 px-3 py-2"
-              }`}
-            >
-              <Icon className="h-[18px] w-[18px] shrink-0" />
-              {!collapsed ? item.label : null}
-            </Link>
-          );
-        })}
+        {projectNav.map((item) => (
+          <NavItem
+            key={item.label}
+            item={item}
+            active={item.label === activeLabel}
+            collapsed={collapsed}
+            onSelect={setActiveLabel}
+          />
+        ))}
       </nav>
 
-      <div className={`border-t border-slate-200 p-3 ${collapsed ? "px-2" : ""}`}>
+      <div className={`border-t border-sidebar-border p-3 ${collapsed ? "px-2" : ""}`}>
         <Link
           href="#"
           title={collapsed ? "Project settings" : undefined}
-          className={`flex items-center rounded-lg text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 ${
+          {...animHandlers(footerRef)}
+          className={`flex items-center rounded-lg text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground ${
             collapsed
               ? "h-9 w-9 items-center justify-center p-0"
               : "gap-3 px-3 py-2"
           }`}
         >
-          <Settings className="h-[18px] w-[18px] shrink-0" />
+          <SettingsIcon ref={footerRef} size={18} />
           {!collapsed ? "Project settings" : null}
         </Link>
       </div>
