@@ -121,6 +121,11 @@ function AlertCard({
 
 export default function DashboardPage() {
   const [alerts, setAlerts] = useState<Alert[]>(initialAlerts);
+  // The grid follows `alertsOpen`, which only closes AFTER the last alert's
+  // exit animation finishes (see AnimatePresence onExitComplete). This keeps the
+  // column tall and in place while the alert fades out, so Quick Actions slides
+  // down once (cleanly) instead of bouncing: slide-down then snap-up.
+  const [alertsOpen, setAlertsOpen] = useState(initialAlerts.length > 0);
   const [isAlertsModalOpen, setIsAlertsModalOpen] = useState(false);
 
   const settingsRef = useRef<AnimIconHandle>(null);
@@ -129,7 +134,7 @@ export default function DashboardPage() {
 
   const visibleAlerts = alerts.slice(0, 3);
   const hiddenCount = Math.max(0, alerts.length - 3);
-  const hasAlerts = alerts.length > 0;
+  const hasAlerts = alertsOpen;
 
   function dismissAlert(id: string) {
     setAlerts((prev) => prev.filter((alert) => alert.id !== id));
@@ -164,6 +169,7 @@ export default function DashboardPage() {
               action: "Review",
             };
     setAlerts((prev) => [...prev, newAlert]);
+    setAlertsOpen(true);
   }
 
   return (
@@ -207,10 +213,10 @@ export default function DashboardPage() {
       </motion.div>
 
       <Stagger className="mt-6 grid flex-1 grid-cols-12 items-start gap-6">
-        {/* Project readiness: col-9 beside the alerts column, or stretched
-            full-width when there are no alerts. */}
+        {/* Project readiness: col-9 beside the alerts column, full-width
+            without. `layout="position"` widens it without distorting content. */}
         <motion.div
-          layout
+          layout="position"
           className={cn(
             "col-span-12 lg:col-start-1 lg:row-start-1",
             hasAlerts ? "lg:col-span-9" : "lg:col-span-12",
@@ -219,61 +225,66 @@ export default function DashboardPage() {
           <ProjectReadiness />
         </motion.div>
 
-        {/* Side column (alerts + actions): always narrow (col-3) on the right.
-            With alerts it spans rows 1-2 so actions sit under the alerts.
-            Without alerts it drops to row 2, landing just under the now
-            full-width readiness — beside the capability cards, never stretched. */}
+        {/* Side column: spans rows 1-2 with alerts so a tall alert list never
+            leaves a gap beside readiness (no scrollbar needed). It collapses to
+            row 2 once the last alert finishes exiting (onExitComplete).
+
+            Both the column AND the Quick-actions group use `layout="position"`:
+            when an alert leaves, the column slides down while Quick actions
+            slides up within it — the two compose into one smooth downward
+            glide instead of a jump-then-slide bounce. */}
         <motion.div
-          layout
+          layout="position"
           className={cn(
             "col-span-12 flex flex-col gap-6 lg:col-span-3 lg:col-start-10",
             hasAlerts ? "lg:row-start-1 lg:row-span-2" : "lg:row-start-2",
           )}
         >
-          {hasAlerts ? (
-            <div className="flex flex-col gap-3">
-              <AnimatePresence initial={false}>
-                {visibleAlerts.map((alert) => (
-                  <AlertCard key={alert.id} alert={alert} onDismiss={dismissAlert} />
-                ))}
-              </AnimatePresence>
+          <div className="flex flex-col gap-3 empty:hidden">
+            <AnimatePresence
+              initial={false}
+              onExitComplete={() => {
+                if (alerts.length === 0) setAlertsOpen(false);
+              }}
+            >
+              {visibleAlerts.map((alert) => (
+                <AlertCard key={alert.id} alert={alert} onDismiss={dismissAlert} />
+              ))}
+            </AnimatePresence>
 
-              {hiddenCount > 0 ? (
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => setIsAlertsModalOpen(true)}
-                >
-                  View {hiddenCount} more alert{hiddenCount === 1 ? "" : "s"}
-                </Button>
-              ) : null}
-            </div>
-          ) : null}
+            {hiddenCount > 0 ? (
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => setIsAlertsModalOpen(true)}
+              >
+                View {hiddenCount} more alert{hiddenCount === 1 ? "" : "s"}
+              </Button>
+            ) : null}
+          </div>
 
-          <Button
-            variant="outline"
-            {...animHandlers(addAlertRef)}
-            className="w-full border-dashed gap-1.5"
-            onClick={spawnAlert}
-          >
-            <PlusIcon ref={addAlertRef} size={14} />
-            Add test alert
-          </Button>
+          <motion.div layout="position" className="flex flex-col gap-6">
+            <QuickActions />
 
-          <QuickActions />
+            <Button
+              variant="outline"
+              {...animHandlers(addAlertRef)}
+              className="w-full border-dashed gap-1.5"
+              onClick={spawnAlert}
+            >
+              <PlusIcon ref={addAlertRef} size={14} />
+              Add test alert
+            </Button>
+          </motion.div>
         </motion.div>
 
-        {/* Capability cards: always col-9 on the left at row 2 — under
-            readiness and beside the side column in both states. */}
-        <motion.div
-          layout
-          className="col-span-12 grid grid-cols-1 gap-6 lg:col-span-9 lg:col-start-1 lg:row-start-2 lg:grid-cols-2"
-        >
+        {/* Capability cards: always col-9 on the left at row 2. */}
+        <div className="col-span-12 grid grid-cols-1 gap-6 lg:col-span-9 lg:col-start-1 lg:row-start-2 lg:grid-cols-2">
           <EnabledCapabilities />
           <Integration />
           <Access />
           <RecentActivity />
-        </motion.div>
+        </div>
       </Stagger>
 
       <Dialog open={isAlertsModalOpen} onOpenChange={setIsAlertsModalOpen}>
