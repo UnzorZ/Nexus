@@ -1,21 +1,30 @@
 "use client";
 
+import "../login/auth.css";
+
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { FormEvent, Suspense, useState } from "react";
 import { motion } from "motion/react";
-import { Eye, EyeOff, UserPlus } from "lucide-react";
-import Image from "next/image";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Eye, EyeOff, ShieldAlert } from "lucide-react";
 import { createNexusAccount } from "@/features/accounts/api";
 import { NexusApiError } from "@/lib/api/client";
-import { SPRING_SNAPPY } from "@/components/dashboard/anim";
+import { fadeUp, SPRING_SNAPPY } from "@/components/dashboard/anim";
+import { AuthShell } from "../login/AuthShell";
 
 export default function RegisterPage() {
+  return (
+    <Suspense fallback={<AuthShell />}>
+      <RegisterScreen />
+    </Suspense>
+  );
+}
+
+function RegisterScreen() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const continuePath = searchParams.get("continue") ?? "/projects";
+
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -35,7 +44,6 @@ export default function RegisterPage() {
       setIsPending(false);
       return;
     }
-
     if (password.length < 8) {
       setError("Password must be at least 8 characters.");
       setIsPending(false);
@@ -44,7 +52,7 @@ export default function RegisterPage() {
 
     try {
       await createNexusAccount({ email, password, displayName });
-      router.push("/login");
+      router.push(`/login?continue=${encodeURIComponent(continuePath)}`);
     } catch (submitError) {
       if (submitError instanceof NexusApiError) {
         setError(submitError.message);
@@ -57,117 +65,113 @@ export default function RegisterPage() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col bg-muted/40">
-      <header className="flex h-16 items-center border-b bg-card px-6">
-        <div className="flex items-center gap-3">
-          <Image
-            src="/nexus-logo-icon.png"
-            alt="Nexus"
-            width={32}
-            height={32}
-            className="h-8 w-auto"
-            priority
-          />
-          <span className="text-lg font-semibold tracking-tight">NEXUS</span>
-        </div>
-      </header>
+    <AuthShell>
+      <motion.header
+        className="auth-header"
+        variants={fadeUp}
+        initial="hidden"
+        animate="visible"
+      >
+        <h1 className="auth-header__title">Create your account</h1>
+        <p className="auth-header__subtitle">
+          Register a Nexus account to access the panel.
+        </p>
+      </motion.header>
 
-      <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-6 py-10">
+      {error ? (
         <motion.div
-          initial={{ opacity: 0, y: 16 }}
+          className="auth-alert auth-alert--error"
+          role="alert"
+          initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
           transition={SPRING_SNAPPY}
         >
-          <Card>
-            <CardHeader className="text-center">
-              <CardTitle className="text-xl">Create account</CardTitle>
-              <CardDescription>
-                Register a Nexus account to access the panel.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    name="email"
-                    type="email"
-                    autoComplete="email"
-                    placeholder="marcos@example.com"
-                    required
-                    disabled={isPending}
-                  />
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="displayName">Display name</Label>
-                  <Input
-                    id="displayName"
-                    name="displayName"
-                    type="text"
-                    autoComplete="name"
-                    placeholder="Marcos"
-                    required
-                    disabled={isPending}
-                  />
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="password">Password</Label>
-                  <div className="relative">
-                    <Input
-                      id="password"
-                      name="password"
-                      type={showPassword ? "text" : "password"}
-                      autoComplete="new-password"
-                      placeholder="Min. 8 characters"
-                      minLength={8}
-                      required
-                      disabled={isPending}
-                      className="pr-10"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      aria-label={showPassword ? "Hide password" : "Show password"}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
-                      tabIndex={-1}
-                    >
-                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
-                  </div>
-                </div>
-
-                {error ? (
-                  <motion.p
-                    initial={{ opacity: 0, y: -4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-                  >
-                    {error}
-                  </motion.p>
-                ) : null}
-
-                <Button type="submit" disabled={isPending} className="w-full gap-2">
-                  <UserPlus size={16} />
-                  {isPending ? "Creating account..." : "Create account"}
-                </Button>
-              </form>
-
-              <p className="mt-6 text-center text-sm text-muted-foreground">
-                Already have an account?{" "}
-                <Link
-                  href="/login"
-                  className="font-medium text-primary hover:underline"
-                >
-                  Sign in
-                </Link>
-              </p>
-            </CardContent>
-          </Card>
+          <ShieldAlert />
+          <span>{error}</span>
         </motion.div>
-      </div>
-    </main>
+      ) : null}
+
+      <form className="auth-form" onSubmit={handleSubmit}>
+        <div className="auth-field">
+          <label className="auth-field__label" htmlFor="displayName">
+            Display name
+          </label>
+          <input
+            id="displayName"
+            name="displayName"
+            type="text"
+            className="auth-field__input"
+            placeholder="Marcos"
+            autoComplete="name"
+            required
+            disabled={isPending}
+          />
+        </div>
+
+        <div className="auth-field">
+          <label className="auth-field__label" htmlFor="email">
+            Email address
+          </label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            className="auth-field__input"
+            placeholder="you@example.com"
+            autoComplete="email"
+            inputMode="email"
+            autoFocus
+            required
+            disabled={isPending}
+          />
+        </div>
+
+        <div className="auth-field">
+          <label className="auth-field__label" htmlFor="password">
+            Password
+          </label>
+          <div className="auth-password">
+            <input
+              id="password"
+              name="password"
+              type={showPassword ? "text" : "password"}
+              className="auth-field__input"
+              placeholder="Min. 8 characters"
+              autoComplete="new-password"
+              minLength={8}
+              required
+              disabled={isPending}
+            />
+            <button
+              type="button"
+              className="auth-eye"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              aria-pressed={showPassword}
+              aria-controls="password"
+              onClick={() => setShowPassword((v) => !v)}
+              tabIndex={-1}
+            >
+              {showPassword ? <EyeOff /> : <Eye />}
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" className="auth-submit" disabled={isPending}>
+          {isPending ? "Creating account…" : "Create account"}
+        </button>
+      </form>
+
+      <p className="auth-switch">
+        Already have an account?{" "}
+        <Link
+          href={{
+            pathname: "/login",
+            query: continuePath ? { continue: continuePath } : {},
+          }}
+        >
+          Sign in
+        </Link>
+      </p>
+    </AuthShell>
   );
 }

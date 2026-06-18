@@ -1,29 +1,41 @@
 "use client";
 
+import "./auth.css";
+
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, useRef, useState } from "react";
+import { FormEvent, Suspense, useState } from "react";
 import { motion } from "motion/react";
-import { Eye, EyeOff, LogIn } from "lucide-react";
-import Image from "next/image";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { NexusApiError, apiClient } from "@/lib/api/client";
+import {
+  CheckCircle2,
+  Eye,
+  EyeOff,
+  Lock,
+  ShieldAlert,
+} from "lucide-react";
+import { apiClient, NexusApiError } from "@/lib/api/client";
 import { CSRF_HEADER_NAME, ensureCsrfToken } from "@/lib/api/csrf";
 import { apiRoutes } from "@/lib/api/routes";
-import { SPRING_SNAPPY } from "@/components/dashboard/anim";
+import { fadeUp, SPRING_SNAPPY } from "@/components/dashboard/anim";
+import { AuthShell } from "./AuthShell";
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<AuthShell />}>
+      <LoginScreen />
+    </Suspense>
+  );
+}
+
+function LoginScreen() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const continuePath = searchParams.get("continue") ?? "/projects";
+  const loggedOut = searchParams.get("logout") === "1";
 
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const formRef = useRef<HTMLFormElement>(null);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -39,7 +51,6 @@ export default function LoginPage() {
       setIsPending(false);
       return;
     }
-
     if (!password) {
       setError("Please enter your password.");
       setIsPending(false);
@@ -55,11 +66,10 @@ export default function LoginPage() {
         {
           headers: { [CSRF_HEADER_NAME]: csrfToken },
           redirect: "manual",
-          errorMessage: "Invalid email or password.",
+          errorMessage: "Incorrect email address or password.",
         },
       );
 
-      // Session is set server-side via JSESSIONID cookie.
       router.push(continuePath);
       router.refresh();
     } catch (err) {
@@ -74,109 +84,112 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col bg-muted/40">
-      <header className="flex h-16 items-center border-b bg-card px-6">
-        <div className="flex items-center gap-3">
-          <Image
-            src="/nexus-logo-icon.png"
-            alt="Nexus"
-            width={32}
-            height={32}
-            className="h-8 w-auto"
-            priority
-          />
-          <span className="text-lg font-semibold tracking-tight">NEXUS</span>
-        </div>
-      </header>
+    <AuthShell>
+      <motion.header
+        className="auth-header"
+        variants={fadeUp}
+        initial="hidden"
+        animate="visible"
+      >
+        <h1 className="auth-header__title">Welcome back</h1>
+        <p className="auth-header__subtitle">Sign in to your Nexus account.</p>
+      </motion.header>
 
-      <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-6 py-10">
+      {loggedOut ? (
         <motion.div
-          initial={{ opacity: 0, y: 16 }}
+          className="auth-alert auth-alert--success"
+          role="status"
+          initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
           transition={SPRING_SNAPPY}
         >
-          <Card>
-            <CardHeader className="text-center">
-              <CardTitle className="text-xl">Sign in</CardTitle>
-              <CardDescription>
-                Enter your Nexus account credentials to continue.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form
-                ref={formRef}
-                onSubmit={handleSubmit}
-                className="flex flex-col gap-5"
-              >
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    name="email"
-                    type="email"
-                    autoComplete="email"
-                    placeholder="marcos@example.com"
-                    required
-                    disabled={isPending}
-                  />
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="password">Password</Label>
-                  </div>
-                  <div className="relative">
-                    <Input
-                      id="password"
-                      name="password"
-                      type={showPassword ? "text" : "password"}
-                      autoComplete="current-password"
-                      placeholder="••••••••"
-                      required
-                      disabled={isPending}
-                      className="pr-10"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      aria-label={showPassword ? "Hide password" : "Show password"}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
-                      tabIndex={-1}
-                    >
-                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
-                  </div>
-                </div>
-
-                {error ? (
-                  <motion.p
-                    initial={{ opacity: 0, y: -4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-                  >
-                    {error}
-                  </motion.p>
-                ) : null}
-
-                <Button type="submit" disabled={isPending} className="w-full gap-2">
-                  <LogIn size={16} />
-                  {isPending ? "Signing in..." : "Sign in"}
-                </Button>
-              </form>
-
-              <p className="mt-6 text-center text-sm text-muted-foreground">
-                Don&apos;t have an account?{" "}
-                <Link
-                  href="/register"
-                  className="font-medium text-primary hover:underline"
-                >
-                  Create one
-                </Link>
-              </p>
-            </CardContent>
-          </Card>
+          <CheckCircle2 />
+          <span>You have been signed out.</span>
         </motion.div>
+      ) : null}
+
+      {error ? (
+        <motion.div
+          className="auth-alert auth-alert--error"
+          role="alert"
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={SPRING_SNAPPY}
+        >
+          <ShieldAlert />
+          <span>{error}</span>
+        </motion.div>
+      ) : null}
+
+      <form className="auth-form" onSubmit={handleSubmit}>
+        <div className="auth-field">
+          <label className="auth-field__label" htmlFor="email">
+            Email address
+          </label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            className="auth-field__input"
+            placeholder="you@example.com"
+            autoComplete="email"
+            inputMode="email"
+            autoFocus
+            required
+            disabled={isPending}
+          />
+        </div>
+
+        <div className="auth-field">
+          <label className="auth-field__label" htmlFor="password">
+            Password
+          </label>
+          <div className="auth-password">
+            <input
+              id="password"
+              name="password"
+              type={showPassword ? "text" : "password"}
+              className="auth-field__input"
+              placeholder="Enter your password"
+              autoComplete="current-password"
+              required
+              disabled={isPending}
+            />
+            <button
+              type="button"
+              className="auth-eye"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              aria-pressed={showPassword}
+              aria-controls="password"
+              onClick={() => setShowPassword((v) => !v)}
+              tabIndex={-1}
+            >
+              {showPassword ? <EyeOff /> : <Eye />}
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" className="auth-submit" disabled={isPending}>
+          {isPending ? "Signing in…" : "Sign in"}
+        </button>
+      </form>
+
+      <div className="auth-session-note">
+        <Lock />
+        <span>Your session is protected and can be revoked at any time.</span>
       </div>
-    </main>
+
+      <p className="auth-switch">
+        Don&apos;t have an account?{" "}
+        <Link
+          href={{
+            pathname: "/register",
+            query: continuePath ? { continue: continuePath } : {},
+          }}
+        >
+          Create one
+        </Link>
+      </p>
+    </AuthShell>
   );
 }
