@@ -28,7 +28,7 @@ export default function Home() {
             Crear cuenta
           </Link>
           <Link
-            href="/dashboard"
+            href="/projects"
             className="inline-flex h-12 items-center border border-transparent px-5 text-sm font-medium text-[#796d5f] underline transition hover:text-[#181612]"
           >
             Ir al dashboard

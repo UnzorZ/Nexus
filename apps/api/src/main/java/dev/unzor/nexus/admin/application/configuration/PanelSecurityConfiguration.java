@@ -12,6 +12,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -25,12 +27,25 @@ import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 @Configuration
 class PanelSecurityConfiguration {
 
+    /**
+     * Proveedor de autenticación del panel, expuesto como bean para que lo
+     * consuman tanto la cadena de filtros como el {@link #panelAuthenticationManager}.
+     */
+    @Bean
+    DaoAuthenticationProvider panelAuthenticationProvider(
+            NexusAccountUserDetailsService nexusAccountUserDetailsService,
+            PasswordEncoder passwordEncoder
+    ) {
+        DaoAuthenticationProvider provider = new DaoAuthenticationProvider(nexusAccountUserDetailsService);
+        provider.setPasswordEncoder(passwordEncoder);
+        return provider;
+    }
+
     @Bean
     @Order(3)
     SecurityFilterChain panelSecurityFilterChain(
             HttpSecurity http,
-            NexusAccountUserDetailsService nexusAccountUserDetailsService,
-            PasswordEncoder passwordEncoder,
+            DaoAuthenticationProvider authenticationProvider,
             PanelAuthenticationSuccessHandler authenticationSuccessHandler,
             PanelAuthenticationFailureHandler authenticationFailureHandler
     ) throws Exception {
@@ -41,11 +56,6 @@ class PanelSecurityConfiguration {
 
         CsrfTokenRequestAttributeHandler csrfRequestHandler = new CsrfTokenRequestAttributeHandler();
         csrfRequestHandler.setCsrfRequestAttributeName("_csrf");
-
-        DaoAuthenticationProvider authenticationProvider = new DaoAuthenticationProvider(
-                nexusAccountUserDetailsService
-        );
-        authenticationProvider.setPasswordEncoder(passwordEncoder);
 
         http
                 .securityMatcher("/panel/**", "/api/panel/**")
@@ -58,6 +68,7 @@ class PanelSecurityConfiguration {
                         .requestMatchers(HttpMethod.GET, "/panel/login").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/panel/v1/csrf").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/panel/v1/accounts").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/panel/v1/session/login").permitAll()
                         .requestMatchers("/panel/logout").permitAll()
                         .anyRequest().authenticated()
                 )
@@ -108,6 +119,16 @@ class PanelSecurityConfiguration {
             PanelContinueUrlValidator continueUrlValidator
     ) {
         return new PanelAuthenticationSuccessHandler(continueUrlValidator);
+    }
+
+    /**
+     * Expone el {@link AuthenticationManager} del panel como bean para que el
+     * endpoint JSON {@code POST /api/panel/v1/session/login} pueda autenticar sin
+     * depender de la redirección del formulario HTML.
+     */
+    @Bean
+    AuthenticationManager panelAuthenticationManager(DaoAuthenticationProvider panelAuthenticationProvider) {
+        return new ProviderManager(panelAuthenticationProvider);
     }
 
     @Bean
