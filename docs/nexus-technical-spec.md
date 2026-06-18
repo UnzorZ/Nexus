@@ -300,7 +300,7 @@ com.unzor.nexus
 │   ├── domain
 │   └── persistence
 └── notify
-    ├── telegram
+    ├── mail
     ├── templates
     └── delivery
 ```
@@ -1495,8 +1495,8 @@ NEXUS_COOKIE_SECRET
 Future module variables:
 
 ```text
-NEXUS_TELEGRAM_BOT_TOKEN
-NEXUS_TELEGRAM_DEFAULT_CHAT_ID
+NEXUS_SMTP_HOST
+NEXUS_SMTP_PASSWORD
 NEXUS_VAULT_MASTER_KEY
 NEXUS_STORAGE_PATH
 ```
@@ -1731,7 +1731,7 @@ Goal: centralize notifications.
 Deliverables:
 
 - Notify module toggle.
-- Telegram channel.
+- Email channel (SMTP).
 - Message send endpoint.
 - Notification history.
 - Notification audit.

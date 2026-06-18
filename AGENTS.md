@@ -299,7 +299,7 @@ Notification service.
 Put here:
 
 - notification requests,
-- Telegram delivery,
+- email delivery,
 - templates,
 - notification history,
 - notification delivery audit.
@@ -347,7 +347,7 @@ Use:
 - `persistence/repository/` for JPA repositories and database-facing adapters.
 - `infrastructure/interceptor/` for technical interceptors that belong to the module.
 
-Only add specialized folders such as `security/`, `oauth/`, `resolver/`, `snapshot/`, or `telegram/` when the module genuinely needs them.
+Only add specialized folders such as `security/`, `oauth/`, `resolver/`, `snapshot/`, or `mail/` when the module genuinely needs them.
 
 ## apps/api/src/main/resources
 

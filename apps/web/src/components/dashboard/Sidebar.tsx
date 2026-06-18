@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { motion } from "motion/react";
 import { Check } from "lucide-react";
 import {
@@ -29,15 +30,15 @@ type IconType = React.ElementType;
 
 const projectNav: { label: string; href: string; Icon: IconType }[] = [
   { label: "Overview", href: "/dashboard", Icon: LayoutGridIcon },
-  { label: "Modules", href: "#", Icon: BoxIcon },
-  { label: "API keys", href: "#", Icon: KeyCircleIcon },
-  { label: "Members", href: "#", Icon: UsersRoundIcon },
-  { label: "Project users", href: "#", Icon: UserIcon },
-  { label: "Permissions", href: "#", Icon: ShieldCheckIcon },
-  { label: "Roles", href: "#", Icon: UserCogIcon },
-  { label: "OAuth clients", href: "#", Icon: LockIcon },
-  { label: "Heartbeat", href: "#", Icon: ActivityIcon },
-  { label: "Audit", href: "#", Icon: ClipboardCheckIcon },
+  { label: "Modules", href: "/dashboard/modules", Icon: BoxIcon },
+  { label: "API keys", href: "/dashboard/api-keys", Icon: KeyCircleIcon },
+  { label: "Members", href: "/dashboard/members", Icon: UsersRoundIcon },
+  { label: "Project users", href: "/dashboard/users", Icon: UserIcon },
+  { label: "Permissions", href: "/dashboard/permissions", Icon: ShieldCheckIcon },
+  { label: "Roles", href: "/dashboard/roles", Icon: UserCogIcon },
+  { label: "OAuth clients", href: "/dashboard/oauth-clients", Icon: LockIcon },
+  { label: "Heartbeat", href: "/dashboard/heartbeat", Icon: ActivityIcon },
+  { label: "Audit", href: "/dashboard/audit", Icon: ClipboardCheckIcon },
 ];
 
 const projects = [
@@ -53,19 +54,16 @@ function NavItem({
   item,
   active,
   collapsed,
-  onSelect,
 }: {
   item: { label: string; href: string; Icon: IconType };
   active: boolean;
   collapsed: boolean;
-  onSelect: (label: string) => void;
 }) {
   const iconRef = useRef<AnimIconHandle>(null);
   return (
     <Link
       href={item.href}
       title={collapsed ? item.label : undefined}
-      onClick={() => onSelect(item.label)}
       {...animHandlers(iconRef)}
       className={`relative flex items-center rounded-lg text-sm font-medium transition-colors ${
         active
@@ -94,9 +92,16 @@ function NavItem({
 export function Sidebar({ width }: { width: number }) {
   const collapsed = width <= COLLAPSE_THRESHOLD;
   const [activeProject] = useState(projects[0]);
-  const [activeLabel, setActiveLabel] = useState("Overview");
+  const pathname = usePathname();
   const chevronRef = useRef<AnimIconHandle>(null);
   const footerRef = useRef<AnimIconHandle>(null);
+
+  // Overview (/dashboard) must only be active on the exact route so it doesn't
+  // win over every nested page; every other item matches itself or its subtree.
+  function isItemActive(href: string) {
+    if (href === "/dashboard") return pathname === "/dashboard";
+    return pathname === href || pathname.startsWith(`${href}/`);
+  }
 
   return (
     <aside
@@ -183,16 +188,15 @@ export function Sidebar({ width }: { width: number }) {
           <NavItem
             key={item.label}
             item={item}
-            active={item.label === activeLabel}
+            active={isItemActive(item.href)}
             collapsed={collapsed}
-            onSelect={setActiveLabel}
           />
         ))}
       </nav>
 
       <div className={`border-t border-sidebar-border p-3 ${collapsed ? "px-2" : ""}`}>
         <Link
-          href="#"
+          href="/dashboard/settings"
           title={collapsed ? "Project settings" : undefined}
           {...animHandlers(footerRef)}
           className={`flex items-center rounded-lg text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground ${
