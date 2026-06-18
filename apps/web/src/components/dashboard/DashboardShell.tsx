@@ -17,6 +17,29 @@ const COLLAPSE_THRESHOLD = 160;
 const EXPAND_THRESHOLD = 180;
 const COLLAPSED_STORAGE_KEY = "nexus-sidebar-collapsed";
 
+/**
+ * Opt-in session bypass for visual prototyping/QA. Set
+ * `NEXT_PUBLIC_DEV_BYPASS=1` to render the dashboard shell with the mock
+ * account below instead of calling the backend `/me` — useful when iterating on
+ * page layouts without the API running. Never active in production builds.
+ */
+const DEV_BYPASS =
+  process.env.NEXT_PUBLIC_DEV_BYPASS === "1" &&
+  process.env.NODE_ENV !== "production";
+
+const MOCK_ACCOUNT: NexusAccount = {
+  id: "dev-account-0000",
+  email: "unzor@unzor.xyz",
+  displayName: "Marcos",
+  status: "ACTIVE",
+  mfaEnabled: false,
+  instanceAdmin: true,
+  emailVerifiedAt: null,
+  lastLoginAt: null,
+  createdAt: "2025-01-12T09:30:00Z",
+  updatedAt: "2025-06-01T12:00:00Z",
+};
+
 function readSavedCollapsed(): boolean {
   if (typeof window === "undefined") return false;
   return localStorage.getItem(COLLAPSED_STORAGE_KEY) === "true";
@@ -38,9 +61,11 @@ export function DashboardShell({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const [session, setSession] = useState<SessionGuardState>({
-    status: "checking",
-  });
+  const [session, setSession] = useState<SessionGuardState>(() =>
+    DEV_BYPASS
+      ? { status: "authenticated", account: MOCK_ACCOUNT }
+      : { status: "checking" },
+  );
   const [expandedWidth, setExpandedWidth] = useState(DEFAULT_WIDTH);
   const [collapsed, setCollapsed] = useState(readSavedCollapsed);
   const [isResizing, setIsResizing] = useState(false);
@@ -52,6 +77,9 @@ export function DashboardShell({
 
   useEffect(() => {
     let cancelled = false;
+
+    // Bypass initializes `session` as authenticated via useState; nothing to fetch.
+    if (DEV_BYPASS) return;
 
     fetchCurrentAccount()
       .then((currentAccount) => {

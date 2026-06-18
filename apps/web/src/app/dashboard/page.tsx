@@ -13,7 +13,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { BookTextIcon } from "@/components/ui/book-text";
-import { ChevronRightIcon } from "@/components/ui/chevron-right";
 import { InfoIcon } from "@/components/ui/info-icon";
 import { PlusIcon } from "@/components/ui/plus";
 import { SettingsIcon } from "@/components/ui/settings";
@@ -25,7 +24,8 @@ import { Integration } from "@/components/dashboard/Integration";
 import { ProjectReadiness } from "@/components/dashboard/ProjectReadiness";
 import { RecentActivity } from "@/components/dashboard/RecentActivity";
 import { QuickActions } from "@/components/dashboard/QuickActions";
-import { Stagger, SPRING, fadeUp, animHandlers, tint, type AnimIconHandle } from "@/components/dashboard/anim";
+import { Stagger, SPRING, animHandlers, tint, type AnimIconHandle } from "@/components/dashboard/anim";
+import { PageHeader } from "@/components/dashboard/shared";
 
 type Alert = {
   id: string;
@@ -174,43 +174,29 @@ export default function DashboardPage() {
 
   return (
     <Stagger root className="mx-auto flex w-full max-w-7xl flex-1 flex-col">
-      <motion.nav
-        variants={fadeUp}
-        className="flex items-center gap-2 text-sm text-muted-foreground"
-      >
-        <span>Projects</span>
-        <ChevronRightIcon size={14} />
-        <span className="text-foreground">F-Shop</span>
-      </motion.nav>
-
-      <motion.div
-        variants={fadeUp}
-        className="mt-4 flex items-start justify-between gap-4"
-      >
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-semibold tracking-tight">F-Shop</h1>
-            <Badge className="gap-1.5 bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/15 dark:text-emerald-300">
-              <span className="nexus-live relative h-1.5 w-1.5 rounded-full bg-emerald-500 text-emerald-500" />
-              Active
-            </Badge>
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Project control plane and integration overview.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <Button variant="outline" {...animHandlers(settingsRef)} className="gap-2">
-            <SettingsIcon ref={settingsRef} size={16} />
-            Project settings
-          </Button>
-          <Button {...animHandlers(guideRef)} className="gap-2">
-            <BookTextIcon ref={guideRef} size={16} />
-            Integration guide
-          </Button>
-        </div>
-      </motion.div>
+      <PageHeader
+        crumbs={["Projects", "F-Shop"]}
+        title="F-Shop"
+        description="Project control plane and integration overview."
+        badge={
+          <Badge className="gap-1.5 bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/15 dark:text-emerald-300">
+            <span className="nexus-live relative h-1.5 w-1.5 rounded-full bg-emerald-500 text-emerald-500" />
+            Active
+          </Badge>
+        }
+        actions={
+          <>
+            <Button variant="outline" {...animHandlers(settingsRef)} className="gap-2">
+              <SettingsIcon ref={settingsRef} size={16} />
+              Project settings
+            </Button>
+            <Button {...animHandlers(guideRef)} className="gap-2">
+              <BookTextIcon ref={guideRef} size={16} />
+              Integration guide
+            </Button>
+          </>
+        }
+      />
 
       <Stagger className="mt-6 grid flex-1 grid-cols-12 items-start gap-6">
         {/* Project readiness: col-9 beside the alerts column, full-width

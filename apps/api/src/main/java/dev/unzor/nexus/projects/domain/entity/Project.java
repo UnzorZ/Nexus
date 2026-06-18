@@ -14,7 +14,7 @@ import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-
+import lombok.Builder;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
@@ -60,6 +60,7 @@ public class Project {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    @Builder
     public Project(String slug, String name, String description, String publicBaseUrl) {
         this.slug = Objects.requireNonNull(slug);
         this.name = Objects.requireNonNull(name);
