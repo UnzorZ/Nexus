@@ -21,7 +21,9 @@ export const apiRoutes = {
     },
     session: {
       csrf: apiUrl("/api/panel/v1/csrf"),
+      loginJson: apiUrl("/api/panel/v1/session/login"),
       login: apiUrl("/panel/login"),
+      frontendLogin: "/login",
       logout: apiUrl("/api/panel/v1/session/logout"),
       me: apiUrl("/api/panel/v1/me"),
     },
@@ -119,17 +121,17 @@ function safeContinuePath(continuePath: string, frontendBaseUrl: string) {
   try {
     const continueUrl = new URL(continuePath, frontendBaseUrl);
     if (continueUrl.origin !== new URL(frontendBaseUrl).origin) {
-      return new URL("/dashboard", frontendBaseUrl).toString();
+      return new URL("/projects", frontendBaseUrl).toString();
     }
 
     return continueUrl.toString();
   } catch {
-    return new URL("/dashboard", frontendBaseUrl).toString();
+    return new URL("/projects", frontendBaseUrl).toString();
   }
 }
 
 export function buildPanelLoginUrl(
-  continuePath = "/dashboard",
+  continuePath = "/projects",
   options: { request?: Request } = {},
 ) {
   let frontendBaseUrl: string;
@@ -148,7 +150,7 @@ export function buildPanelLoginUrl(
   }
 
   const continueUrl = safeContinuePath(continuePath, frontendBaseUrl);
-  const loginUrl = new URL(apiRoutes.panel.session.login);
+  const loginUrl = new URL(`${frontendBaseUrl}${apiRoutes.panel.session.frontendLogin}`);
   loginUrl.searchParams.set("continue", continueUrl);
   return loginUrl.toString();
 }
