@@ -2,6 +2,7 @@ package dev.unzor.nexus.admin.api.controller;
 
 import dev.unzor.nexus.admin.api.dto.NexusAccountDetails;
 import dev.unzor.nexus.admin.api.dto.SessionSummary;
+import dev.unzor.nexus.admin.api.requests.LoginRequest;
 import dev.unzor.nexus.admin.application.configuration.PanelSessionConfiguration;
 import dev.unzor.nexus.admin.application.service.GetNexusAccountService;
 import dev.unzor.nexus.admin.application.service.PanelSessionService;
@@ -9,14 +10,22 @@ import dev.unzor.nexus.admin.infrastructure.security.NexusAccountPrincipal;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.web.authentication.logout.SecurityContextLogoutHandler;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -32,16 +41,74 @@ class PanelSessionController {
 
     private final GetNexusAccountService getNexusAccountService;
     private final PanelSessionService panelSessionService;
+    private final AuthenticationManager authenticationManager;
     private final SecurityContextLogoutHandler logoutHandler = new SecurityContextLogoutHandler();
+    private final HttpSessionSecurityContextRepository securityContextRepository = new HttpSessionSecurityContextRepository();
 
     PanelSessionController(
             GetNexusAccountService getNexusAccountService,
-            PanelSessionService panelSessionService
+            PanelSessionService panelSessionService,
+            @Qualifier("panelAuthenticationManager") AuthenticationManager authenticationManager
     ) {
         this.getNexusAccountService = getNexusAccountService;
         this.panelSessionService = panelSessionService;
+        this.authenticationManager = authenticationManager;
         logoutHandler.setClearAuthentication(true);
         logoutHandler.setInvalidateHttpSession(true);
+    }
+
+    /**
+     * Inicio de sesión JSON para el panel Nexus. Recibe email y contraseña, los
+     * autentica contra el {@link AuthenticationManager} del panel y, si es
+     * correcto, establece el {@code SecurityContext} en la sesión HTTP de forma
+     * que el resto de endpoints de la API del panel lo reconozcan.
+     * <p>
+     * La sesión y la cookie {@code JSESSIONID} las crea Spring Session; el
+     * frontend Next.js debe enviar la cookie y la cabecera {@code X-XSRF-TOKEN}
+     * previamente obtenida de {@code GET /api/panel/v1/csrf}.
+     */
+    @PostMapping("/session/login")
+    @ResponseStatus(HttpStatus.OK)
+    NexusAccountDetails login(
+            @Valid @RequestBody LoginRequest request,
+            HttpServletRequest servletRequest,
+            HttpServletResponse servletResponse
+    ) {
+        UsernamePasswordAuthenticationToken token =
+                new UsernamePasswordAuthenticationToken(request.email(), request.password());
+
+        Authentication authenticated;
+        try {
+            authenticated = authenticationManager.authenticate(token);
+        } catch (BadCredentialsException e) {
+            throw new BadCredentialsException("Invalid email or password.");
+        }
+
+        // Persistir SecurityContext en la sesión HTTP
+        var securityContext = org.springframework.security.core.context.SecurityContextHolder.createEmptyContext();
+        securityContext.setAuthentication(authenticated);
+        securityContextRepository.saveContext(securityContext, servletRequest, servletResponse);
+
+        // Establecer atributos de dominio de la sesión (mismo que PanelAuthenticationSuccessHandler)
+        HttpSession session = servletRequest.getSession(false);
+        if (session != null && authenticated.getPrincipal() instanceof NexusAccountPrincipal principal) {
+            principal.eraseCredentials();
+            session.setAttribute(PanelSessionConfiguration.ACCOUNT_ID, principal.accountId().toString());
+            session.setAttribute(PanelSessionConfiguration.SESSION_PUBLIC_ID, UUID.randomUUID().toString());
+            session.setAttribute(
+                    PanelSessionConfiguration.USER_AGENT,
+                    truncate(servletRequest.getHeader("User-Agent"), PanelSessionConfiguration.USER_AGENT_MAX_LENGTH)
+            );
+        }
+
+        return getNexusAccountService.getById(
+                ((NexusAccountPrincipal) authenticated.getPrincipal()).accountId()
+        );
+    }
+
+    private static String truncate(String value, int maxLength) {
+        if (value == null) return "";
+        return value.length() <= maxLength ? value : value.substring(0, maxLength);
     }
 
     @GetMapping("/csrf")

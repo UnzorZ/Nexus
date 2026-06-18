@@ -32,6 +32,11 @@ export const apiRoutes = {
           `/api/panel/v1/sessions/${encodeURIComponent(publicSessionId)}`,
         ),
     },
+    projects: {
+      root: apiUrl("/api/panel/v1/projects"),
+      byId: (projectId: string) =>
+        apiUrl(`/api/panel/v1/projects/${encodeURIComponent(projectId)}`),
+    },
   },
 } as const;
 

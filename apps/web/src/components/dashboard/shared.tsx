@@ -85,22 +85,32 @@ export function StatusBadge({
 /*  PageHeader — breadcrumb + title row, entrance-synced to the page Stagger  */
 /* -------------------------------------------------------------------------- */
 
-// Label → route for breadcrumb links. The last crumb is always the current page
-// (no link); any non-last crumb found here becomes a clickable Link.
-const CRUMB_HREF: Record<string, string> = {
-  Projects: "/dashboard",
-  "F-Shop": "/dashboard",
-  Modules: "/dashboard/modules",
-  "API keys": "/dashboard/api-keys",
-  Members: "/dashboard/members",
-  "Project users": "/dashboard/users",
-  Permissions: "/dashboard/permissions",
-  Roles: "/dashboard/roles",
-  "OAuth clients": "/dashboard/oauth-clients",
-  Heartbeat: "/dashboard/heartbeat",
-  Audit: "/dashboard/audit",
-  "Project settings": "/dashboard/settings",
+const SECTION_MAP: Record<string, string> = {
+  Modules: "modules",
+  "API keys": "api-keys",
+  Members: "members",
+  "Project users": "users",
+  Permissions: "permissions",
+  Roles: "roles",
+  "OAuth clients": "oauth-clients",
+  Heartbeat: "heartbeat",
+  Audit: "audit",
+  "Project settings": "settings",
 };
+
+function crumbHref(crumb: string, projectId?: string): string | undefined {
+  if (crumb === "Projects") return "/projects";
+  if (crumb === "Project settings") {
+    return projectId ? `/projects/${projectId}/settings` : "/dashboard/settings";
+  }
+  const section = SECTION_MAP[crumb];
+  if (section) {
+    return projectId
+      ? `/projects/${projectId}/${section}`
+      : `/dashboard/${section}`;
+  }
+  return undefined;
+}
 
 export function PageHeader({
   crumbs,
@@ -108,12 +118,14 @@ export function PageHeader({
   description,
   badge,
   actions,
+  projectId,
 }: {
   crumbs: string[];
   title: React.ReactNode;
   description?: React.ReactNode;
   badge?: React.ReactNode;
   actions?: React.ReactNode;
+  projectId?: string;
 }) {
   return (
     <>
@@ -123,7 +135,7 @@ export function PageHeader({
       >
         {crumbs.map((crumb, index) => {
           const last = index === crumbs.length - 1;
-          const href = CRUMB_HREF[crumb];
+          const href = crumbHref(crumb, projectId);
           return (
             <Fragment key={crumb}>
               {index > 0 ? <ChevronRightIcon size={14} /> : null}

@@ -1,6 +1,7 @@
 package dev.unzor.nexus.admin.infrastructure.security;
 
 import dev.unzor.nexus.admin.domain.entity.NexusAccount;
+import dev.unzor.nexus.shared.security.AuthenticatedAccount;
 import org.springframework.security.core.CredentialsContainer;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -29,7 +30,7 @@ import java.util.UUID;
  * <p>Es una clase (no un {@code record}) porque {@code eraseCredentials()} debe poder
  * mutar la contraseña a {@code null}.</p>
  */
-public final class NexusAccountPrincipal implements UserDetails, CredentialsContainer, Serializable {
+public final class NexusAccountPrincipal implements UserDetails, CredentialsContainer, AuthenticatedAccount, Serializable {
 
     private static final long serialVersionUID = 1L;
 
