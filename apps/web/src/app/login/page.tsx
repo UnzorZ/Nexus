@@ -1,24 +1,29 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { FormEvent, useRef, useState } from "react";
 import { motion } from "motion/react";
-import { Eye, EyeOff, UserPlus } from "lucide-react";
+import { Eye, EyeOff, LogIn } from "lucide-react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { createNexusAccount } from "@/features/accounts/api";
-import { NexusApiError } from "@/lib/api/client";
+import { NexusApiError, apiClient } from "@/lib/api/client";
+import { CSRF_HEADER_NAME, ensureCsrfToken } from "@/lib/api/csrf";
+import { apiRoutes } from "@/lib/api/routes";
 import { SPRING_SNAPPY } from "@/components/dashboard/anim";
 
-export default function RegisterPage() {
+export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const continuePath = searchParams.get("continue") ?? "/projects";
+
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -28,26 +33,38 @@ export default function RegisterPage() {
     const formData = new FormData(event.currentTarget);
     const email = String(formData.get("email") ?? "").trim();
     const password = String(formData.get("password") ?? "");
-    const displayName = String(formData.get("displayName") ?? "").trim();
 
-    if (!email || !password || !displayName) {
-      setError("Please fill in all fields.");
+    if (!email) {
+      setError("Please enter your email address.");
       setIsPending(false);
       return;
     }
 
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
+    if (!password) {
+      setError("Please enter your password.");
       setIsPending(false);
       return;
     }
 
     try {
-      await createNexusAccount({ email, password, displayName });
-      router.push("/login");
-    } catch (submitError) {
-      if (submitError instanceof NexusApiError) {
-        setError(submitError.message);
+      const csrfToken = await ensureCsrfToken();
+
+      await apiClient.post<unknown>(
+        apiRoutes.panel.session.loginJson,
+        { email, password },
+        {
+          headers: { [CSRF_HEADER_NAME]: csrfToken },
+          redirect: "manual",
+          errorMessage: "Invalid email or password.",
+        },
+      );
+
+      // Session is set server-side via JSESSIONID cookie.
+      router.push(continuePath);
+      router.refresh();
+    } catch (err) {
+      if (err instanceof NexusApiError) {
+        setError(err.message);
       } else {
         setError("Could not connect to the Nexus API.");
       }
@@ -80,13 +97,17 @@ export default function RegisterPage() {
         >
           <Card>
             <CardHeader className="text-center">
-              <CardTitle className="text-xl">Create account</CardTitle>
+              <CardTitle className="text-xl">Sign in</CardTitle>
               <CardDescription>
-                Register a Nexus account to access the panel.
+                Enter your Nexus account credentials to continue.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+              <form
+                ref={formRef}
+                onSubmit={handleSubmit}
+                className="flex flex-col gap-5"
+              >
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="email">Email</Label>
                   <Input
@@ -101,28 +122,16 @@ export default function RegisterPage() {
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="displayName">Display name</Label>
-                  <Input
-                    id="displayName"
-                    name="displayName"
-                    type="text"
-                    autoComplete="name"
-                    placeholder="Marcos"
-                    required
-                    disabled={isPending}
-                  />
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="password">Password</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="password">Password</Label>
+                  </div>
                   <div className="relative">
                     <Input
                       id="password"
                       name="password"
                       type={showPassword ? "text" : "password"}
-                      autoComplete="new-password"
-                      placeholder="Min. 8 characters"
-                      minLength={8}
+                      autoComplete="current-password"
+                      placeholder="••••••••"
                       required
                       disabled={isPending}
                       className="pr-10"
@@ -150,18 +159,18 @@ export default function RegisterPage() {
                 ) : null}
 
                 <Button type="submit" disabled={isPending} className="w-full gap-2">
-                  <UserPlus size={16} />
-                  {isPending ? "Creating account..." : "Create account"}
+                  <LogIn size={16} />
+                  {isPending ? "Signing in..." : "Sign in"}
                 </Button>
               </form>
 
               <p className="mt-6 text-center text-sm text-muted-foreground">
-                Already have an account?{" "}
+                Don&apos;t have an account?{" "}
                 <Link
-                  href="/login"
+                  href="/register"
                   className="font-medium text-primary hover:underline"
                 >
-                  Sign in
+                  Create one
                 </Link>
               </p>
             </CardContent>
