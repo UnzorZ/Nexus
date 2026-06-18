@@ -5,6 +5,7 @@ import dev.unzor.nexus.admin.infrastructure.security.PanelAuthenticationSuccessH
 import dev.unzor.nexus.admin.infrastructure.security.PanelContinueUrlValidator;
 import dev.unzor.nexus.admin.infrastructure.security.NexusAccountAuthorityResolver;
 import dev.unzor.nexus.admin.infrastructure.security.NexusAccountUserDetailsService;
+import dev.unzor.nexus.admin.infrastructure.security.SameSiteCsrfCookieFilter;
 import dev.unzor.nexus.admin.persistence.repository.NexusAccountRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -22,10 +23,17 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 
 @Configuration
 class PanelSecurityConfiguration {
+
+    /**
+     * Nombre de la cookie CSRF del panel. Debe coincidir con el que lee el frontend
+     * Next.js ({@code XSRF-TOKEN}).
+     */
+    private static final String CSRF_COOKIE_NAME = "XSRF-TOKEN";
 
     /**
      * Proveedor de autenticación del panel, expuesto como bean para que lo
@@ -47,7 +55,9 @@ class PanelSecurityConfiguration {
             HttpSecurity http,
             DaoAuthenticationProvider authenticationProvider,
             PanelAuthenticationSuccessHandler authenticationSuccessHandler,
-            PanelAuthenticationFailureHandler authenticationFailureHandler
+            PanelAuthenticationFailureHandler authenticationFailureHandler,
+            @Value("${nexus.session.cookie.same-site:${NEXUS_SESSION_COOKIE_SAME_SITE:Lax}}") String csrfSameSite,
+            @Value("${nexus.session.cookie.secure:${NEXUS_SESSION_COOKIE_SECURE:false}}") boolean csrfSecure
     ) throws Exception {
         CookieCsrfTokenRepository csrfTokenRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
         csrfTokenRepository.setCookieName("XSRF-TOKEN");
@@ -60,6 +70,9 @@ class PanelSecurityConfiguration {
         http
                 .securityMatcher("/panel/**", "/api/panel/**")
                 .cors(Customizer.withDefaults())
+                .addFilterBefore(
+                        new SameSiteCsrfCookieFilter(CSRF_COOKIE_NAME, csrfSameSite, csrfSecure),
+                        CsrfFilter.class)
                 .csrf(csrf -> csrf
                         .csrfTokenRepository(csrfTokenRepository)
                         .csrfTokenRequestHandler(csrfRequestHandler)
