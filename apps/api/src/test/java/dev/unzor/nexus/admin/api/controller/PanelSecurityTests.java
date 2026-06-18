@@ -184,6 +184,21 @@ class PanelSecurityTests {
                 .andExpect(status().isCreated());
     }
 
+    @Test
+    void csrfEndpointReturnsTokenInTheBodyForCrossOriginClients() throws Exception {
+        MvcResult result = mockMvc.perform(get("/api/panel/v1/csrf"))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        // The token must be available in the body (not only the cookie) so a
+        // cross-origin SPA — which cannot read document.cookie — can echo it in
+        // the X-XSRF-TOKEN header. The cookie is still issued for double-submit.
+        String body = result.getResponse().getContentAsString();
+        assertThat(body).contains("X-XSRF-TOKEN");
+        assertThat(body).contains("\"token\"");
+        assertThat(result.getResponse().getCookie("XSRF-TOKEN")).isNotNull();
+    }
+
     private MvcResult loginAndReturn(String email) throws Exception {
         CsrfTokens csrf = fetchCsrf();
         return mockMvc.perform(post("/panel/login")
@@ -206,7 +221,7 @@ class PanelSecurityTests {
         }
 
         MvcResult csrfResult = mockMvc.perform(requestBuilder)
-                .andExpect(status().isNoContent())
+                .andExpect(status().isOk())
                 .andReturn();
         Cookie cookie = csrfResult.getResponse().getCookie("XSRF-TOKEN");
         if (cookie == null || cookie.getValue() == null) {
@@ -217,7 +232,7 @@ class PanelSecurityTests {
 
     private CsrfTokens fetchCsrfWithCookies(Cookie... cookies) throws Exception {
         MvcResult csrfResult = mockMvc.perform(get("/api/panel/v1/csrf").cookie(cookies))
-                .andExpect(status().isNoContent())
+                .andExpect(status().isOk())
                 .andReturn();
         Cookie cookie = csrfResult.getResponse().getCookie("XSRF-TOKEN");
         if (cookie == null || cookie.getValue() == null) {

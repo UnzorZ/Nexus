@@ -111,10 +111,20 @@ class PanelSessionController {
         return value.length() <= maxLength ? value : value.substring(0, maxLength);
     }
 
+    /**
+     * Expone el token CSRF del panel junto con la cookie {@code XSRF-TOKEN}.
+     *
+     * <p>Devolver el token en el cuerpo (no solo en la cookie) es lo que permite
+     * que un frontend cross-origin —que no puede leer {@code document.cookie}
+     * porque la cookie la emite el host del API— lo coloque en la cabecera
+     * {@code X-XSRF-TOKEN}. La cookie sigue emitiéndose (vía {@code getToken()},
+     * que fuerza el guardado en el repositorio) para el double-submit: el
+     * navegador la envía de vuelta en las escrituras con credenciales.</p>
+     */
     @GetMapping("/csrf")
-    @ResponseStatus(NO_CONTENT)
-    void csrf(CsrfToken csrfToken) {
+    CsrfToken csrf(CsrfToken csrfToken) {
         csrfToken.getToken();
+        return csrfToken;
     }
 
     @GetMapping("/me")

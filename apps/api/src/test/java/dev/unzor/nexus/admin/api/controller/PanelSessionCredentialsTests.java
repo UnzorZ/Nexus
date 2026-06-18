@@ -81,7 +81,7 @@ class PanelSessionCredentialsTests {
 
     private void registerAccount(String email) throws Exception {
         MvcResult csrf = mockMvc.perform(get("/api/panel/v1/csrf"))
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isNoContent())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
                 .andReturn();
         Cookie csrfCookie = csrf.getResponse().getCookie("XSRF-TOKEN");
         String token = csrfCookie.getValue();
@@ -96,7 +96,7 @@ class PanelSessionCredentialsTests {
 
     private Cookie login(String email) throws Exception {
         MvcResult csrf = mockMvc.perform(get("/api/panel/v1/csrf"))
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isNoContent())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
                 .andReturn();
         Cookie csrfCookie = csrf.getResponse().getCookie("XSRF-TOKEN");
         String token = csrfCookie.getValue();
