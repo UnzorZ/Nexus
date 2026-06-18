@@ -277,7 +277,7 @@ class PanelSessionManagementTests {
 
     private CsrfTokens fetchCsrf() throws Exception {
         MvcResult csrfResult = mockMvc.perform(get("/api/panel/v1/csrf"))
-                .andExpect(status().isNoContent())
+                .andExpect(status().isOk())
                 .andReturn();
         Cookie cookie = csrfResult.getResponse().getCookie("XSRF-TOKEN");
         if (cookie == null || cookie.getValue() == null) {

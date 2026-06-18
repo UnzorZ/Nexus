@@ -3,26 +3,28 @@ import { apiRoutes } from "@/lib/api/routes";
 
 export const CSRF_HEADER_NAME = "X-XSRF-TOKEN";
 
-const CSRF_COOKIE_NAME = "XSRF-TOKEN";
-
-function readCookie(name: string) {
-  if (typeof document === "undefined") {
-    return null;
-  }
-
-  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
-  return match ? decodeURIComponent(match[1]) : null;
-}
-
+/**
+ * Obtiene el token CSRF del panel.
+ *
+ * Lo lee del CUERPO de `GET /csrf` (no de `document.cookie`): cuando el
+ * frontend y el API están en orígenes distintos (p. ej. distintos subdominios
+ * de ngrok), la cookie `XSRF-TOKEN` la emite el host del API y el JS del
+ * frontend no puede leerla. El backend devuelve el token en el cuerpo para
+ * exactamente este caso; la cookie sigue emitiéndose y viaja en las
+ * escrituras con credenciales para el double-submit.
+ */
 export async function ensureCsrfToken() {
-  await apiClient.get<null>(apiRoutes.panel.session.csrf, {
-    errorMessage: "No se pudo inicializar la protección CSRF.",
-  });
+  const body = await apiClient.get<{ token?: string } | null>(
+    apiRoutes.panel.session.csrf,
+    {
+      errorMessage: "No se pudo inicializar la protección CSRF.",
+    },
+  );
 
-  const token = readCookie(CSRF_COOKIE_NAME);
+  const token = body?.token;
   if (!token) {
     throw new NexusApiError(
-      "La cookie CSRF no está disponible. Recarga la página e inténtalo de nuevo.",
+      "El token CSRF no está disponible. Recarga la página e inténtalo de nuevo.",
       { status: 403, code: "csrf_missing" },
     );
   }

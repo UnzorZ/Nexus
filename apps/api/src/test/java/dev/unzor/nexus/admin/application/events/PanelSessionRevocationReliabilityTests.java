@@ -151,7 +151,7 @@ class PanelSessionRevocationReliabilityTests {
 
     private void registerAccount(String email) throws Exception {
         MvcResult csrf = mockMvc.perform(get("/api/panel/v1/csrf"))
-                .andExpect(status().isNoContent())
+                .andExpect(status().isOk())
                 .andReturn();
         Cookie csrfCookie = csrf.getResponse().getCookie("XSRF-TOKEN");
         String token = csrfCookie.getValue();
@@ -166,7 +166,7 @@ class PanelSessionRevocationReliabilityTests {
 
     private Cookie login(String email) throws Exception {
         MvcResult csrf = mockMvc.perform(get("/api/panel/v1/csrf"))
-                .andExpect(status().isNoContent())
+                .andExpect(status().isOk())
                 .andReturn();
         Cookie csrfCookie = csrf.getResponse().getCookie("XSRF-TOKEN");
         String token = csrfCookie.getValue();
