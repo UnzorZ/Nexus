@@ -489,6 +489,113 @@
 }
 
 /* ------------------------------------------------------------------ */
+/*  Consent (OAuth authorize) — lives inside the auth panel            */
+/* ------------------------------------------------------------------ */
+
+.auth-card {
+  border: 1px solid var(--auth-border);
+  border-radius: 9px;
+  background: var(--auth-panel);
+  padding: 16px;
+}
+
+.dark .auth-card {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.auth-card__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 590;
+  color: var(--auth-ink);
+}
+
+.auth-perm-list {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.auth-perm-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--auth-muted);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.auth-perm-list svg {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  color: #16a34a;
+  stroke-width: 1.8;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.dark .auth-perm-list svg {
+  color: #4ade80;
+}
+
+.auth-trust-note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--auth-muted);
+}
+
+.auth-button-row {
+  display: flex;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.auth-button-row .auth-submit {
+  flex: 1;
+}
+
+.auth-submit--outline {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  padding: 0 16px;
+  text-decoration: none;
+  color: var(--auth-ink);
+  border: 1px solid var(--auth-border);
+  border-radius: 7px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+  transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease, transform 150ms ease;
+}
+
+.auth-submit--outline:hover:not(:disabled) {
+  border-color: var(--auth-accent);
+  color: var(--auth-accent);
+  background: var(--auth-focus-ring);
+}
+
+.auth-submit--outline:focus-visible {
+  outline: 3px solid var(--auth-focus-ring);
+  outline-offset: 2px;
+}
+
+.auth-submit--outline:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* ------------------------------------------------------------------ */
 /*  Responsive                                                        */
 /* ------------------------------------------------------------------ */
 
