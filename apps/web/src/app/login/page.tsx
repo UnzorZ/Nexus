@@ -89,7 +89,7 @@ function LoginScreen() {
         className="auth-header"
         variants={fadeUp}
         initial="hidden"
-        animate="visible"
+        animate="show"
       >
         <h1 className="auth-header__title">Welcome back</h1>
         <p className="auth-header__subtitle">Sign in to your Nexus account.</p>

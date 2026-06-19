@@ -70,7 +70,7 @@ function RegisterScreen() {
         className="auth-header"
         variants={fadeUp}
         initial="hidden"
-        animate="visible"
+        animate="show"
       >
         <h1 className="auth-header__title">Create your account</h1>
         <p className="auth-header__subtitle">

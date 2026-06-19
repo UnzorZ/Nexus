@@ -28,7 +28,7 @@ export default function OAuthLoginPage({
         className="auth-header"
         variants={fadeUp}
         initial="hidden"
-        animate="visible"
+        animate="show"
       >
         <h1 className="auth-header__title">Authorize request</h1>
         <p className="auth-header__subtitle">
