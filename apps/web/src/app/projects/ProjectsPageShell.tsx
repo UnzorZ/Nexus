@@ -32,6 +32,7 @@ import { cn } from "@/lib/utils";
 import {
   SPRING_SNAPPY,
   fadeUp,
+  staggerContainer,
 } from "@/components/dashboard/anim";
 import {
   createProject,
@@ -77,9 +78,6 @@ function ProjectCard({
   return (
     <motion.div
       variants={fadeUp}
-      custom={index}
-      initial="hidden"
-      animate="visible"
       onClick={() => router.push(`/projects/${project.id}`)}
       className="group cursor-pointer"
     >
@@ -327,8 +325,9 @@ export function ProjectsPageShell() {
           </motion.div>
         ) : (
           <motion.div
+            variants={staggerContainer}
             initial="hidden"
-            animate="visible"
+            animate="show"
             className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
           >
             {projects.map((project, index) => (
