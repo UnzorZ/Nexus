@@ -27,7 +27,7 @@ import { RecentActivity } from "@/components/dashboard/RecentActivity";
 import { QuickActions } from "@/components/dashboard/QuickActions";
 import { Stagger, SPRING, animHandlers, tint, type AnimIconHandle } from "@/components/dashboard/anim";
 import { PageHeader, StatusBadge } from "@/components/dashboard/shared";
-import { useProject } from "../useProject";
+import { useProject } from "./useProject";
 
 type Alert = {
   id: string;

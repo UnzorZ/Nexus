@@ -36,7 +36,7 @@ type NavItemDef = {
 
 function buildNav(projectId: string): NavItemDef[] {
   return [
-    { label: "Overview", href: `/projects/${projectId}/dashboard`, Icon: LayoutGridIcon },
+    { label: "Overview", href: `/projects/${projectId}`, Icon: LayoutGridIcon },
     { label: "Modules", href: `/projects/${projectId}/modules`, Icon: BoxIcon },
     { label: "API keys", href: `/projects/${projectId}/api-keys`, Icon: KeyCircleIcon },
     { label: "Members", href: `/projects/${projectId}/members`, Icon: UsersRoundIcon },
@@ -119,11 +119,12 @@ export function Sidebar({ width }: { width: number }) {
   const projectId = project?.id ?? "";
   const navItems = buildNav(projectId);
 
-  // Overview (/projects/[id]/dashboard) must only be active on the exact route
-  // so it doesn't win over every nested page.
+  // The project index (Overview, href === `/projects/{id}`) must only be active
+  // on the exact route, otherwise it matches every nested page too.
+  const indexHref = `/projects/${projectId}`;
   function isItemActive(href: string) {
-    const dashboardHref = href.replace(/\/dashboard$/, "");
-    return pathname === href || (pathname.startsWith(`${href}/`));
+    if (href === indexHref) return pathname === href;
+    return pathname === href || pathname.startsWith(`${href}/`);
   }
 
   const initial = project?.name?.charAt(0).toUpperCase() ?? "?";
