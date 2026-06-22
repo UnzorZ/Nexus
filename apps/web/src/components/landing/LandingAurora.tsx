@@ -191,6 +191,7 @@ export function LandingAurora() {
 
     let raf = 0;
     const loop = (ms: number) => {
+      if (!program) return;
       draw(ms / 1000);
       raf = requestAnimationFrame(loop);
     };
@@ -202,7 +203,10 @@ export function LandingAurora() {
       raf = requestAnimationFrame(loop);
     }
 
-    const onResize = () => resize();
+    const onResize = () => {
+      resize();
+      if (reduce) draw(8);
+    };
     window.addEventListener("resize", onResize, { passive: true });
 
     const onLost = (e: Event) => {
