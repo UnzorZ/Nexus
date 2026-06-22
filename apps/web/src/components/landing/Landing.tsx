@@ -1,8 +1,7 @@
 "use client";
 
-import { Fragment, type ReactNode, useSyncExternalStore } from "react";
+import { Fragment, type ReactNode } from "react";
 import Link from "next/link";
-import { useTheme } from "next-themes";
 import { motion } from "motion/react";
 import {
   Activity,
@@ -17,13 +16,11 @@ import {
   KeyRound,
   Layers,
   Lock,
-  Moon,
   Send,
   Server,
   Settings2,
   ShieldAlert,
   ShieldCheck,
-  Sun,
   UserCog,
   Users,
 } from "lucide-react";
@@ -37,6 +34,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ThemeToggle, ThemedLogo } from "@/components/ui/theme-toggle";
 import { cn } from "@/lib/utils";
 import {
   EASE_OUT,
@@ -45,47 +43,8 @@ import {
   fadeUp,
   tint,
 } from "@/components/dashboard/anim";
-import { Logo } from "./Logo";
 
 type TintKey = keyof typeof tint;
-
-/* ---- theme-aware helpers ---- */
-
-// Client-only mount flag without setState-in-effect (matches the Topbar's
-// pattern): false on the server, true after hydration.
-function useMounted() {
-  return useSyncExternalStore(
-    () => () => {},
-    () => true,
-    () => false,
-  );
-}
-
-/** Full brand logo on light; icon+wordmark lockup on dark (the full logo's
- *  wordmark is near-black and vanishes on dark surfaces). */
-function ThemedLogo({ height }: { height: number }) {
-  const { resolvedTheme } = useTheme();
-  const mounted = useMounted();
-  const dark = mounted && resolvedTheme === "dark";
-  return <Logo variant={dark ? "lockup" : "full"} height={height} />;
-}
-
-function ThemeToggle() {
-  const { resolvedTheme, setTheme } = useTheme();
-  const mounted = useMounted();
-  const dark = mounted && resolvedTheme === "dark";
-  return (
-    <Button
-      variant="ghost"
-      size="icon"
-      className="h-9 w-9"
-      aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
-      onClick={() => setTheme(dark ? "light" : "dark")}
-    >
-      {dark ? <Sun size={16} /> : <Moon size={16} />}
-    </Button>
-  );
-}
 
 /* ---- motion + layout helpers ---- */
 

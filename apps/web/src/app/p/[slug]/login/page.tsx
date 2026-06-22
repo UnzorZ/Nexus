@@ -6,7 +6,13 @@ import { motion } from "motion/react";
 import { Check, ShieldCheck } from "lucide-react";
 import { AuthShell } from "@/app/login/AuthShell";
 import { fadeUp, SPRING_SNAPPY } from "@/components/dashboard/anim";
-import "@/app/login/auth.css";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 const SCOPES = [
   "View your account profile and email",
@@ -24,17 +30,14 @@ export default function OAuthLoginPage({
 
   return (
     <AuthShell>
-      <motion.header
-        className="auth-header"
-        variants={fadeUp}
-        initial="hidden"
-        animate="show"
-      >
-        <h1 className="auth-header__title">Authorize request</h1>
-        <p className="auth-header__subtitle">
+      <motion.header variants={fadeUp} initial="hidden" animate="show">
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+          Authorize request
+        </h1>
+        <p className="mt-1.5 text-sm text-muted-foreground">
           An application wants to access the{" "}
-          <strong style={{ color: "var(--auth-ink)" }}>{slug}</strong> project on
-          your behalf.
+          <strong className="font-semibold text-foreground">{slug}</strong>{" "}
+          project on your behalf.
         </p>
       </motion.header>
 
@@ -42,39 +45,54 @@ export default function OAuthLoginPage({
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={SPRING_SNAPPY}
-        className="auth-card"
+        className="mt-6"
       >
-        <h2 className="auth-card__title">This application will be able to:</h2>
-        <ul className="auth-perm-list">
-          {SCOPES.map((scope) => (
-            <li key={scope}>
-              <Check />
-              <span>{scope}</span>
-            </li>
-          ))}
-        </ul>
+        <Card>
+          <CardHeader>
+            <CardTitle className="font-heading text-sm">
+              This application will be able to:
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2.5">
+              {SCOPES.map((scope) => (
+                <li
+                  key={scope}
+                  className="flex items-start gap-2.5 text-sm text-muted-foreground"
+                >
+                  <Check
+                    size={16}
+                    className="mt-0.5 shrink-0 text-emerald-600 dark:text-emerald-400"
+                  />
+                  <span>{scope}</span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
       </motion.div>
 
-      <p className="auth-trust-note" style={{ marginTop: 18 }}>
+      <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
         This does not give the application your Nexus password or session
-        credentials. You can revoke access at any time from your project settings.
+        credentials. You can revoke access at any time from your project
+        settings.
       </p>
 
-      <form className="auth-form" style={{ marginTop: 22 }}>
-        <div className="auth-button-row">
-          <Link href="/login" className="auth-submit--outline">
-            Cancel
-          </Link>
-          <button type="submit" className="auth-submit" disabled>
-            Authorize
-          </button>
-        </div>
+      <form className="mt-5 flex gap-3">
+        <Button asChild variant="outline" className="h-11 flex-1">
+          <Link href="/login">Cancel</Link>
+        </Button>
+        <Button type="submit" className="h-11 flex-1" disabled>
+          Authorize
+        </Button>
       </form>
 
-      <div className="auth-session-note" aria-hidden>
-        <ShieldCheck />
+      <div className="mt-6 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+        <ShieldCheck size={14} className="shrink-0" />
         <span>
-          Signing in to <strong>{slug}</strong> via Nexus identity.
+          Signing in to{" "}
+          <strong className="font-medium text-foreground">{slug}</strong> via
+          Nexus identity.
         </span>
       </div>
     </AuthShell>
