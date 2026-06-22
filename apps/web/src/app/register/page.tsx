@@ -1,7 +1,5 @@
 "use client";
 
-import "../login/auth.css";
-
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useState } from "react";
@@ -10,6 +8,9 @@ import { Eye, EyeOff, ShieldAlert } from "lucide-react";
 import { createNexusAccount } from "@/features/accounts/api";
 import { NexusApiError } from "@/lib/api/client";
 import { fadeUp, SPRING_SNAPPY } from "@/components/dashboard/anim";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { AuthShell } from "../login/AuthShell";
 
 export default function RegisterPage() {
@@ -66,41 +67,38 @@ function RegisterScreen() {
 
   return (
     <AuthShell>
-      <motion.header
-        className="auth-header"
-        variants={fadeUp}
-        initial="hidden"
-        animate="show"
-      >
-        <h1 className="auth-header__title">Create your account</h1>
-        <p className="auth-header__subtitle">
+      <motion.header variants={fadeUp} initial="hidden" animate="show">
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+          Create your account
+        </h1>
+        <p className="mt-1.5 text-sm text-muted-foreground">
           Register a Nexus account to access the panel.
         </p>
       </motion.header>
 
       {error ? (
         <motion.div
-          className="auth-alert auth-alert--error"
           role="alert"
           initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
           transition={SPRING_SNAPPY}
+          className="mt-5 flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
         >
-          <ShieldAlert />
+          <ShieldAlert size={16} className="shrink-0" />
           <span>{error}</span>
         </motion.div>
       ) : null}
 
-      <form className="auth-form" onSubmit={handleSubmit}>
-        <div className="auth-field">
-          <label className="auth-field__label" htmlFor="displayName">
+      <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+        <div className="space-y-1.5">
+          <Label htmlFor="displayName" className="text-sm font-medium">
             Display name
-          </label>
-          <input
+          </Label>
+          <Input
             id="displayName"
             name="displayName"
             type="text"
-            className="auth-field__input"
+            className="h-11 px-3"
             placeholder="Marcos"
             autoComplete="name"
             required
@@ -108,15 +106,15 @@ function RegisterScreen() {
           />
         </div>
 
-        <div className="auth-field">
-          <label className="auth-field__label" htmlFor="email">
+        <div className="space-y-1.5">
+          <Label htmlFor="email" className="text-sm font-medium">
             Email address
-          </label>
-          <input
+          </Label>
+          <Input
             id="email"
             name="email"
             type="email"
-            className="auth-field__input"
+            className="h-11 px-3"
             placeholder="you@example.com"
             autoComplete="email"
             inputMode="email"
@@ -126,16 +124,16 @@ function RegisterScreen() {
           />
         </div>
 
-        <div className="auth-field">
-          <label className="auth-field__label" htmlFor="password">
+        <div className="space-y-1.5">
+          <Label htmlFor="password" className="text-sm font-medium">
             Password
-          </label>
-          <div className="auth-password">
-            <input
+          </Label>
+          <div className="relative">
+            <Input
               id="password"
               name="password"
               type={showPassword ? "text" : "password"}
-              className="auth-field__input"
+              className="h-11 px-3 pr-11"
               placeholder="Min. 8 characters"
               autoComplete="new-password"
               minLength={8}
@@ -144,30 +142,31 @@ function RegisterScreen() {
             />
             <button
               type="button"
-              className="auth-eye"
+              className="absolute right-2 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               aria-label={showPassword ? "Hide password" : "Show password"}
               aria-pressed={showPassword}
               aria-controls="password"
-              onClick={() => setShowPassword((v) => !v)}
               tabIndex={-1}
+              onClick={() => setShowPassword((v) => !v)}
             >
-              {showPassword ? <EyeOff /> : <Eye />}
+              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
           </div>
         </div>
 
-        <button type="submit" className="auth-submit" disabled={isPending}>
+        <Button type="submit" className="h-11 w-full" disabled={isPending}>
           {isPending ? "Creating account…" : "Create account"}
-        </button>
+        </Button>
       </form>
 
-      <p className="auth-switch">
+      <p className="mt-6 text-center text-sm text-muted-foreground">
         Already have an account?{" "}
         <Link
           href={{
             pathname: "/login",
             query: continuePath ? { continue: continuePath } : {},
           }}
+          className="font-medium text-primary hover:underline"
         >
           Sign in
         </Link>

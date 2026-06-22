@@ -1,22 +1,17 @@
 "use client";
 
-import "./auth.css";
-
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useState } from "react";
 import { motion } from "motion/react";
-import {
-  CheckCircle2,
-  Eye,
-  EyeOff,
-  Lock,
-  ShieldAlert,
-} from "lucide-react";
+import { CheckCircle2, Eye, EyeOff, Lock, ShieldAlert } from "lucide-react";
 import { apiClient, NexusApiError } from "@/lib/api/client";
 import { CSRF_HEADER_NAME, ensureCsrfToken } from "@/lib/api/csrf";
 import { apiRoutes } from "@/lib/api/routes";
 import { fadeUp, SPRING_SNAPPY } from "@/components/dashboard/anim";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { AuthShell } from "./AuthShell";
 
 export default function LoginPage() {
@@ -85,52 +80,51 @@ function LoginScreen() {
 
   return (
     <AuthShell>
-      <motion.header
-        className="auth-header"
-        variants={fadeUp}
-        initial="hidden"
-        animate="show"
-      >
-        <h1 className="auth-header__title">Welcome back</h1>
-        <p className="auth-header__subtitle">Sign in to your Nexus account.</p>
+      <motion.header variants={fadeUp} initial="hidden" animate="show">
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+          Welcome back
+        </h1>
+        <p className="mt-1.5 text-sm text-muted-foreground">
+          Sign in to your Nexus account.
+        </p>
       </motion.header>
 
       {loggedOut ? (
         <motion.div
-          className="auth-alert auth-alert--success"
           role="status"
           initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
           transition={SPRING_SNAPPY}
+          className="mt-5 flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-300"
         >
-          <CheckCircle2 />
+          <CheckCircle2 size={16} className="shrink-0" />
           <span>You have been signed out.</span>
         </motion.div>
       ) : null}
 
       {error ? (
         <motion.div
-          className="auth-alert auth-alert--error"
           role="alert"
           initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
           transition={SPRING_SNAPPY}
+          className="mt-5 flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
         >
-          <ShieldAlert />
+          <ShieldAlert size={16} className="shrink-0" />
           <span>{error}</span>
         </motion.div>
       ) : null}
 
-      <form className="auth-form" onSubmit={handleSubmit}>
-        <div className="auth-field">
-          <label className="auth-field__label" htmlFor="email">
+      <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+        <div className="space-y-1.5">
+          <Label htmlFor="email" className="text-sm font-medium">
             Email address
-          </label>
-          <input
+          </Label>
+          <Input
             id="email"
             name="email"
             type="email"
-            className="auth-field__input"
+            className="h-11 px-3"
             placeholder="you@example.com"
             autoComplete="email"
             inputMode="email"
@@ -140,16 +134,16 @@ function LoginScreen() {
           />
         </div>
 
-        <div className="auth-field">
-          <label className="auth-field__label" htmlFor="password">
+        <div className="space-y-1.5">
+          <Label htmlFor="password" className="text-sm font-medium">
             Password
-          </label>
-          <div className="auth-password">
-            <input
+          </Label>
+          <div className="relative">
+            <Input
               id="password"
               name="password"
               type={showPassword ? "text" : "password"}
-              className="auth-field__input"
+              className="h-11 px-3 pr-11"
               placeholder="Enter your password"
               autoComplete="current-password"
               required
@@ -157,35 +151,36 @@ function LoginScreen() {
             />
             <button
               type="button"
-              className="auth-eye"
+              className="absolute right-2 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               aria-label={showPassword ? "Hide password" : "Show password"}
               aria-pressed={showPassword}
               aria-controls="password"
-              onClick={() => setShowPassword((v) => !v)}
               tabIndex={-1}
+              onClick={() => setShowPassword((v) => !v)}
             >
-              {showPassword ? <EyeOff /> : <Eye />}
+              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
           </div>
         </div>
 
-        <button type="submit" className="auth-submit" disabled={isPending}>
+        <Button type="submit" className="h-11 w-full" disabled={isPending}>
           {isPending ? "Signing in…" : "Sign in"}
-        </button>
+        </Button>
       </form>
 
-      <div className="auth-session-note">
-        <Lock />
+      <div className="mt-5 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+        <Lock size={14} className="shrink-0" />
         <span>Your session is protected and can be revoked at any time.</span>
       </div>
 
-      <p className="auth-switch">
+      <p className="mt-6 text-center text-sm text-muted-foreground">
         Don&apos;t have an account?{" "}
         <Link
           href={{
             pathname: "/register",
             query: continuePath ? { continue: continuePath } : {},
           }}
+          className="font-medium text-primary hover:underline"
         >
           Create one
         </Link>
