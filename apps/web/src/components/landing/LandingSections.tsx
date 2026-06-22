@@ -7,27 +7,36 @@ import { ArrowRight } from "lucide-react";
 import { EASE_OUT } from "@/components/dashboard/anim";
 import { Logo } from "./Logo";
 
-/* Scroll-triggered reveal. */
+type RevealProps = {
+  children: ReactNode;
+  delay?: number;
+  className?: string;
+  as?: "div" | "li";
+  tabIndex?: number;
+};
+
+/* Scroll-triggered reveal. Use as="li" inside lists so ul/ol keep valid markup. */
 function Reveal({
   children,
   delay = 0,
   className,
-}: {
-  children: ReactNode;
-  delay?: number;
-  className?: string;
-}) {
-  return (
-    <motion.div
-      className={className}
-      initial={{ opacity: 0, y: 22 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-80px" }}
-      transition={{ duration: 0.65, ease: EASE_OUT, delay }}
-    >
-      {children}
-    </motion.div>
-  );
+  as = "div",
+  tabIndex,
+}: RevealProps) {
+  const motionProps = {
+    className,
+    initial: { opacity: 0, y: 22 },
+    whileInView: { opacity: 1, y: 0 },
+    viewport: { once: true, margin: "-80px" },
+    transition: { duration: 0.65, ease: EASE_OUT, delay },
+    ...(tabIndex !== undefined ? { tabIndex } : {}),
+  };
+
+  if (as === "li") {
+    return <motion.li {...motionProps}>{children}</motion.li>;
+  }
+
+  return <motion.div {...motionProps}>{children}</motion.div>;
 }
 
 /* ------------------------------------------------------------------ */
@@ -120,15 +129,19 @@ export function CapabilitiesSection() {
 
         <ul className="nx-index">
           {CAPS.map((c, i) => (
-            <Reveal key={c.n} delay={i * 0.05}>
-              <li className="nx-index__row" tabIndex={0}>
-                <span className="nx-index__num">{c.n}</span>
-                <div className="nx-index__main">
-                  <h3 className="nx-index__name">{c.title}</h3>
-                  <p className="nx-index__desc">{c.desc}</p>
-                </div>
-                <span className="nx-index__tag">{c.tag}</span>
-              </li>
+            <Reveal
+              key={c.n}
+              as="li"
+              delay={i * 0.05}
+              className="nx-index__row"
+              tabIndex={0}
+            >
+              <span className="nx-index__num">{c.n}</span>
+              <div className="nx-index__main">
+                <h3 className="nx-index__name">{c.title}</h3>
+                <p className="nx-index__desc">{c.desc}</p>
+              </div>
+              <span className="nx-index__tag">{c.tag}</span>
             </Reveal>
           ))}
         </ul>
