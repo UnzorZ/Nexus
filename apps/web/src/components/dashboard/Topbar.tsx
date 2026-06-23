@@ -1,9 +1,9 @@
 "use client";
 
 import { useSyncExternalStore, useRef, useState } from "react";
-import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
+import { useThemeReveal } from "@/components/ui/theme-toggle";
 import { LogOut, Settings, User } from "lucide-react";
 import {
   DropdownMenu,
@@ -73,7 +73,8 @@ export function Topbar({
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const bellRef = useRef<AnimIconHandle>(null);
   const themeRef = useRef<AnimIconHandle>(null);
-  const { resolvedTheme, setTheme } = useTheme();
+  const { resolvedTheme } = useTheme();
+  const toggleTheme = useThemeReveal();
 
   // Detect client mount without setState-in-effect (the Sun/Moon icon depends
   // on the client-only resolvedTheme; this avoids a hydration mismatch).
@@ -83,33 +84,6 @@ export function Topbar({
     () => false,
   );
   const isDark = mounted && resolvedTheme === "dark";
-
-  function handleThemeToggle(event: React.MouseEvent<HTMLButtonElement>) {
-    const target = isDark ? "light" : "dark";
-    const reduce =
-      typeof window !== "undefined" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const doc = document as Document & {
-      startViewTransition?: (cb: () => void) => void;
-    };
-    if (reduce || !doc.startViewTransition) {
-      setTheme(target);
-      return;
-    }
-    const x = event.clientX;
-    const y = event.clientY;
-    const endRadius = Math.hypot(
-      Math.max(x, window.innerWidth - x),
-      Math.max(y, window.innerHeight - y),
-    );
-    const root = document.documentElement;
-    root.style.setProperty("--reveal-x", `${x}px`);
-    root.style.setProperty("--reveal-y", `${y}px`);
-    root.style.setProperty("--reveal-r", `${endRadius}px`);
-    doc.startViewTransition(() => {
-      flushSync(() => setTheme(target));
-    });
-  }
 
   const unreadCount = notifications.filter((n) => n.unread).length;
   const displayName = account.displayName?.trim() || account.email;
@@ -159,7 +133,7 @@ export function Topbar({
           type="button"
           aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
           {...animHandlers(themeRef)}
-          onClick={handleThemeToggle}
+          onClick={toggleTheme}
           className="relative flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           {isDark ? (
