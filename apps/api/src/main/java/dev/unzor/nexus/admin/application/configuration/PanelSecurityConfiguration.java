@@ -1,7 +1,9 @@
 package dev.unzor.nexus.admin.application.configuration;
 
+import dev.unzor.nexus.admin.application.service.RecordLoginService;
 import dev.unzor.nexus.admin.infrastructure.security.PanelAuthenticationFailureHandler;
 import dev.unzor.nexus.admin.infrastructure.security.PanelAuthenticationSuccessHandler;
+import dev.unzor.nexus.admin.infrastructure.security.PanelSessionInitializer;
 import dev.unzor.nexus.admin.infrastructure.security.PanelContinueUrlValidator;
 import dev.unzor.nexus.admin.infrastructure.security.NexusAccountAuthorityResolver;
 import dev.unzor.nexus.admin.infrastructure.security.NexusAccountUserDetailsService;
@@ -129,9 +131,11 @@ class PanelSecurityConfiguration {
 
     @Bean
     PanelAuthenticationSuccessHandler panelAuthenticationSuccessHandler(
-            PanelContinueUrlValidator continueUrlValidator
+            PanelContinueUrlValidator continueUrlValidator,
+            RecordLoginService recordLoginService,
+            PanelSessionInitializer sessionInitializer
     ) {
-        return new PanelAuthenticationSuccessHandler(continueUrlValidator);
+        return new PanelAuthenticationSuccessHandler(continueUrlValidator, recordLoginService, sessionInitializer);
     }
 
     /**

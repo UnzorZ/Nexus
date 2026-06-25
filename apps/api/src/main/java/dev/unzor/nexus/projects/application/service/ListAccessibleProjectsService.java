@@ -38,13 +38,19 @@ public class ListAccessibleProjectsService {
                     .toList();
         }
 
-        return membershipRepository
+        List<UUID> projectIds = membershipRepository
                 .findAllByNexusAccountIdAndStatus(accountId, ProjectMembershipStatus.ACTIVE)
                 .stream()
                 .map(ProjectMembership::getProjectId)
                 .distinct()
-                .map(projectRepository::findById)
-                .flatMap(opt -> opt.stream())
+                .toList();
+
+        if (projectIds.isEmpty()) {
+            return List.of();
+        }
+
+        // Una única consulta en lugar de N findById (uno por membresía).
+        return projectRepository.findAllById(projectIds).stream()
                 .map(ProjectSummary::from)
                 .toList();
     }
