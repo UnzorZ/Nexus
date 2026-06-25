@@ -5,7 +5,7 @@ import { motion } from "motion/react";
 import type { NexusAccount } from "@/features/accounts/api";
 import { fetchCurrentAccount } from "@/features/session/api";
 import { NexusApiError } from "@/lib/api/client";
-import { buildPanelLoginUrl } from "@/lib/api/routes";
+import { buildPanelLoginUrl } from "@/lib/auth/continue-url";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 

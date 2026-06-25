@@ -7,10 +7,12 @@ import dev.unzor.nexus.projects.domain.enums.ProjectMembershipRole;
 import dev.unzor.nexus.projects.domain.exception.ProjectAlreadyExistException;
 import dev.unzor.nexus.projects.persistence.repository.ProjectMembershipRepository;
 import dev.unzor.nexus.projects.persistence.repository.ProjectRepository;
+import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -50,7 +52,21 @@ public class CreateProjectService {
                 .publicBaseUrl(publicBaseUrl)
                 .build();
 
-        Project savedProject = projectRepository.save(project);
+        Project savedProject;
+        try {
+            // saveAndFlush materializa el INSERT dentro del bloque para que la
+            // violación de unicidad del slug se lance aquí, no al hacer commit.
+            savedProject = projectRepository.saveAndFlush(project);
+        } catch (DataIntegrityViolationException exception) {
+            // Solo tratamos como conflicto de slug las violaciones de unicidad del
+            // slug (columna UNIQUE y el índice funcional LOWER). Otras violaciones
+            // de integridad (NOT NULL, claves foráneas futuras, etc.) deben
+            // propagarse como error de servidor, no como 409 de slug duplicado.
+            if (isSlugUniqueViolation(exception)) {
+                throw new ProjectAlreadyExistException(slug);
+            }
+            throw exception;
+        }
 
         ProjectMembership membership = new ProjectMembership(
                 savedProject.getId(),
@@ -60,5 +76,26 @@ public class CreateProjectService {
         membershipRepository.save(membership);
 
         return ProjectDetails.from(savedProject);
+    }
+
+    private static final Set<String> SLUG_UNIQUE_CONSTRAINTS =
+            Set.of("projects_slug_key", "uk_projects_slug_lower");
+
+    /**
+     * Comprueba si la excepción corresponde a una violación de unicidad del slug
+     * (columna UNIQUE {@code projects_slug_key} o el índice funcional
+     * {@code uk_projects_slug_lower}). Otras {@code DataIntegrityViolationException}
+     * (NOT NULL, claves foráneas, etc.) no se consideran conflicto de slug.
+     */
+    private static boolean isSlugUniqueViolation(DataIntegrityViolationException exception) {
+        Throwable cause = exception;
+        while (cause != null) {
+            if (cause instanceof ConstraintViolationException violation
+                    && SLUG_UNIQUE_CONSTRAINTS.contains(violation.getConstraintName())) {
+                return true;
+            }
+            cause = cause.getCause();
+        }
+        return false;
     }
 }
