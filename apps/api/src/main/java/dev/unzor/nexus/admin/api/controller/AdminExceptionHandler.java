@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -37,6 +38,23 @@ class AdminExceptionHandler {
         problem.setTitle("Unauthorized");
         problem.setProperty("code", "invalid_credentials");
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(problem);
+    }
+
+    /**
+     * Cuenta suspendida o desactivada: el {@code DaoAuthenticationProvider} lanza
+     * {@link DisabledException} cuando el principal no está habilitado (estado
+     * distinto de {@code ACTIVE}). Se devuelve un 403 con un código estable para
+     * que el frontend pueda redirigir a la página dedicada.
+     */
+    @ExceptionHandler(DisabledException.class)
+    ResponseEntity<ProblemDetail> handleAccountSuspended(DisabledException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.FORBIDDEN,
+                "Esta cuenta está suspendida."
+        );
+        problem.setTitle("Forbidden");
+        problem.setProperty("code", "account_suspended");
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(problem);
     }
 
     @ExceptionHandler(SessionNotFoundException.class)

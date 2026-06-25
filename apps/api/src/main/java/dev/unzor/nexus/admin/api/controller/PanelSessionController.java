@@ -6,13 +6,15 @@ import dev.unzor.nexus.admin.api.requests.LoginRequest;
 import dev.unzor.nexus.admin.application.configuration.PanelSessionConfiguration;
 import dev.unzor.nexus.admin.application.service.GetNexusAccountService;
 import dev.unzor.nexus.admin.application.service.PanelSessionService;
+import dev.unzor.nexus.admin.application.service.RecordLoginService;
 import dev.unzor.nexus.admin.infrastructure.security.NexusAccountPrincipal;
+import dev.unzor.nexus.admin.infrastructure.security.PanelSessionInitializer;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
-import org.springframework.http.HttpStatus;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -41,6 +43,8 @@ class PanelSessionController {
 
     private final GetNexusAccountService getNexusAccountService;
     private final PanelSessionService panelSessionService;
+    private final RecordLoginService recordLoginService;
+    private final PanelSessionInitializer sessionInitializer;
     private final AuthenticationManager authenticationManager;
     private final SecurityContextLogoutHandler logoutHandler = new SecurityContextLogoutHandler();
     private final HttpSessionSecurityContextRepository securityContextRepository = new HttpSessionSecurityContextRepository();
@@ -48,10 +52,14 @@ class PanelSessionController {
     PanelSessionController(
             GetNexusAccountService getNexusAccountService,
             PanelSessionService panelSessionService,
+            RecordLoginService recordLoginService,
+            PanelSessionInitializer sessionInitializer,
             @Qualifier("panelAuthenticationManager") AuthenticationManager authenticationManager
     ) {
         this.getNexusAccountService = getNexusAccountService;
         this.panelSessionService = panelSessionService;
+        this.recordLoginService = recordLoginService;
+        this.sessionInitializer = sessionInitializer;
         this.authenticationManager = authenticationManager;
         logoutHandler.setClearAuthentication(true);
         logoutHandler.setInvalidateHttpSession(true);
@@ -89,26 +97,12 @@ class PanelSessionController {
         securityContext.setAuthentication(authenticated);
         securityContextRepository.saveContext(securityContext, servletRequest, servletResponse);
 
-        // Establecer atributos de dominio de la sesión (mismo que PanelAuthenticationSuccessHandler)
-        HttpSession session = servletRequest.getSession(false);
-        if (session != null && authenticated.getPrincipal() instanceof NexusAccountPrincipal principal) {
-            principal.eraseCredentials();
-            session.setAttribute(PanelSessionConfiguration.ACCOUNT_ID, principal.accountId().toString());
-            session.setAttribute(PanelSessionConfiguration.SESSION_PUBLIC_ID, UUID.randomUUID().toString());
-            session.setAttribute(
-                    PanelSessionConfiguration.USER_AGENT,
-                    truncate(servletRequest.getHeader("User-Agent"), PanelSessionConfiguration.USER_AGENT_MAX_LENGTH)
-            );
-        }
+        sessionInitializer.initialize(servletRequest, authenticated);
 
-        return getNexusAccountService.getById(
-                ((NexusAccountPrincipal) authenticated.getPrincipal()).accountId()
-        );
-    }
+        NexusAccountPrincipal principal = (NexusAccountPrincipal) authenticated.getPrincipal();
+        recordLoginService.recordLogin(principal.accountId());
 
-    private static String truncate(String value, int maxLength) {
-        if (value == null) return "";
-        return value.length() <= maxLength ? value : value.substring(0, maxLength);
+        return getNexusAccountService.getById(principal.accountId());
     }
 
     /**

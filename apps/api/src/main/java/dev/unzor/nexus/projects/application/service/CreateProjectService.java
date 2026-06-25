@@ -50,7 +50,17 @@ public class CreateProjectService {
                 .publicBaseUrl(publicBaseUrl)
                 .build();
 
-        Project savedProject = projectRepository.save(project);
+        Project savedProject;
+        try {
+            // saveAndFlush materializa el INSERT dentro del bloque para que la
+            // violación de unicidad del slug se lance aquí, no al hacer commit.
+            savedProject = projectRepository.saveAndFlush(project);
+        } catch (DataIntegrityViolationException exception) {
+            // La única restricción única de la tabla projects es el slug
+            // (case-insensitive vía uk_projects_slug_lower); cualquier violación
+            // de unicidad en este INSERT se debe a un slug duplicado.
+            throw new ProjectAlreadyExistException(slug);
+        }
 
         ProjectMembership membership = new ProjectMembership(
                 savedProject.getId(),
