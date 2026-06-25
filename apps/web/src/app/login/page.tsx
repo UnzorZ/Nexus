@@ -13,7 +13,6 @@ import { fadeUp, SPRING_SNAPPY } from "@/components/dashboard/anim";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import { AuthShell } from "./AuthShell";
 
 export default function LoginPage() {
@@ -96,7 +95,6 @@ function LoginScreen() {
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -241,22 +239,7 @@ function LoginScreen() {
           </div>
         </div>
 
-        <div className="flex items-center justify-between py-1">
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="rememberMe"
-              name="rememberMe"
-              checked={rememberMe}
-              onCheckedChange={(checked) => setRememberMe(checked === true)}
-              disabled={isPending}
-            />
-            <Label
-              htmlFor="rememberMe"
-              className="cursor-pointer text-sm font-medium text-foreground"
-            >
-              Remember me
-            </Label>
-          </div>
+        <div className="flex justify-end py-1">
           <Link
             href="#"
             className="text-sm font-medium text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400"
