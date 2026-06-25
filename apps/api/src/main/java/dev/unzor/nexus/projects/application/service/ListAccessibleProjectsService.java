@@ -8,6 +8,7 @@ import dev.unzor.nexus.projects.persistence.repository.ProjectRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
@@ -35,6 +36,7 @@ public class ListAccessibleProjectsService {
         if (isInstanceAdmin) {
             return projectRepository.findAll().stream()
                     .map(ProjectSummary::from)
+                    .sorted(BY_NAME)
                     .toList();
         }
 
@@ -49,9 +51,16 @@ public class ListAccessibleProjectsService {
             return List.of();
         }
 
-        // Una única consulta en lugar de N findById (uno por membresía).
+        // Una única consulta en lugar de N findById (uno por membresía), y orden
+        // determinista por nombre: findAllById no garantiza el orden de los ids.
         return projectRepository.findAllById(projectIds).stream()
                 .map(ProjectSummary::from)
+                .sorted(BY_NAME)
                 .toList();
     }
+
+    /** Orden determinista y estable para los listados de proyectos. */
+    private static final Comparator<ProjectSummary> BY_NAME =
+            Comparator.comparing(ProjectSummary::name, String.CASE_INSENSITIVE_ORDER)
+                    .thenComparing(ProjectSummary::slug);
 }

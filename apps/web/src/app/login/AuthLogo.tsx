@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useTheme } from "next-themes";
+import { useMounted } from "@/components/ui/theme-toggle";
 import { cn } from "@/lib/utils";
 
 /**
@@ -20,7 +21,8 @@ export function AuthLogo({
   asLink?: boolean;
 }) {
   const { resolvedTheme } = useTheme();
-  const dark = resolvedTheme === "dark";
+  const mounted = useMounted();
+  const dark = mounted && resolvedTheme === "dark";
 
   const inner = dark ? (
     <span className={cn("inline-flex items-center gap-2.5", className)}>
