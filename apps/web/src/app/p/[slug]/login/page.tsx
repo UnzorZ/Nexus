@@ -29,7 +29,7 @@ export default function OAuthLoginPage({
   const { slug } = use(params);
 
   return (
-    <AuthShell>
+    <AuthShell mode="minimal">
       <motion.header variants={fadeUp} initial="hidden" animate="show">
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">
           Authorize request
