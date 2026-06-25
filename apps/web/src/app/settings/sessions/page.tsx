@@ -10,7 +10,7 @@ import {
   type PanelSessionSummary,
 } from "@/features/session/api";
 import { NexusApiError } from "@/lib/api/client";
-import { buildPanelLoginUrl } from "@/lib/api/routes";
+import { buildPanelLoginUrl } from "@/lib/auth/continue-url";
 
 function formatInstant(value: string | null | undefined): string {
   if (!value) {

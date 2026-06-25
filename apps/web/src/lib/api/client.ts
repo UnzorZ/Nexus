@@ -88,6 +88,17 @@ export async function apiRequest<T>(
   if (!response.ok) {
     const fallback = options.errorMessage ?? "No se pudo completar la operación.";
     const { message, code } = errorDetails(responseBody, fallback);
+
+    // Interceptor global: una cuenta suspendida o desactivada redirige a la
+    // página dedicada, independientemente del endpoint que reciba el 403.
+    if (
+      response.status === 403 &&
+      code === "account_suspended" &&
+      typeof window !== "undefined"
+    ) {
+      window.location.assign("/login/suspended");
+    }
+
     throw new NexusApiError(message, {
       status: response.status,
       code,
