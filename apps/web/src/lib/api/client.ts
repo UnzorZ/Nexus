@@ -119,4 +119,9 @@ export const apiClient = {
   ) => apiRequest<T>(url, { ...options, method: "POST", body }),
   delete: <T>(url: string, options: RequestOptions = {}) =>
     apiRequest<T>(url, { ...options, method: "DELETE" }),
+  patch: <T>(
+    url: string,
+    body?: RequestOptions["body"],
+    options: RequestOptions = {},
+  ) => apiRequest<T>(url, { ...options, method: "PATCH", body }),
 };
