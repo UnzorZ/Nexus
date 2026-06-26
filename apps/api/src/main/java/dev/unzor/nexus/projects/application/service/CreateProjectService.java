@@ -75,7 +75,7 @@ public class CreateProjectService {
         );
         membershipRepository.save(membership);
 
-        return ProjectDetails.from(savedProject);
+        return ProjectDetails.from(savedProject, true, true);
     }
 
     private static final Set<String> SLUG_UNIQUE_CONSTRAINTS =

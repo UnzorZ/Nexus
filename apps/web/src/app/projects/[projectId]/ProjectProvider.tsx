@@ -15,7 +15,7 @@ export type ProjectContextValue = {
   project: ProjectDetails | null;
   loading: boolean;
   error: string | null;
-  refresh: () => void;
+  refresh: (options?: { silent?: boolean }) => void;
 };
 
 export const ProjectContext = createContext<ProjectContextValue>({
@@ -39,9 +39,11 @@ export function ProjectProvider({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (options?: { silent?: boolean }) => {
     try {
-      setLoading(true);
+      if (!options?.silent) {
+        setLoading(true);
+      }
       setError(null);
       const data = await fetchProject(projectId);
       setProject(data);
