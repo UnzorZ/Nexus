@@ -1,9 +1,9 @@
 "use client";
 
 import { useSyncExternalStore, useRef, useState } from "react";
-import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
+import { useThemeReveal } from "@/components/ui/theme-toggle";
 import { LogOut, Settings, User } from "lucide-react";
 import {
   DropdownMenu,
@@ -73,7 +73,8 @@ export function Topbar({
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const bellRef = useRef<AnimIconHandle>(null);
   const themeRef = useRef<AnimIconHandle>(null);
-  const { resolvedTheme, setTheme } = useTheme();
+  const { resolvedTheme } = useTheme();
+  const toggleTheme = useThemeReveal();
 
   // Detect client mount without setState-in-effect (the Sun/Moon icon depends
   // on the client-only resolvedTheme; this avoids a hydration mismatch).
@@ -83,33 +84,6 @@ export function Topbar({
     () => false,
   );
   const isDark = mounted && resolvedTheme === "dark";
-
-  function handleThemeToggle(event: React.MouseEvent<HTMLButtonElement>) {
-    const target = isDark ? "light" : "dark";
-    const reduce =
-      typeof window !== "undefined" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const doc = document as Document & {
-      startViewTransition?: (cb: () => void) => void;
-    };
-    if (reduce || !doc.startViewTransition) {
-      setTheme(target);
-      return;
-    }
-    const x = event.clientX;
-    const y = event.clientY;
-    const endRadius = Math.hypot(
-      Math.max(x, window.innerWidth - x),
-      Math.max(y, window.innerHeight - y),
-    );
-    const root = document.documentElement;
-    root.style.setProperty("--reveal-x", `${x}px`);
-    root.style.setProperty("--reveal-y", `${y}px`);
-    root.style.setProperty("--reveal-r", `${endRadius}px`);
-    doc.startViewTransition(() => {
-      flushSync(() => setTheme(target));
-    });
-  }
 
   const unreadCount = notifications.filter((n) => n.unread).length;
   const displayName = account.displayName?.trim() || account.email;
@@ -159,8 +133,8 @@ export function Topbar({
           type="button"
           aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
           {...animHandlers(themeRef)}
-          onClick={handleThemeToggle}
-          className="relative flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          onClick={toggleTheme}
+          className="relative flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-[color,background-color,transform] duration-150 hover:bg-muted hover:text-foreground active:scale-[0.96]"
         >
           {isDark ? (
             <SunIcon ref={themeRef} size={18} />
@@ -175,11 +149,11 @@ export function Topbar({
               type="button"
               aria-label="Notifications"
               {...animHandlers(bellRef)}
-              className="relative flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="relative flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-[color,background-color,transform] duration-150 hover:bg-muted hover:text-foreground active:scale-[0.96]"
             >
               <BellIcon ref={bellRef} size={18} />
               {unreadCount > 0 ? (
-                <span className="nexus-blink absolute -top-0.5 -right-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground ring-2 ring-card">
+                <span className="nexus-blink tabular-nums absolute -top-0.5 -right-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground ring-2 ring-card">
                   {unreadCount}
                 </span>
               ) : null}
@@ -227,7 +201,7 @@ export function Topbar({
             <button
               type="button"
               aria-label="Open account menu"
-              className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary transition-colors hover:bg-primary/20"
+              className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary transition-[color,background-color,transform] duration-150 hover:bg-primary/20 active:scale-[0.96]"
             >
               {initials}
             </button>

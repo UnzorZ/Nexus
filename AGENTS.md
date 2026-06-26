@@ -572,3 +572,109 @@ Update this file whenever the structure changes meaningfully.
 - Keep Nexus as a modular monolith until there is real pressure to split services.
 - Prefer OpenAPI-defined HTTP contracts over SDK-only behavior.
 - Run `./gradlew build` after backend structural changes.
+
+## Remote development over zrok (HTTPS tunnels)
+
+**Trigger:** if the user says they are developing remotely, over zrok, from
+another device/browser, needs the app on HTTPS, or asks to "expose the
+backend/frontend with a tunnel", work through this runbook. It gives the backend
+and frontend each a public HTTPS URL so cross-site session cookies work. (This
+flow used ngrok; it switched to zrok.)
+
+### Why remote-dev is a distinct mode
+
+Plain localhost HTTP uses `SameSite=Lax; Secure=false` cookies and
+localhost-only CORS. Over HTTPS tunnels the browser (on the frontend tunnel)
+fetches the backend tunnel cross-site, so the panel session cookie must be
+`SameSite=None; Secure` and CORS must allow the frontend origin. That is the
+`remote-dev` Spring profile (`application-remote-dev.properties`). Running the
+backend in the default profile under tunnels makes every cross-site request —
+including the CORS preflight — return `403`.
+
+### One-time zrok setup
+
+Install zrok and run `zrok enable <account-token>` once (the token comes from
+your zrok account and is stored outside the repo). There is no per-tunnel config
+file — each tunnel is a `zrok share public` process.
+
+### Bring-up
+
+1. **Check existing tunnels/instances first** (the user often has them running):
+   ```bash
+   zrok overview              # lists active shares + their public URLs
+   pgrep -fl "zrok share"
+   docker ps                  # postgres/redis are shared infra
+   ```
+   In `zrok overview`, find the shares targeting `http://localhost:8080` and
+   `http://localhost:3000` and reuse their `*.shares.zrok.io` URLs. If both
+   exist, skip to step 3. (`zrok status` does NOT list share URLs.)
+
+2. **Start the tunnels** (before the app — the URLs feed its env), two processes:
+   ```bash
+   zrok share public http://localhost:8080 --headless &
+   zrok share public http://localhost:3000 --headless &
+   zrok overview              # copy the two *.shares.zrok.io URLs
+   ```
+   Let `$BACK` = the backend (8080) share URL, `$FRONT` = the frontend (3000)
+   share URL.
+
+3. **Wire the frontend env.** The app is run on the host (not docker), and
+   **host-run Next.js does NOT read the repo-root `.env`** — it reads
+   `apps/web/.env.local`:
+   ```dotenv
+   # apps/web/.env.local
+   NEXT_PUBLIC_NEXUS_API_BASE_URL=<$BACK>
+   ```
+   Restart the frontend (`npm run dev`) after editing `.env.local`. (The
+   repo-root `.env` is read only by `docker compose`'s `web` service; if you run
+   the frontend via compose instead, set `NEXT_PUBLIC_NEXUS_API_BASE_URL`,
+   `NEXUS_FRONTEND_BASE_URL`, and `NEXUS_ALLOWED_DEV_ORIGINS` there and
+   `docker compose up -d web`.)
+
+4. **Run the backend in remote-dev.** It is not a docker service; it is a Spring
+   Boot app launched from the shell (or IntelliJ). Kill whatever holds `:8080`,
+   then (long-running — run detached/backgrounded):
+   ```bash
+   SPRING_PROFILES_ACTIVE=remote-dev \
+   NEXUS_FRONTEND_BASE_URL=<$FRONT> \
+   NEXUS_ALLOWED_DEV_ORIGINS=<$FRONT> \
+   SPRING_DOCKER_COMPOSE_LIFECYCLE=start-only \
+   ./gradlew :apps:nexus-api:bootRun
+   ```
+   Notes:
+   - Task path is `:apps:nexus-api:bootRun` — the module is renamed in
+     `settings.gradle` (`project(':apps:api').name = 'nexus-api'`), so
+     `:apps:api:bootRun` does not resolve.
+   - `SPRING_DOCKER_COMPOSE_LIFECYCLE=start-only` prevents a backend shutdown
+     from running `docker compose down` and tearing down the shared stack.
+   - The backend reads these from the **shell env**, not the repo-root `.env`.
+
+### Verify
+
+```bash
+curl -s "$BACK/actuator/health/readiness"   # expect {"status":"UP"}
+# remote-dev cookie must be SameSite=None; Secure
+curl -sI "$BACK/login" | grep -i set-cookie
+# CORS must allow the frontend origin on a panel path (expect access-control-allow-origin: $FRONT)
+curl -s -D - -o /dev/null "$BACK/api/panel/v1/csrf" -H "Origin: $FRONT" | grep -i access-control
+```
+A `403` on `/login` or `/api/projects` for an **anonymous** request is normal
+(protected endpoints reject unauthenticated access) — it is not a tunnel/CORS
+problem. (zrok has no interstitial page, so no special curl header is needed,
+unlike ngrok free.)
+
+**curl `200` is not proof the page renders.** Next.js dev blocks cross-origin
+dev resources (HMR) unless the tunnel host is in `allowedDevOrigins`. If the page
+returns HTML but stays blank/stuck in a real browser, `next.config.ts` derives
+`allowedDevOrigins` from `NEXUS_ALLOWED_DEV_ORIGINS`; confirm `[HMR] connected`
+in the browser console after a hard refresh.
+
+### Refresh / tear-down
+
+- Stop the tunnels by killing the `zrok share public` processes (`pkill -f "zrok share"`).
+- zrok public shares are **not reserved** by default — their tokens change every
+  time they are recreated. When they do, refresh `apps/web/.env.local`, the
+  backend's `NEXUS_FRONTEND_BASE_URL`/`NEXUS_ALLOWED_DEV_ORIGINS`, and (if you
+  use docker compose) the repo-root `.env`, then restart the app. For **stable**
+  URLs, reserve them once with `zrok reserve public` and run the shares with
+  `--share <name>`.

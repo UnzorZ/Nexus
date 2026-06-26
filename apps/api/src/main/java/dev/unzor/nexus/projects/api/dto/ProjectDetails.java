@@ -17,10 +17,16 @@ public record ProjectDetails(
         ProjectStatus status,
         String publicBaseUrl,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        boolean canManage,
+        boolean canDelete
 ) {
 
     public static ProjectDetails from(Project project) {
+        return from(project, false, false);
+    }
+
+    public static ProjectDetails from(Project project, boolean canManage, boolean canDelete) {
         return new ProjectDetails(
                 project.getId(),
                 project.getSlug(),
@@ -29,7 +35,9 @@ public record ProjectDetails(
                 project.getStatus(),
                 project.getPublicBaseUrl(),
                 project.getCreatedAt(),
-                project.getUpdatedAt()
+                project.getUpdatedAt(),
+                canManage,
+                canDelete
         );
     }
 }

@@ -159,11 +159,15 @@ export function PageHeader({
       >
         <div className="min-w-0">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+            <h1 className="text-balance text-2xl font-semibold tracking-tight">
+              {title}
+            </h1>
             {badge}
           </div>
           {description ? (
-            <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+            <p className="mt-1 text-pretty text-sm text-muted-foreground">
+              {description}
+            </p>
           ) : null}
         </div>
         {actions ? (
@@ -375,7 +379,9 @@ export function EmptyState({
       ) : null}
       <p className="text-sm font-medium">{title}</p>
       {description ? (
-        <p className="max-w-sm text-xs text-muted-foreground">{description}</p>
+        <p className="max-w-sm text-pretty text-xs text-muted-foreground">
+          {description}
+        </p>
       ) : null}
       {action}
     </div>
