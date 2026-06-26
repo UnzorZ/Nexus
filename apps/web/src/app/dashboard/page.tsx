@@ -241,7 +241,7 @@ export default function DashboardPage() {
             {hiddenCount > 0 ? (
               <Button
                 variant="outline"
-                className="w-full"
+                className="w-full tabular-nums"
                 onClick={() => setIsAlertsModalOpen(true)}
               >
                 View {hiddenCount} more alert{hiddenCount === 1 ? "" : "s"}
@@ -276,7 +276,9 @@ export default function DashboardPage() {
       <Dialog open={isAlertsModalOpen} onOpenChange={setIsAlertsModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>All alerts ({alerts.length})</DialogTitle>
+            <DialogTitle>
+            All alerts (<span className="tabular-nums">{alerts.length}</span>)
+          </DialogTitle>
           </DialogHeader>
           <div className="flex max-h-[60vh] flex-col gap-3 overflow-y-auto">
             {alerts.map((alert) => {
