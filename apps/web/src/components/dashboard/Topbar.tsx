@@ -134,7 +134,7 @@ export function Topbar({
           aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
           {...animHandlers(themeRef)}
           onClick={toggleTheme}
-          className="relative flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          className="relative flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-[color,background-color,transform] duration-150 hover:bg-muted hover:text-foreground active:scale-[0.96]"
         >
           {isDark ? (
             <SunIcon ref={themeRef} size={18} />
@@ -149,11 +149,11 @@ export function Topbar({
               type="button"
               aria-label="Notifications"
               {...animHandlers(bellRef)}
-              className="relative flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="relative flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-[color,background-color,transform] duration-150 hover:bg-muted hover:text-foreground active:scale-[0.96]"
             >
               <BellIcon ref={bellRef} size={18} />
               {unreadCount > 0 ? (
-                <span className="nexus-blink absolute -top-0.5 -right-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground ring-2 ring-card">
+                <span className="nexus-blink tabular-nums absolute -top-0.5 -right-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground ring-2 ring-card">
                   {unreadCount}
                 </span>
               ) : null}
@@ -201,7 +201,7 @@ export function Topbar({
             <button
               type="button"
               aria-label="Open account menu"
-              className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary transition-colors hover:bg-primary/20"
+              className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary transition-[color,background-color,transform] duration-150 hover:bg-primary/20 active:scale-[0.96]"
             >
               {initials}
             </button>
