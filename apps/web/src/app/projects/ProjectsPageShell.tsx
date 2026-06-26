@@ -81,7 +81,7 @@ function ProjectCard({
       onClick={() => router.push(`/projects/${project.id}`)}
       className="group cursor-pointer"
     >
-      <Card className="h-full transition-all hover:border-primary/30 hover:shadow-sm">
+      <Card className="h-full transition-[border-color,box-shadow] duration-150 hover:border-primary/30 hover:shadow-sm">
         <CardHeader>
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-3 min-w-0">
@@ -281,8 +281,10 @@ export function ProjectsPageShell() {
       {/* Body */}
       <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-6 py-10">
         <motion.div variants={fadeUp} className="flex flex-col gap-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="text-balance text-2xl font-semibold tracking-tight">
+            Projects
+          </h1>
+          <p className="text-pretty text-sm text-muted-foreground">
             Select a project to manage its modules, API keys, members, and
             settings.
           </p>

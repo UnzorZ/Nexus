@@ -1,4 +1,5 @@
 import { apiClient } from "@/lib/api/client";
+import { CSRF_HEADER_NAME } from "@/lib/api/csrf";
 import { apiRoutes } from "@/lib/api/routes";
 
 export type ProjectSummary = {
@@ -18,6 +19,8 @@ export type ProjectDetails = {
   publicBaseUrl: string | null;
   createdAt: string;
   updatedAt: string;
+  canManage: boolean;
+  canDelete: boolean;
 };
 
 export type CreateProjectPayload = {
@@ -26,6 +29,23 @@ export type CreateProjectPayload = {
   description?: string | null;
   publicBaseUrl?: string | null;
 };
+
+export type UpdateProjectPayload = {
+  name: string;
+  description: string | null;
+  publicBaseUrl: string | null;
+};
+
+export function parseFieldErrors(detail: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const part of detail.split(/\s*;\s*/)) {
+    const match = part.match(/^(\w+):\s*(.+)$/);
+    if (match) {
+      out[match[1]] = match[2];
+    }
+  }
+  return out;
+}
 
 export async function fetchProjects(): Promise<ProjectSummary[]> {
   return apiClient.get<ProjectSummary[]>(apiRoutes.panel.projects.root, {
@@ -54,9 +74,36 @@ export async function createProject(
     apiRoutes.panel.projects.root,
     payload,
     {
-      headers: { "X-XSRF-TOKEN": csrfToken },
+      headers: { [CSRF_HEADER_NAME]: csrfToken },
       redirect: "manual",
       errorMessage: "No se pudo crear el proyecto.",
     },
   );
+}
+
+export async function updateProject(
+  projectId: string,
+  payload: UpdateProjectPayload,
+  csrfToken: string,
+): Promise<ProjectDetails> {
+  return apiClient.patch<ProjectDetails>(
+    apiRoutes.panel.projects.byId(projectId),
+    payload,
+    {
+      headers: { [CSRF_HEADER_NAME]: csrfToken },
+      redirect: "manual",
+      errorMessage: "No se pudo guardar el proyecto.",
+    },
+  );
+}
+
+export async function archiveProject(
+  projectId: string,
+  csrfToken: string,
+): Promise<void> {
+  await apiClient.delete<null>(apiRoutes.panel.projects.byId(projectId), {
+    headers: { [CSRF_HEADER_NAME]: csrfToken },
+    redirect: "manual",
+    errorMessage: "No se pudo archivar el proyecto.",
+  });
 }

@@ -16,15 +16,24 @@ import java.util.UUID;
 public class GetProjectService {
 
     private final ProjectRepository projectRepository;
+    private final ProjectAccessService projectAccessService;
 
-    public GetProjectService(ProjectRepository projectRepository) {
+    public GetProjectService(
+            ProjectRepository projectRepository,
+            ProjectAccessService projectAccessService
+    ) {
         this.projectRepository = projectRepository;
+        this.projectAccessService = projectAccessService;
     }
 
     @Transactional(readOnly = true)
-    public ProjectDetails getById(UUID projectId) {
+    public ProjectDetails getById(UUID projectId, UUID accountId, boolean isInstanceAdmin) {
         return projectRepository.findById(projectId)
-                .map(ProjectDetails::from)
+                .map(project -> ProjectDetails.from(
+                        project,
+                        projectAccessService.canManage(projectId, accountId, isInstanceAdmin),
+                        projectAccessService.canDelete(projectId, accountId, isInstanceAdmin)
+                ))
                 .orElseThrow(() -> new ProjectNotFoundException(projectId.toString()));
     }
 }

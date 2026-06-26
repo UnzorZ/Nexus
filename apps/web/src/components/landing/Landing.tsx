@@ -82,10 +82,12 @@ function SectionHead({
   return (
     <div className="mb-8 max-w-2xl">
       <div className="mb-2 text-xs text-muted-foreground">{crumb}</div>
-      <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+      <h2 className="text-balance text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
         {title}
       </h2>
-      {desc ? <p className="mt-2 text-muted-foreground">{desc}</p> : null}
+      {desc ? (
+        <p className="mt-2 text-pretty text-muted-foreground">{desc}</p>
+      ) : null}
     </div>
   );
 }
@@ -198,10 +200,10 @@ export function Landing() {
               <span className="nexus-live relative h-1.5 w-1.5 rounded-full bg-emerald-500 text-emerald-500" />
               Control plane · v0.1
             </Badge>
-            <h1 className="text-4xl font-semibold tracking-tight text-foreground sm:text-6xl">
+            <h1 className="text-balance text-4xl font-semibold tracking-tight text-foreground sm:text-6xl">
               One control plane for every app you ship.
             </h1>
-            <p className="mt-5 max-w-xl text-lg leading-relaxed text-muted-foreground">
+            <p className="mt-5 max-w-xl text-pretty text-lg leading-relaxed text-muted-foreground">
               Nexus handles the things every app needs — signing people in,
               deciding who can do what, holding the keys, and watching everything
               stays alive — so each project can focus on what makes it different.
@@ -376,7 +378,7 @@ export function Landing() {
                           )}
                         </div>
                       </div>
-                      <p className="mt-2 text-xs text-muted-foreground">
+                      <p className="mt-2 text-pretty text-xs text-muted-foreground">
                         {m.desc}
                       </p>
                       <p className="mt-2 font-mono text-[10px] text-muted-foreground/80">
@@ -473,10 +475,10 @@ export function Landing() {
           <Reveal>
             <Card className="overflow-hidden">
               <CardContent className="flex flex-col items-center gap-5 px-6 py-12 text-center">
-                <h2 className="max-w-xl text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+                <h2 className="max-w-xl text-balance text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
                   Bring your apps to one center of gravity.
                 </h2>
-                <p className="max-w-md text-muted-foreground">
+                <p className="max-w-md text-pretty text-muted-foreground">
                   Claim your instance and connect your first project in minutes.
                 </p>
                 <div className="flex flex-wrap justify-center gap-3">
