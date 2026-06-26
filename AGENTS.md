@@ -573,12 +573,13 @@ Update this file whenever the structure changes meaningfully.
 - Prefer OpenAPI-defined HTTP contracts over SDK-only behavior.
 - Run `./gradlew build` after backend structural changes.
 
-## Remote development over ngrok (HTTPS tunnels)
+## Remote development over zrok (HTTPS tunnels)
 
-**Trigger:** if the user says they are developing remotely, over ngrok, from
+**Trigger:** if the user says they are developing remotely, over zrok, from
 another device/browser, needs the app on HTTPS, or asks to "expose the
 backend/frontend with a tunnel", work through this runbook. It gives the backend
-and frontend each a public HTTPS URL so cross-site session cookies work.
+and frontend each a public HTTPS URL so cross-site session cookies work. (This
+flow used ngrok; it switched to zrok.)
 
 ### Why remote-dev is a distinct mode
 
@@ -590,49 +591,49 @@ fetches the backend tunnel cross-site, so the panel session cookie must be
 backend in the default profile under tunnels makes every cross-site request —
 including the CORS preflight — return `403`.
 
-### One-time ngrok config
+### One-time zrok setup
 
-Two named tunnels live in the global ngrok config
-(`~/Library/Application Support/ngrok/ngrok.yml`, outside the repo so the
-authtoken is never committed): `nexus-back` → `8080`, `nexus-front` → `3000`.
-Both run on one ngrok agent via `ngrok start --all` (two separate `ngrok http`
-processes fight over the `:4040` inspect port). If these tunnel definitions are
-missing, recreate them there.
+Install zrok and run `zrok enable <account-token>` once (the token comes from
+your zrok account and is stored outside the repo). There is no per-tunnel config
+file — each tunnel is a `zrok share public` process.
 
 ### Bring-up
 
 1. **Check existing tunnels/instances first** (the user often has them running):
    ```bash
-   curl -s localhost:4040/api/tunnels   # any tunnels already up?
-   pgrep -fl ngrok
-   docker ps                            # postgres/redis/web are shared infra
+   zrok overview              # lists active shares + their public URLs
+   pgrep -fl "zrok share"
+   docker ps                  # postgres/redis are shared infra
    ```
-   If tunnels already exist, reuse their `public_url`s instead of starting new ones.
+   In `zrok overview`, find the shares targeting `http://localhost:8080` and
+   `http://localhost:3000` and reuse their `*.shares.zrok.io` URLs. If both
+   exist, skip to step 3. (`zrok status` does NOT list share URLs.)
 
-2. **Start the tunnels** (before the app — the URLs feed its env):
+2. **Start the tunnels** (before the app — the URLs feed its env), two processes:
    ```bash
-   ngrok start --all
-   curl -s localhost:4040/api/tunnels | jq -r '.tunnels[] | "\(.name) \(.public_url)"'
+   zrok share public http://localhost:8080 --headless &
+   zrok share public http://localhost:3000 --headless &
+   zrok overview              # copy the two *.shares.zrok.io URLs
    ```
-   Let `$BACK` = the `nexus-back` HTTPS URL, `$FRONT` = the `nexus-front` HTTPS URL.
+   Let `$BACK` = the backend (8080) share URL, `$FRONT` = the frontend (3000)
+   share URL.
 
-3. **Wire the frontend env.** Write a repo-root `.env` — **not**
-   `apps/web/.env.local`, which docker compose ignores (compose injects the
-   process env, and Next.js will not override an already-set var from `.env.local`).
-   Docker compose auto-substitutes a root `.env` into the `web` service:
+3. **Wire the frontend env.** The app is run on the host (not docker), and
+   **host-run Next.js does NOT read the repo-root `.env`** — it reads
+   `apps/web/.env.local`:
    ```dotenv
+   # apps/web/.env.local
    NEXT_PUBLIC_NEXUS_API_BASE_URL=<$BACK>
-   NEXUS_FRONTEND_BASE_URL=<$FRONT>
-   NEXUS_ALLOWED_DEV_ORIGINS=<$FRONT>
    ```
-   Then recreate `web` (postgres/redis are untouched):
-   ```bash
-   docker compose up -d web
-   ```
+   Restart the frontend (`npm run dev`) after editing `.env.local`. (The
+   repo-root `.env` is read only by `docker compose`'s `web` service; if you run
+   the frontend via compose instead, set `NEXT_PUBLIC_NEXUS_API_BASE_URL`,
+   `NEXUS_FRONTEND_BASE_URL`, and `NEXUS_ALLOWED_DEV_ORIGINS` there and
+   `docker compose up -d web`.)
 
 4. **Run the backend in remote-dev.** It is not a docker service; it is a Spring
-   Boot app usually launched from IntelliJ in the default profile. Kill whatever
-   holds `:8080`, then (long-running — run detached/backgrounded):
+   Boot app launched from the shell (or IntelliJ). Kill whatever holds `:8080`,
+   then (long-running — run detached/backgrounded):
    ```bash
    SPRING_PROFILES_ACTIVE=remote-dev \
    NEXUS_FRONTEND_BASE_URL=<$FRONT> \
@@ -646,32 +647,34 @@ missing, recreate them there.
      `:apps:api:bootRun` does not resolve.
    - `SPRING_DOCKER_COMPOSE_LIFECYCLE=start-only` prevents a backend shutdown
      from running `docker compose down` and tearing down the shared stack.
+   - The backend reads these from the **shell env**, not the repo-root `.env`.
 
 ### Verify
 
 ```bash
+curl -s "$BACK/actuator/health/readiness"   # expect {"status":"UP"}
 # remote-dev cookie must be SameSite=None; Secure
-curl -sI "$BACK/login" -H "ngrok-skip-browser-warning: 1" | grep -i set-cookie
-# CORS must allow the frontend origin on a panel path (expect 200 + access-control-allow-origin: $FRONT)
-curl -s -D - -o /dev/null "$BACK/api/panel/v1/csrf" -H "Origin: $FRONT" -H "ngrok-skip-browser-warning: 1" | grep -i access-control
+curl -sI "$BACK/login" | grep -i set-cookie
+# CORS must allow the frontend origin on a panel path (expect access-control-allow-origin: $FRONT)
+curl -s -D - -o /dev/null "$BACK/api/panel/v1/csrf" -H "Origin: $FRONT" | grep -i access-control
 ```
 A `403` on `/login` or `/api/projects` for an **anonymous** request is normal
 (protected endpoints reject unauthenticated access) — it is not a tunnel/CORS
-problem. Always add `ngrok-skip-browser-warning: 1` to curl past the ngrok free
-interstitial.
+problem. (zrok has no interstitial page, so no special curl header is needed,
+unlike ngrok free.)
 
 **curl `200` is not proof the page renders.** Next.js dev blocks cross-origin
 dev resources (HMR) unless the tunnel host is in `allowedDevOrigins`. If the page
-returns HTML but stays blank/stuck in a real browser, the symptom is a console
-warning `Blocked cross-origin request to Next.js dev resource /_next/webpack-hmr`
-— meaning the host isn't allowed. `next.config.ts` derives `allowedDevOrigins`
-from `NEXUS_ALLOWED_DEV_ORIGINS` and normalizes each value to a bare hostname
-(the option requires hostnames, but the env var is also used as full origins
-elsewhere); confirm `[HMR] connected` in the browser console after a hard refresh.
+returns HTML but stays blank/stuck in a real browser, `next.config.ts` derives
+`allowedDevOrigins` from `NEXUS_ALLOWED_DEV_ORIGINS`; confirm `[HMR] connected`
+in the browser console after a hard refresh.
 
 ### Refresh / tear-down
 
-- `ngrok stop` stops the tunnels.
-- ngrok free URLs are ephemeral and change on every `ngrok start --all`. When they
-  do, refresh the root `.env` and the backend `NEXUS_FRONTEND_BASE_URL`, recreate
-  `web`, and restart the backend.
+- Stop the tunnels by killing the `zrok share public` processes (`pkill -f "zrok share"`).
+- zrok public shares are **not reserved** by default — their tokens change every
+  time they are recreated. When they do, refresh `apps/web/.env.local`, the
+  backend's `NEXUS_FRONTEND_BASE_URL`/`NEXUS_ALLOWED_DEV_ORIGINS`, and (if you
+  use docker compose) the repo-root `.env`, then restart the app. For **stable**
+  URLs, reserve them once with `zrok reserve public` and run the shares with
+  `--share <name>`.
