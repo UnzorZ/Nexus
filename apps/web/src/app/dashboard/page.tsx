@@ -175,8 +175,8 @@ export default function DashboardPage() {
   return (
     <Stagger root className="mx-auto flex w-full max-w-7xl flex-1 flex-col">
       <PageHeader
-        crumbs={["Projects", "F-Shop"]}
-        title="F-Shop"
+        crumbs={["Projects", "Unknown project"]}
+        title="Unknown project"
         description="Project control plane and integration overview."
         badge={
           <Badge className="gap-1.5 bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/15 dark:text-emerald-300">

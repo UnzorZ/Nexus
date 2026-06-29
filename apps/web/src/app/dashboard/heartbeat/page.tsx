@@ -62,10 +62,10 @@ const statusMeta: Record<HbStatus, { label: string; tone: Tone; dot?: boolean; p
 };
 
 const instances: Instance[] = [
-  { id: "i-1", instanceId: "fshop-api-prod-01", app: "f-shop-api", version: "1.4.2", keyPrefix: "nxs_f-shop_••••a1b2", status: "online", lastSeen: "42 seconds ago", region: "eu-west-1", runtime: "JVM 21 · Spring 3.4" },
-  { id: "i-2", instanceId: "fshop-worker-01", app: "f-shop-worker", version: "0.9.1", keyPrefix: "nxs_f-shop_••••7c9d", status: "stale", lastSeen: "4 minutes ago", region: "us-east-1", runtime: "Node 22" },
-  { id: "i-3", instanceId: "fshop-api-stage-01", app: "f-shop-api", version: "1.4.0", keyPrefix: "nxs_f-shop_••••7c9d", status: "offline", lastSeen: "3 hours ago", region: "eu-west-1", runtime: "JVM 21 · Spring 3.4" },
-  { id: "i-4", instanceId: "fshop-api-prod-02", app: "f-shop-api", version: "1.4.2", keyPrefix: "nxs_f-shop_••••a1b2", status: "offline", lastSeen: "2 days ago", region: "eu-west-1", runtime: "JVM 21 · Spring 3.4" },
+  { id: "i-1", instanceId: "demo-api-prod-01", app: "demo-api", version: "1.4.2", keyPrefix: "nxs_demo_••••a1b2", status: "online", lastSeen: "42 seconds ago", region: "eu-west-1", runtime: "JVM 21 · Spring 3.4" },
+  { id: "i-2", instanceId: "demo-worker-01", app: "demo-worker", version: "0.9.1", keyPrefix: "nxs_demo_••••7c9d", status: "stale", lastSeen: "4 minutes ago", region: "us-east-1", runtime: "Node 22" },
+  { id: "i-3", instanceId: "demo-api-stage-01", app: "demo-api", version: "1.4.0", keyPrefix: "nxs_demo_••••7c9d", status: "offline", lastSeen: "3 hours ago", region: "eu-west-1", runtime: "JVM 21 · Spring 3.4" },
+  { id: "i-4", instanceId: "demo-api-prod-02", app: "demo-api", version: "1.4.2", keyPrefix: "nxs_demo_••••a1b2", status: "offline", lastSeen: "2 days ago", region: "eu-west-1", runtime: "JVM 21 · Spring 3.4" },
 ];
 
 export default function HeartbeatPage() {
@@ -78,7 +78,7 @@ export default function HeartbeatPage() {
   return (
     <Stagger root className="mx-auto flex w-full max-w-7xl flex-1 flex-col">
       <PageHeader
-        crumbs={["Projects", "F-Shop", "Heartbeat"]}
+        crumbs={["Projects", "Unknown project", "Heartbeat"]}
         title="Heartbeat"
         description="App instances reporting liveness to Nexus. Status is derived from last seen and the liveness timeout — not pushed by clients."
         badge={<StatusBadge tone="emerald" dot pulse>{online} online</StatusBadge>}

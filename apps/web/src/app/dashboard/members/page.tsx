@@ -119,7 +119,7 @@ const initialMembers: Member[] = [
   {
     id: "m-2",
     name: "Ana Pérez",
-    email: "ana@fshop.dev",
+    email: "ana@example.com",
     role: "MEMBER",
     status: "active",
     mfa: true,
@@ -129,7 +129,7 @@ const initialMembers: Member[] = [
   {
     id: "m-3",
     name: "Lucas Díaz",
-    email: "lucas@fshop.dev",
+    email: "lucas@example.com",
     role: "MEMBER",
     status: "active",
     mfa: false,
@@ -139,7 +139,7 @@ const initialMembers: Member[] = [
   {
     id: "m-4",
     name: "Sofía Romero",
-    email: "sofia@fshop.dev",
+    email: "sofia@example.com",
     role: "ADMIN",
     status: "invited",
     mfa: false,
@@ -189,9 +189,9 @@ export default function MembersPage() {
   return (
     <Stagger root className="mx-auto flex w-full max-w-7xl flex-1 flex-col">
       <PageHeader
-        crumbs={["Projects", "F-Shop", "Members"]}
+        crumbs={["Projects", "Unknown project", "Members"]}
         title="Members"
-        description="Nexus accounts who can manage F-Shop from the dashboard. Roles are scoped to this project, separate from instance administration."
+        description="Nexus accounts who can manage this project from the dashboard. Roles are scoped to this project, separate from instance administration."
         badge={<StatusBadge tone="emerald" dot pulse>{active} active</StatusBadge>}
         actions={
           <>
@@ -253,7 +253,7 @@ export default function MembersPage() {
             <EmptyState
               Icon={UsersRoundIcon}
               title="No members yet"
-              description="Invite a Nexus account to help manage F-Shop."
+              description="Invite a Nexus account to help manage this project."
             />
           ) : (
             <Table>
@@ -385,7 +385,7 @@ export default function MembersPage() {
             <DialogTitle>Invite member</DialogTitle>
             <DialogDescription>
               The invitee must have a Nexus account. They&apos;ll be added to
-              F-Shop with the chosen role.
+              this project with the chosen role.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-4 py-1">
@@ -434,7 +434,7 @@ export default function MembersPage() {
             <DialogTitle>Remove {removeTarget?.name}?</DialogTitle>
             <DialogDescription>
               {removeTarget?.name} ({removeTarget?.email}) will lose access to
-              F-Shop immediately. This is recorded in the audit log.
+              this project immediately. This is recorded in the audit log.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

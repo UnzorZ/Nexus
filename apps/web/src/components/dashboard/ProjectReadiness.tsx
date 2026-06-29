@@ -125,7 +125,7 @@ export function ProjectReadiness() {
 
           <div className="mt-5 flex items-center gap-2 border-t pt-4 text-xs text-muted-foreground">
             <span className="nexus-live relative h-2 w-2 rounded-full bg-emerald-500 text-emerald-500" />
-            F-Shop can use enabled Nexus capabilities through the SDK.
+            This project can use enabled Nexus capabilities through the SDK.
           </div>
         </CardContent>
       </Card>

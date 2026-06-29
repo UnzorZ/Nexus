@@ -73,15 +73,15 @@ const actorMeta: Record<
 };
 
 const events: AuditEvent[] = [
-  { id: "e-1", actorType: "API_KEY", actor: "nxs_f-shop_••••a1b2", action: "heartbeat.report", resourceType: "instance", resourceId: "fshop-api-prod-01", outcome: "success", ip: "198.51.100.4", time: "42 seconds ago", minsAgo: 0.7, traceId: "a1b2c3d4", userAgent: "nexus-spring-boot-starter/1.0.0", metadata: { status: "online", region: "eu-west-1" } },
-  { id: "e-2", actorType: "PROJECT_USER", actor: "pablo@soto.io", action: "permission.check", resourceType: "permission", resourceId: "orders.cancel", outcome: "success", ip: "203.0.113.77", time: "10 minutes ago", minsAgo: 10, traceId: "b2c3d4e5", userAgent: "fshop-web/1.4.2 (Chrome)", metadata: { result: "allow", via: "role: vip" } },
+  { id: "e-1", actorType: "API_KEY", actor: "nxs_demo_••••a1b2", action: "heartbeat.report", resourceType: "instance", resourceId: "demo-api-prod-01", outcome: "success", ip: "198.51.100.4", time: "42 seconds ago", minsAgo: 0.7, traceId: "a1b2c3d4", userAgent: "nexus-spring-boot-starter/1.0.0", metadata: { status: "online", region: "eu-west-1" } },
+  { id: "e-2", actorType: "PROJECT_USER", actor: "pablo@soto.io", action: "permission.check", resourceType: "permission", resourceId: "orders.cancel", outcome: "success", ip: "203.0.113.77", time: "10 minutes ago", minsAgo: 10, traceId: "b2c3d4e5", userAgent: "demo-web/1.4.2 (Chrome)", metadata: { result: "allow", via: "role: vip" } },
   { id: "e-3", actorType: "SYSTEM", actor: "nexus", action: "permission.declare", resourceType: "permission", resourceId: "orders.refund", outcome: "success", ip: "127.0.0.1", time: "2 hours ago", minsAgo: 120, traceId: "c3d4e5f6", userAgent: "nexus-api/1.0.0", metadata: { source: "CODE", sync: "added" } },
   { id: "e-4", actorType: "SYSTEM", actor: "nexus", action: "module.gate", resourceType: "module", resourceId: "notify", outcome: "failure", ip: "127.0.0.1", time: "1 hour ago", minsAgo: 60, traceId: "d4e5f6g7", userAgent: "nexus-api/1.0.0", metadata: { reason: "module_disabled", status: "403" } },
   { id: "e-5", actorType: "PROJECT_USER", actor: "vera@lago.net", action: "auth.login", resourceType: "session", resourceId: "—", outcome: "failure", ip: "192.0.2.55", time: "6 hours ago", minsAgo: 360, traceId: "e5f6g7h8", userAgent: "Mozilla/5.0 (iPhone)", metadata: { reason: "invalid_credentials" } },
-  { id: "e-6", actorType: "API_KEY", actor: "nxs_f-shop_••••3f0e", action: "api_key.authenticate", resourceType: "api_key", resourceId: "key-3", outcome: "failure", ip: "198.51.100.9", time: "3 days ago", minsAgo: 4320, traceId: "f6g7h8i9", userAgent: "curl/8.4.0", metadata: { reason: "disabled" } },
+  { id: "e-6", actorType: "API_KEY", actor: "nxs_demo_••••3f0e", action: "api_key.authenticate", resourceType: "api_key", resourceId: "key-3", outcome: "failure", ip: "198.51.100.9", time: "3 days ago", minsAgo: 4320, traceId: "f6g7h8i9", userAgent: "curl/8.4.0", metadata: { reason: "disabled" } },
   { id: "e-7", actorType: "NEXUS_ACCOUNT", actor: "Marcos", action: "api_key.create", resourceType: "api_key", resourceId: "key-2", outcome: "success", ip: "203.0.113.9", time: "3 days ago", minsAgo: 4320, traceId: "g7h8i9j0", userAgent: "Mozilla/5.0 (Macintosh)", metadata: { scopes: "heartbeat:write", expires: "90d" } },
   { id: "e-8", actorType: "NEXUS_ACCOUNT", actor: "Marcos", action: "module.enable", resourceType: "module", resourceId: "identity", outcome: "success", ip: "203.0.113.9", time: "5 days ago", minsAgo: 7200, traceId: "h8i9j0k1", userAgent: "Mozilla/5.0 (Macintosh)", metadata: { from: "disabled", to: "enabled" } },
-  { id: "e-9", actorType: "NEXUS_ACCOUNT", actor: "Ana", action: "member.invite", resourceType: "membership", resourceId: "sofia@fshop.dev", outcome: "success", ip: "203.0.113.12", time: "2 days ago", minsAgo: 2880, traceId: "i9j0k1l2", userAgent: "Mozilla/5.0 (Macintosh)", metadata: { role: "ADMIN" } },
+  { id: "e-9", actorType: "NEXUS_ACCOUNT", actor: "Ana", action: "member.invite", resourceType: "membership", resourceId: "sofia@example.com", outcome: "success", ip: "203.0.113.12", time: "2 days ago", minsAgo: 2880, traceId: "i9j0k1l2", userAgent: "Mozilla/5.0 (Macintosh)", metadata: { role: "ADMIN" } },
   { id: "e-10", actorType: "NEXUS_ACCOUNT", actor: "Marcos", action: "role.update", resourceType: "role", resourceId: "support-agent", outcome: "success", ip: "203.0.113.9", time: "1 day ago", minsAgo: 1440, traceId: "j0k1l2m3", userAgent: "Mozilla/5.0 (Macintosh)", metadata: { added: "orders.cancel" } },
   { id: "e-11", actorType: "NEXUS_ACCOUNT", actor: "Marcos", action: "session.revoke", resourceType: "session", resourceId: "s-9f2c", outcome: "success", ip: "203.0.113.9", time: "4 days ago", minsAgo: 5760, traceId: "k1l2m3n4", userAgent: "Mozilla/5.0 (Macintosh)", metadata: { reason: "logout_all" } },
   { id: "e-12", actorType: "NEXUS_ACCOUNT", actor: "Lucas", action: "api_key.delete", resourceType: "api_key", resourceId: "key-legacy", outcome: "success", ip: "203.0.113.21", time: "12 days ago", minsAgo: 17280, traceId: "l2m3n4o5", userAgent: "Mozilla/5.0 (Macintosh)", metadata: { rotated_to: "key-2" } },
@@ -119,9 +119,9 @@ export default function AuditPage() {
   return (
     <Stagger root className="mx-auto flex w-full max-w-7xl flex-1 flex-col">
       <PageHeader
-        crumbs={["Projects", "F-Shop", "Audit"]}
+        crumbs={["Projects", "Unknown project", "Audit"]}
         title="Audit"
-        description="Immutable trail of sensitive actions on F-Shop. Metadata is intentionally small and never stores secrets, tokens, or raw JWTs."
+        description="Immutable trail of sensitive actions on this project. Metadata is intentionally small and never stores secrets, tokens, or raw JWTs."
         badge={<StatusBadge tone="amber" dot pulse>{filtered.length} events</StatusBadge>}
         actions={
           <>

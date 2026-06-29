@@ -24,7 +24,7 @@ class ArchiveProjectServiceTests {
     @Test
     void archivesProject() {
         UUID projectId = UUID.randomUUID();
-        Project project = new Project("f-shop", "F-Shop", null, null);
+        Project project = new Project("acme-app", "Acme App", null, null);
 
         when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
         when(projectRepository.save(any(Project.class))).thenAnswer(invocation -> invocation.getArgument(0));

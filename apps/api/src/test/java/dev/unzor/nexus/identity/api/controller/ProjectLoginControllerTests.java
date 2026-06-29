@@ -30,9 +30,9 @@ class ProjectLoginControllerTests {
     @Test
     void propagatesUnexpectedFailures() {
         IllegalStateException failure = new IllegalStateException("database unavailable");
-        when(projectSlugResolver.resolve("f-shop")).thenThrow(failure);
+        when(projectSlugResolver.resolve("acme-app")).thenThrow(failure);
 
-        assertThatThrownBy(() -> controller.login("f-shop", new ConcurrentModel()))
+        assertThatThrownBy(() -> controller.login("acme-app", new ConcurrentModel()))
                 .isSameAs(failure);
     }
 }

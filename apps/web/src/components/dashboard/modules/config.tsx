@@ -37,7 +37,7 @@ const initialFlags: FlagDef[] = [
 ];
 
 const values = [
-  { key: "brand.name", value: "F-Shop" },
+  { key: "brand.name", value: "Example project" },
   { key: "tax.default_rate", value: "0.21" },
   { key: "currency", value: "EUR" },
   { key: "locale", value: "es-ES" },

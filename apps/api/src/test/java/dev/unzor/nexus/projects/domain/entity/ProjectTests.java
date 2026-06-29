@@ -10,20 +10,20 @@ class ProjectTests {
     @Test
     void newProjectsStartActive() {
         Project project = new Project(
-                "garage-lab",
-                "GarageLab",
-                "Garage management",
-                "https://garage.example.com"
+                "acme-app",
+                "Acme App",
+                "Sample description",
+                "https://app.example.com"
         );
 
-        assertThat(project.getSlug()).isEqualTo("garage-lab");
+        assertThat(project.getSlug()).isEqualTo("acme-app");
         assertThat(project.getStatus()).isEqualTo(ProjectStatus.ACTIVE);
         assertThat(project.isOperational()).isTrue();
     }
 
     @Test
     void lifecycleTransitionsControlWhetherTheProjectIsOperational() {
-        Project project = new Project("f-shop", "F-Shop", null, null);
+        Project project = new Project("acme-app", "Acme App", null, null);
 
         project.suspend();
         assertThat(project.isOperational()).isFalse();
