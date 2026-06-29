@@ -4,6 +4,7 @@ import dev.unzor.nexus.projects.domain.entity.ProjectMembership;
 import dev.unzor.nexus.projects.domain.enums.ProjectMembershipRole;
 import dev.unzor.nexus.projects.domain.enums.ProjectMembershipStatus;
 import dev.unzor.nexus.projects.domain.exception.MembershipAlreadyOwnerException;
+import dev.unzor.nexus.projects.domain.exception.MembershipNotActiveException;
 import dev.unzor.nexus.projects.domain.exception.MembershipNotFoundException;
 import dev.unzor.nexus.projects.persistence.repository.ProjectMembershipRepository;
 import org.junit.jupiter.api.Test;
@@ -42,6 +43,7 @@ class TransferOwnershipServiceTests {
 
         assertThat(target.getRole()).isEqualTo(ProjectMembershipRole.OWNER);
         assertThat(owner.getRole()).isEqualTo(ProjectMembershipRole.ADMIN);
+        verify(membershipRepository).findForUpdateByProjectId(projectId);
         verify(membershipRepository).save(target);
         verify(membershipRepository).save(owner);
     }
@@ -66,6 +68,19 @@ class TransferOwnershipServiceTests {
 
         assertThatThrownBy(() -> service.transfer(projectId, targetId))
                 .isInstanceOf(MembershipAlreadyOwnerException.class);
+        verify(membershipRepository, never()).save(any(ProjectMembership.class));
+    }
+
+    @Test
+    void transferThrowsWhenTargetIsInactive() {
+        UUID projectId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+        ProjectMembership target = new ProjectMembership(projectId, targetId, ProjectMembershipRole.MEMBER);
+        target.suspend();
+        when(membershipRepository.findByProjectIdAndId(projectId, targetId)).thenReturn(Optional.of(target));
+
+        assertThatThrownBy(() -> service.transfer(projectId, targetId))
+                .isInstanceOf(MembershipNotActiveException.class);
         verify(membershipRepository, never()).save(any(ProjectMembership.class));
     }
 }

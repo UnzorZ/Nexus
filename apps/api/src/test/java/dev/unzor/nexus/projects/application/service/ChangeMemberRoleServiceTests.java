@@ -44,6 +44,7 @@ class ChangeMemberRoleServiceTests {
 
         MembershipDetails result = service.changeRole(projectId, membershipId, ProjectMembershipRole.ADMIN);
 
+        verify(membershipRepository).findForUpdateByProjectId(projectId);
         assertThat(membership.getRole()).isEqualTo(ProjectMembershipRole.ADMIN);
         assertThat(result.role()).isEqualTo(ProjectMembershipRole.ADMIN);
     }

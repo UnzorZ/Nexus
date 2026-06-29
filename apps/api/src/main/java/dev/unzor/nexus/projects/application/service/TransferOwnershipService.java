@@ -4,6 +4,7 @@ import dev.unzor.nexus.projects.domain.entity.ProjectMembership;
 import dev.unzor.nexus.projects.domain.enums.ProjectMembershipRole;
 import dev.unzor.nexus.projects.domain.enums.ProjectMembershipStatus;
 import dev.unzor.nexus.projects.domain.exception.MembershipAlreadyOwnerException;
+import dev.unzor.nexus.projects.domain.exception.MembershipNotActiveException;
 import dev.unzor.nexus.projects.domain.exception.MembershipNotFoundException;
 import dev.unzor.nexus.projects.persistence.repository.ProjectMembershipRepository;
 import org.springframework.stereotype.Service;
@@ -30,9 +31,18 @@ public class TransferOwnershipService {
 
     @Transactional
     public void transfer(UUID projectId, UUID targetMembershipId) {
+        // SELECT … FOR UPDATE sobre las membresías del proyecto: serializa esta
+        // mutación con cualquier otra que afecte al invariante de OWNER (cambio de
+        // rol, eliminación), evitando la carrera check-then-act del último owner.
+        membershipRepository.findForUpdateByProjectId(projectId);
         ProjectMembership target = membershipRepository
                 .findByProjectIdAndId(projectId, targetMembershipId)
                 .orElseThrow(() -> new MembershipNotFoundException(targetMembershipId));
+        // El destinatario debe estar activo: promover una membresía inactiva
+        // dejaría el proyecto con un OWNER sin acceso efectivo.
+        if (target.getStatus() != ProjectMembershipStatus.ACTIVE) {
+            throw new MembershipNotActiveException(targetMembershipId);
+        }
         // Guard esencial: sin él, transferir al propio owner dejaría el proyecto
         // sin ningún OWNER (el objetivo y el owner actual serían la misma fila).
         if (target.getRole() == ProjectMembershipRole.OWNER) {
