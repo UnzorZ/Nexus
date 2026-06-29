@@ -36,6 +36,7 @@ class RemoveMemberServiceTests {
 
         service.remove(projectId, membershipId);
 
+        verify(membershipRepository).findForUpdateByProjectId(projectId);
         assertThat(membership.getStatus()).isEqualTo(ProjectMembershipStatus.REVOKED);
     }
 

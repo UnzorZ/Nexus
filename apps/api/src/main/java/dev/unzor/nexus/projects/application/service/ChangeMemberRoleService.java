@@ -34,6 +34,10 @@ public class ChangeMemberRoleService {
 
     @Transactional
     public MembershipDetails changeRole(UUID projectId, UUID membershipId, ProjectMembershipRole newRole) {
+        // SELECT … FOR UPDATE sobre las membresías del proyecto: serializa esta
+        // mutación con cualquier otra que afecte al invariante de OWNER, evitando
+        // la carrera check-then-act del recuento de owners activos.
+        membershipRepository.findForUpdateByProjectId(projectId);
         ProjectMembership membership = membershipRepository
                 .findByProjectIdAndId(projectId, membershipId)
                 .orElseThrow(() -> new MembershipNotFoundException(membershipId));

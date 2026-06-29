@@ -2,6 +2,7 @@ package dev.unzor.nexus.projects.api.controller;
 
 import dev.unzor.nexus.projects.domain.exception.LastOwnerProtectionException;
 import dev.unzor.nexus.projects.domain.exception.MembershipAlreadyOwnerException;
+import dev.unzor.nexus.projects.domain.exception.MembershipNotActiveException;
 import dev.unzor.nexus.projects.domain.exception.MembershipNotFoundException;
 import dev.unzor.nexus.projects.domain.exception.ProjectAccessDeniedException;
 import dev.unzor.nexus.projects.domain.exception.ProjectAlreadyExistException;
@@ -73,6 +74,17 @@ class ProjectsExceptionHandler {
         );
         problem.setTitle("Conflict");
         problem.setProperty("code", "already_owner");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler(MembershipNotActiveException.class)
+    ResponseEntity<ProblemDetail> handleNotActive(MembershipNotActiveException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT,
+                "That member is not active and cannot receive ownership."
+        );
+        problem.setTitle("Conflict");
+        problem.setProperty("code", "member_not_active");
         return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
     }
 
