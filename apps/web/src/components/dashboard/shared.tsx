@@ -109,6 +109,9 @@ function crumbHref(crumb: string, projectId?: string): string | undefined {
       ? `/projects/${projectId}/${section}`
       : `/dashboard/${section}`;
   }
+  // Un crumb dinámico que no es una sección conocida (p. ej. el nombre del
+  // proyecto) enlaza a la raíz del proyecto cuando la página aporta projectId.
+  if (projectId) return `/projects/${projectId}`;
   return undefined;
 }
 
