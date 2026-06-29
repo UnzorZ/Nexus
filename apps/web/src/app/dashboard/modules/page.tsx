@@ -1,18 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { BoxIcon } from "@/components/ui/box";
 import { ChevronRightIcon } from "@/components/ui/chevron-right";
-import { ClipboardCheckIcon } from "@/components/ui/clipboard-check";
-import { LockIcon } from "@/components/ui/lock";
-import { ShieldCheckIcon } from "@/components/ui/shield-check";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { Stagger, tint } from "@/components/dashboard/anim";
+import { Stagger } from "@/components/dashboard/anim";
 import {
   PageHeader,
   Panel,
-  StatTile,
   StatusBadge,
 } from "@/components/dashboard/shared";
 import {
@@ -35,9 +30,9 @@ export default function ModulesPage() {
   return (
     <Stagger root className="mx-auto flex w-full max-w-7xl flex-1 flex-col">
       <PageHeader
-        crumbs={["Projects", "F-Shop", "Modules"]}
+        crumbs={["Projects", "Unknown project", "Modules"]}
         title="Modules"
-        description="Enable or disable Nexus capabilities for F-Shop. Endpoints belonging to a disabled module return 403 module_disabled."
+        description="Enable or disable Nexus capabilities for this project. Endpoints belonging to a disabled module return 403 module_disabled."
         badge={
           <StatusBadge tone="emerald" dot pulse>
             {enabledCount} enabled
@@ -52,18 +47,6 @@ export default function ModulesPage() {
       />
 
       <Stagger className="mt-6 grid flex-1 grid-cols-1 gap-6">
-        <Panel
-          title="Module gate"
-          description="Every project-level API passes these checks in order."
-        >
-          <div className="grid grid-cols-2 divide-x divide-border md:grid-cols-4">
-            <StatTile Icon={ShieldCheckIcon} iconBg={tint.emerald.bg} iconColor={tint.emerald.text} label="Enabled" value={enabledCount} hint={`of ${MODULE_CATALOG.length} configurable`} />
-            <StatTile Icon={BoxIcon} iconBg={tint.blue.bg} iconColor={tint.blue.text} label="Configurable" value={MODULE_CATALOG.length} hint="Per-project modules" />
-            <StatTile Icon={ClipboardCheckIcon} iconBg={tint.amber.bg} iconColor={tint.amber.text} label="Always on" value={CORE_CAPABILITIES.length} hint="Core capabilities" />
-            <StatTile Icon={LockIcon} iconBg={tint.red.bg} iconColor={tint.red.text} label="Default policy" value="Deny" hint="Fail-closed by design" />
-          </div>
-        </Panel>
-
         <Panel
           title="Project modules"
           description="Open a module to configure it, or toggle it to enable or disable its APIs."
@@ -95,6 +78,7 @@ export default function ModulesPage() {
                     </div>
                     <Switch
                       checked={isOn}
+                      className="enabled:hover:border-primary"
                       onClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();

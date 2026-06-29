@@ -49,11 +49,11 @@ type OAuthClient = {
 const initialClients: OAuthClient[] = [
   {
     id: "c-1",
-    clientId: "fshop-web",
-    name: "F-Shop Web",
+    clientId: "demo-web",
+    name: "Demo Web",
     public: true,
-    redirectUris: ["https://fshop.unzor.xyz/auth/callback"],
-    postLogout: ["https://fshop.unzor.xyz"],
+    redirectUris: ["https://app.example.com/auth/callback"],
+    postLogout: ["https://app.example.com"],
     grants: ["authorization_code", "refresh_token"],
     scopes: ["openid", "profile", "orders.read"],
     requirePkce: true,
@@ -61,8 +61,8 @@ const initialClients: OAuthClient[] = [
   },
   {
     id: "c-2",
-    clientId: "fshop-backend",
-    name: "F-Shop Backend",
+    clientId: "demo-backend",
+    name: "Demo Backend",
     public: false,
     redirectUris: [],
     postLogout: [],
@@ -70,14 +70,14 @@ const initialClients: OAuthClient[] = [
     scopes: ["orders.read", "orders.cancel"],
     requirePkce: false,
     status: "active",
-    secretMask: "fshop-backend_••••9f2c",
+    secretMask: "demo-backend_••••9f2c",
   },
   {
     id: "c-3",
-    clientId: "fshop-mobile",
-    name: "F-Shop Mobile",
+    clientId: "demo-mobile",
+    name: "Demo Mobile",
     public: true,
-    redirectUris: ["fshop://auth", "https://fshop.unzor.xyz/mobile/callback"],
+    redirectUris: ["demo-app://auth", "https://app.example.com/mobile/callback"],
     postLogout: [],
     grants: ["authorization_code"],
     scopes: ["openid", "profile"],
@@ -108,9 +108,9 @@ export default function OAuthClientsPage() {
   return (
     <Stagger root className="mx-auto flex w-full max-w-7xl flex-1 flex-col">
       <PageHeader
-        crumbs={["Projects", "F-Shop", "OAuth clients"]}
+        crumbs={["Projects", "Unknown project", "OAuth clients"]}
         title="OAuth clients"
-        description="OAuth2/OIDC clients under F-Shop's project issuer. Redirect URIs must match exactly; PKCE is required for public clients."
+        description="OAuth2/OIDC clients under this project's issuer. Redirect URIs must match exactly; PKCE is required for public clients."
         badge={<StatusBadge tone="amber" dot pulse>{active} active</StatusBadge>}
         actions={
           <>

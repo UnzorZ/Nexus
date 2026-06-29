@@ -30,7 +30,7 @@ const activities: ActivityItem[] = [
   {
     id: 1,
     message: "Permissions synchronized",
-    actor: "f-shop-api",
+    actor: "demo-api",
     time: "2 minutes ago",
     Icon: ShieldCheckIcon,
     iconColor: tint.indigo.text,
@@ -39,7 +39,7 @@ const activities: ActivityItem[] = [
   {
     id: 2,
     message: "Heartbeat received",
-    actor: "f-shop-api",
+    actor: "demo-api",
     time: "42 seconds ago",
     Icon: ActivityIcon,
     iconColor: tint.emerald.text,

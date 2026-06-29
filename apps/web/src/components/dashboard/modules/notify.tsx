@@ -22,20 +22,20 @@ import { tint } from "@/components/dashboard/anim";
 const templates = [
   { id: "t-1", name: "Order shipped", subject: "Your order #{{id}} has shipped", trigger: "order.shipped", lastSent: "12 min ago" },
   { id: "t-2", name: "Payment failed", subject: "Payment failed for order #{{id}}", trigger: "payment.failed", lastSent: "3 hours ago" },
-  { id: "t-3", name: "Weekly summary", subject: "Your weekly F-Shop summary", trigger: "schedule.weekly", lastSent: "2 days ago" },
+  { id: "t-3", name: "Weekly summary", subject: "Your weekly project summary", trigger: "schedule.weekly", lastSent: "2 days ago" },
 ];
 
 const deliveries = [
   { id: "d-1", to: "elena@vidal.me", subject: "Your order #10482 has shipped", status: "delivered" as const, time: "12 min ago" },
   { id: "d-2", to: "pablo@soto.io", subject: "Payment failed for order #7731", status: "delivered" as const, time: "3 hours ago" },
-  { id: "d-3", to: "mark@old.invalid", subject: "Your weekly F-Shop summary", status: "bounced" as const, time: "2 days ago" },
+  { id: "d-3", to: "mark@old.invalid", subject: "Your weekly project summary", status: "bounced" as const, time: "2 days ago" },
   { id: "d-4", to: "vera@lago.net", subject: "Your order #7781 has shipped", status: "delivered" as const, time: "2 days ago" },
 ];
 
 export function NotifyModule() {
   return (
     <>
-      <Panel title="Delivery" description="Transactional email delivery for F-Shop.">
+      <Panel title="Delivery" description="Transactional email delivery for this project.">
         <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
           <StatTile Icon={Send} iconBg={tint.emerald.bg} iconColor={tint.emerald.text} label="Sent (24h)" value="1 284" hint="Email" />
           <StatTile Icon={MailIcon} iconBg={tint.indigo.bg} iconColor={tint.indigo.text} label="Delivery rate" value="99.4%" hint="Last 7 days" />
@@ -51,11 +51,11 @@ export function NotifyModule() {
       >
         <div className="flex flex-col gap-2.5 text-sm">
           <Row label="Status"><StatusBadge tone="emerald" dot>Connected</StatusBadge></Row>
-          <Row label="Host" value={<MonoChip>smtp.fshop.dev:587</MonoChip>} />
+          <Row label="Host" value={<MonoChip>smtp.example.com:587</MonoChip>} />
           <Row label="Encryption" value="STARTTLS" />
-          <Row label="Username" value="notifications@fshop.dev" />
-          <Row label="From" value="F-Shop <notifications@fshop.dev>" />
-          <Row label="Reply-to" value="support@fshop.dev" />
+          <Row label="Username" value="notifications@example.com" />
+          <Row label="From" value="Example project <notifications@example.com>" />
+          <Row label="Reply-to" value="support@example.com" />
         </div>
       </Panel>
 

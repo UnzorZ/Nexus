@@ -23,13 +23,13 @@ class ResolveProjectBySlugServiceTests {
         UUID projectId = UUID.randomUUID();
         Project project = mock(Project.class);
         when(project.getId()).thenReturn(projectId);
-        when(project.getSlug()).thenReturn("f-shop");
-        when(projectRepository.findBySlugIgnoreCase("F-SHOP"))
+        when(project.getSlug()).thenReturn("acme-app");
+        when(projectRepository.findBySlugIgnoreCase("ACME-APP"))
                 .thenReturn(Optional.of(project));
 
-        ProjectSlugReference reference = service.resolve("F-SHOP");
+        ProjectSlugReference reference = service.resolve("ACME-APP");
 
         assertThat(reference.projectId()).isEqualTo(projectId);
-        assertThat(reference.projectSlug()).isEqualTo("f-shop");
+        assertThat(reference.projectSlug()).isEqualTo("acme-app");
     }
 }

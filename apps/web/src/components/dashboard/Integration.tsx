@@ -16,14 +16,14 @@ import { MotionCard, SPRING_SNAPPY, animHandlers, type AnimIconHandle } from "./
 
 const integrationData = {
   sdk: "Spring Boot starter",
-  application: "f-shop-api",
+  application: "demo-api",
   version: "1.4.2",
   lastHeartbeat: "42 seconds ago",
   apiKey: "nx_live_**********a1b2",
 };
 
 const configSnippet = `nexus:
-  project: f-shop
+  project: demo-project
   api-key: \${NEXUS_API_KEY}`;
 
 export function Integration() {

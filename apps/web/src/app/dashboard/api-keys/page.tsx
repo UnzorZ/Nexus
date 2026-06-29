@@ -93,7 +93,7 @@ const initialKeys: ApiKey[] = [
   {
     id: "key-1",
     name: "Production API key",
-    prefix: "nxs_f-shop_••••a1b2",
+    prefix: "nxs_demo_••••a1b2",
     scopes: ["heartbeat:write", "permissions:sync", "audit:read"],
     status: "active",
     lastUsedAt: "42 seconds ago",
@@ -104,7 +104,7 @@ const initialKeys: ApiKey[] = [
   {
     id: "key-2",
     name: "Staging API key",
-    prefix: "nxs_f-shop_••••7c9d",
+    prefix: "nxs_demo_••••7c9d",
     scopes: ["heartbeat:write"],
     status: "active",
     lastUsedAt: "2 hours ago",
@@ -115,7 +115,7 @@ const initialKeys: ApiKey[] = [
   {
     id: "key-3",
     name: "CI deploy key",
-    prefix: "nxs_f-shop_••••3f0e",
+    prefix: "nxs_demo_••••3f0e",
     scopes: ["*"],
     status: "disabled",
     lastUsedAt: "3 days ago",
@@ -126,7 +126,7 @@ const initialKeys: ApiKey[] = [
   {
     id: "key-4",
     name: "Legacy web key",
-    prefix: "nxs_f-shop_••••9b2a",
+    prefix: "nxs_demo_••••9b2a",
     scopes: ["users:read"],
     status: "expired",
     lastUsedAt: "2 months ago",
@@ -169,7 +169,7 @@ export default function ApiKeysPage() {
         iconColor: tint.indigo.text,
         label: "Active keys",
         value: active,
-        hint: "Identifying F-Shop",
+        hint: "Identifying this project",
       },
       {
         Icon: ClockIcon,
@@ -214,11 +214,11 @@ export default function ApiKeysPage() {
   }
 
   function createKey() {
-    const secret = `nxs_f-shop_${randomSecret()}`;
+    const secret = `nxs_demo_${randomSecret()}`;
     const created: ApiKey = {
       id: `key-${Date.now()}`,
       name: newName.trim() || "Untitled key",
-      prefix: `nxs_f-shop_••••${secret.slice(-4)}`,
+      prefix: `nxs_demo_••••${secret.slice(-4)}`,
       scopes: newScopes.length ? newScopes : ["heartbeat:write"],
       status: "active",
       lastUsedAt: "never",
@@ -244,9 +244,9 @@ export default function ApiKeysPage() {
   return (
     <Stagger root className="mx-auto flex w-full max-w-7xl flex-1 flex-col">
       <PageHeader
-        crumbs={["Projects", "F-Shop", "API keys"]}
+        crumbs={["Projects", "Unknown project", "API keys"]}
         title="API keys"
-        description="Machine credentials that identify F-Shop to Nexus. Scopes are additive; secrets are shown once and stored only as a hash."
+        description="Machine credentials that identify this project to Nexus. Scopes are additive; secrets are shown once and stored only as a hash."
         badge={
           <StatusBadge tone="emerald" dot pulse>
             {active} active
@@ -264,7 +264,7 @@ export default function ApiKeysPage() {
       />
 
       <Stagger className="mt-6 grid flex-1 grid-cols-1 gap-6">
-        <Panel title="API keys" description="nxs_f-shop_•••••• format · multiple keys per project are first-class.">
+        <Panel title="API keys" description="nxs_demo_•••••• format · multiple keys per project are first-class.">
           <div className="mb-4 grid grid-cols-2 divide-x divide-border md:grid-cols-4">
             {summary.map((s) => (
               <StatTile key={s.label} {...s} />
@@ -275,7 +275,7 @@ export default function ApiKeysPage() {
             <EmptyState
               Icon={KeyCircleIcon}
               title="No API keys yet"
-              description="Create your first key to let a backend app identify as F-Shop."
+              description="Create your first key to let a backend app identify as this project."
               action={
                 <Button className="mt-1" onClick={openCreate}>
                   <PlusIcon size={14} />

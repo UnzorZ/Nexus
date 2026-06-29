@@ -14,7 +14,7 @@ import { tint } from "@/components/dashboard/anim";
 export function RegistryModule() {
   return (
     <>
-      <Panel title="Registry" description="App registration and heartbeat-based liveness for F-Shop.">
+      <Panel title="Registry" description="App registration and heartbeat-based liveness for this project.">
         <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
           <StatTile Icon={Server} iconBg={tint.cyan.bg} iconColor={tint.cyan.text} label="Instances" value="4" hint="Registered" />
           <StatTile Icon={ActivityIcon} iconBg={tint.emerald.bg} iconColor={tint.emerald.text} label="Online" value="1" hint="Within timeout" />

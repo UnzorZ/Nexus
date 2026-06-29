@@ -77,7 +77,7 @@ export function VaultModule() {
         <div className="flex flex-col gap-2.5 text-sm">
           <Row label="Algorithm" value="AES-256-GCM" />
           <Row label="Key wrapping" value="Project-scoped DEK · rotated quarterly" />
-          <Row label="Master key" value={<MonoChip>mk_fshop_4c8e</MonoChip>} />
+          <Row label="Master key" value={<MonoChip>mk_demo_4c8e</MonoChip>} />
           <div className="flex items-center gap-3">
             <span className="w-28 shrink-0 text-xs text-muted-foreground">Audit</span>
             <StatusBadge tone="emerald" dot>Every read &amp; write logged</StatusBadge>

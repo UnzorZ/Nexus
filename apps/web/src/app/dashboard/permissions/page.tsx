@@ -107,9 +107,9 @@ export default function PermissionsPage() {
   return (
     <Stagger root className="mx-auto flex w-full max-w-7xl flex-1 flex-col">
       <PageHeader
-        crumbs={["Projects", "F-Shop", "Permissions"]}
+        crumbs={["Projects", "Unknown project", "Permissions"]}
         title="Permissions"
-        description="Permission flags declared by F-Shop and managed by Nexus. Positive-only; effective when any assignment matches."
+        description="Permission flags declared by this project and managed by Nexus. Positive-only; effective when any assignment matches."
         badge={<StatusBadge tone="violet" dot pulse>{TOTAL_DECLARED} declared</StatusBadge>}
         actions={
           <>
