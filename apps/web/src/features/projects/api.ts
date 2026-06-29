@@ -107,3 +107,18 @@ export async function archiveProject(
     errorMessage: "No se pudo archivar el proyecto.",
   });
 }
+
+export async function restoreProject(
+  projectId: string,
+  csrfToken: string,
+): Promise<ProjectDetails> {
+  return apiClient.post<ProjectDetails>(
+    apiRoutes.panel.projects.restore(projectId),
+    null,
+    {
+      headers: { [CSRF_HEADER_NAME]: csrfToken },
+      redirect: "manual",
+      errorMessage: "No se pudo restaurar el proyecto.",
+    },
+  );
+}
