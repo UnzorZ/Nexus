@@ -47,6 +47,20 @@ export const apiRoutes = {
             `/api/panel/v1/projects/${encodeURIComponent(projectId)}/modules/${encodeURIComponent(key)}`,
           ),
       },
+      members: {
+        root: (projectId: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/members`,
+          ),
+        byId: (projectId: string, memberId: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/members/${encodeURIComponent(memberId)}`,
+          ),
+        transferOwnership: (projectId: string, memberId: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/members/${encodeURIComponent(memberId)}/transfer-ownership`,
+          ),
+      },
     },
   },
 } as const;
