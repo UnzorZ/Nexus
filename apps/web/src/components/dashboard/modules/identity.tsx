@@ -17,7 +17,7 @@ import { tint } from "@/components/dashboard/anim";
 export function IdentityModule() {
   return (
     <>
-      <Panel title="Identity" description="Project-isolated users authenticated through F-Shop's OAuth/OIDC realm.">
+      <Panel title="Identity" description="Project-isolated users authenticated through this project's OAuth/OIDC realm.">
         <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
           <StatTile Icon={UserIcon} iconBg={tint.indigo.bg} iconColor={tint.indigo.text} label="Project users" value="248" hint="Realm" />
           <StatTile Icon={LockIcon} iconBg={tint.amber.bg} iconColor={tint.amber.text} label="OAuth clients" value="2" hint="Web · Backend" />
@@ -28,8 +28,8 @@ export function IdentityModule() {
 
       <RelatedLinks
         links={[
-          { href: "/dashboard/users", label: "Project users", hint: "248 users in the F-Shop realm" },
-          { href: "/dashboard/oauth-clients", label: "OAuth clients", hint: "2 clients — fshop-web, fshop-backend" },
+          { href: "/dashboard/users", label: "Project users", hint: "248 users in this project realm" },
+          { href: "/dashboard/oauth-clients", label: "OAuth clients", hint: "2 clients — demo-web, demo-backend" },
         ]}
       />
 
@@ -39,7 +39,7 @@ export function IdentityModule() {
         action={<Button variant="outline" size="sm">View JWKS</Button>}
       >
         <div className="flex flex-col gap-2.5 text-sm">
-          <Row label="Issuer" value={<MonoChip>https://nexus.unzor.xyz/p/f-shop</MonoChip>} />
+          <Row label="Issuer" value={<MonoChip>https://nexus.unzor.xyz/p/demo-project</MonoChip>} />
           <Row label="Access token" value="15 minutes" />
           <Row label="Refresh token" value="7 days · rotating" />
           <div className="flex items-center gap-3">

@@ -27,22 +27,22 @@ import {
 } from "@/components/dashboard/shared";
 
 export default function ProjectSettingsPage() {
-  const [name, setName] = useState("F-Shop");
+  const [name, setName] = useState("Unknown project");
   const [description, setDescription] = useState(
     "E-commerce platform and storefront.",
   );
-  const [publicBaseUrl, setPublicBaseUrl] = useState("https://fshop.unzor.xyz");
+  const [publicBaseUrl, setPublicBaseUrl] = useState("https://app.example.com");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [confirmText, setConfirmText] = useState("");
 
-  const slug = "f-shop";
+  const slug = "demo-project";
 
   return (
     <Stagger root className="mx-auto flex w-full max-w-4xl flex-1 flex-col">
       <PageHeader
-        crumbs={["Projects", "F-Shop", "Settings"]}
+        crumbs={["Projects", "Unknown project", "Settings"]}
         title="Project settings"
-        description="F-Shop boundary metadata. Changes to identity-affecting fields are recorded in the audit log."
+        description="Project boundary metadata. Changes to identity-affecting fields are recorded in the audit log."
         badge={<StatusBadge tone="emerald" dot pulse>Active</StatusBadge>}
         actions={<Button>Save changes</Button>}
       />
@@ -97,15 +97,15 @@ export default function ProjectSettingsPage() {
           <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between gap-3">
               <span className="text-xs text-muted-foreground">Project ID</span>
-              <MonoChip>prj_fshop_8f3a2c</MonoChip>
+              <MonoChip>prj_demo_8f3a2c</MonoChip>
             </div>
             <div className="flex items-center justify-between gap-3">
               <span className="text-xs text-muted-foreground">Issuer</span>
-              <MonoChip>https://nexus.unzor.xyz/p/f-shop</MonoChip>
+              <MonoChip>https://nexus.unzor.xyz/p/demo-project</MonoChip>
             </div>
             <div className="flex items-center justify-between gap-3">
               <span className="text-xs text-muted-foreground">JWKS</span>
-              <MonoChip>https://nexus.unzor.xyz/p/f-shop/.well-known/jwks.json</MonoChip>
+              <MonoChip>https://nexus.unzor.xyz/p/demo-project/.well-known/jwks.json</MonoChip>
             </div>
             <div className="flex items-center justify-between gap-3 border-t pt-3">
               <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -129,7 +129,7 @@ export default function ProjectSettingsPage() {
               <div>
                 <p className="text-sm font-medium">Delete this project</p>
                 <p className="text-xs text-muted-foreground">
-                  Permanently removes F-Shop, its keys, users and history. This cannot be undone.
+                  Permanently removes this project, its keys, users and history. This cannot be undone.
                 </p>
               </div>
             </div>
@@ -149,7 +149,7 @@ export default function ProjectSettingsPage() {
       <Dialog open={deleteOpen} onOpenChange={(open) => { setDeleteOpen(open); if (!open) setConfirmText(""); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete F-Shop?</DialogTitle>
+            <DialogTitle>Delete this project?</DialogTitle>
             <DialogDescription>
               This permanently deletes the project and everything under it. Type the slug to confirm.
             </DialogDescription>

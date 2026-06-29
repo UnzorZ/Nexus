@@ -1,17 +1,19 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { Database } from "lucide-react";
-import { BookTextIcon } from "@/components/ui/book-text";
-import { BoxIcon } from "@/components/ui/box";
-import { FileCogIcon } from "@/components/ui/file-cog";
-import { GaugeIcon } from "@/components/ui/gauge";
-import { ActivityIcon } from "@/components/ui/activity";
-import { LockIcon } from "@/components/ui/lock";
-import { BellIcon } from "@/components/ui/bell";
-import { ClipboardCheckIcon } from "@/components/ui/clipboard-check";
-import { ShieldCheckIcon } from "@/components/ui/shield-check";
-import { UserIcon } from "@/components/ui/user";
+import {
+  Activity,
+  Archive,
+  Bell,
+  FileText,
+  Gauge,
+  HardDrive,
+  KeyRound,
+  ScrollText,
+  Settings,
+  ShieldCheck,
+  Users,
+} from "lucide-react";
 import { tint } from "@/components/dashboard/anim";
 import type { Tone } from "@/components/dashboard/shared";
 
@@ -35,17 +37,17 @@ export const categoryTone: Record<Category, Tone> = {
 };
 
 export const MODULE_CATALOG: ModuleMeta[] = [
-  { key: "identity", name: "Identity", description: "Project-isolated users, OAuth/OIDC realms, JWT/JWKS issuance.", category: "Access", Icon: UserIcon, iconBg: tint.indigo.bg, iconColor: tint.indigo.text },
-  { key: "permissions", name: "Permissions", description: "Permission catalog, roles, assignments and snapshot API.", category: "Access", Icon: ShieldCheckIcon, iconBg: tint.violet.bg, iconColor: tint.violet.text },
-  { key: "audit", name: "Audit", description: "Browseable audit trail for sensitive project actions.", category: "Access", Icon: ClipboardCheckIcon, iconBg: tint.amber.bg, iconColor: tint.amber.text },
-  { key: "registry", name: "Registry", description: "App registration and heartbeat-based liveness tracking.", category: "Integration", Icon: ActivityIcon, iconBg: tint.cyan.bg, iconColor: tint.cyan.text },
-  { key: "notify", name: "Notify", description: "Notification requests, templates and email delivery.", category: "Integration", Icon: BellIcon, iconBg: tint.emerald.bg, iconColor: tint.emerald.text },
-  { key: "storage", name: "Storage", description: "Per-project blob storage and object lifecycle.", category: "Data", Icon: BoxIcon, iconBg: tint.blue.bg, iconColor: tint.blue.text },
-  { key: "vault", name: "Vault", description: "Encrypted secrets and project-scoped key values.", category: "Data", Icon: LockIcon, iconBg: tint.red.bg, iconColor: tint.red.text },
-  { key: "backup", name: "Backup", description: "Scheduled project data snapshots and restore points.", category: "Data", Icon: Database, iconBg: tint.indigo.bg, iconColor: tint.indigo.text },
-  { key: "documents", name: "Documents", description: "Document generation and templated exports.", category: "Data", Icon: BookTextIcon, iconBg: tint.violet.bg, iconColor: tint.violet.text },
-  { key: "config", name: "Config", description: "Dynamic project configuration and feature flags.", category: "Operations", Icon: FileCogIcon, iconBg: tint.amber.bg, iconColor: tint.amber.text },
-  { key: "metrics", name: "Metrics", description: "Project-scoped usage metrics and instrumentation.", category: "Operations", Icon: GaugeIcon, iconBg: tint.cyan.bg, iconColor: tint.cyan.text },
+  { key: "identity", name: "Identity", description: "Project-isolated users, OAuth/OIDC realms, JWT/JWKS issuance.", category: "Access", Icon: Users, iconBg: tint.indigo.bg, iconColor: tint.indigo.text },
+  { key: "permissions", name: "Permissions", description: "Permission catalog, roles, assignments and snapshot API.", category: "Access", Icon: ShieldCheck, iconBg: tint.violet.bg, iconColor: tint.violet.text },
+  { key: "audit", name: "Audit", description: "Browseable audit trail for sensitive project actions.", category: "Access", Icon: ScrollText, iconBg: tint.amber.bg, iconColor: tint.amber.text },
+  { key: "registry", name: "Registry", description: "App registration and heartbeat-based liveness tracking.", category: "Integration", Icon: Activity, iconBg: tint.cyan.bg, iconColor: tint.cyan.text },
+  { key: "notify", name: "Notify", description: "Notification requests, templates and email delivery.", category: "Integration", Icon: Bell, iconBg: tint.emerald.bg, iconColor: tint.emerald.text },
+  { key: "storage", name: "Storage", description: "Per-project blob storage and object lifecycle.", category: "Data", Icon: HardDrive, iconBg: tint.blue.bg, iconColor: tint.blue.text },
+  { key: "vault", name: "Vault", description: "Encrypted secrets and project-scoped key values.", category: "Data", Icon: KeyRound, iconBg: tint.red.bg, iconColor: tint.red.text },
+  { key: "backup", name: "Backup", description: "Scheduled project data snapshots and restore points.", category: "Data", Icon: Archive, iconBg: tint.indigo.bg, iconColor: tint.indigo.text },
+  { key: "documents", name: "Documents", description: "Document generation and templated exports.", category: "Data", Icon: FileText, iconBg: tint.violet.bg, iconColor: tint.violet.text },
+  { key: "config", name: "Config", description: "Dynamic project configuration and feature flags.", category: "Operations", Icon: Settings, iconBg: tint.amber.bg, iconColor: tint.amber.text },
+  { key: "metrics", name: "Metrics", description: "Project-scoped usage metrics and instrumentation.", category: "Operations", Icon: Gauge, iconBg: tint.cyan.bg, iconColor: tint.cyan.text },
 ];
 
 export const CORE_CAPABILITIES = [

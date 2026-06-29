@@ -27,28 +27,41 @@ import {
 export function ModuleShell({
   module,
   children,
+  enabled: enabledProp,
+  onToggle,
+  projectId,
+  projectName,
+  canToggle = true,
 }: {
   module: ModuleMeta;
   children: React.ReactNode;
+  enabled?: boolean;
+  onToggle?: () => void;
+  projectId?: string;
+  projectName?: string;
+  canToggle?: boolean;
 }) {
-  const enabled = useModuleEnabled();
-  const isOn = !!enabled[module.key];
+  const store = useModuleEnabled();
+  const isOn = enabledProp ?? !!store[module.key];
+  const handleToggle = onToggle ?? (() => toggleModuleEnabled(module.key));
+  const switchDisabled =
+    !canToggle || (onToggle !== undefined && enabledProp === undefined);
   const docsRef = useRef<AnimIconHandle>(null);
 
   return (
     <Stagger root className="mx-auto flex w-full max-w-7xl flex-1 flex-col">
       <PageHeader
-        crumbs={["Projects", "F-Shop", "Modules", module.name]}
+        crumbs={[
+          "Projects",
+          projectName ?? "Unknown project",
+          "Modules",
+          module.name,
+        ]}
+        projectId={projectId}
         title={
           <span className="inline-flex items-center gap-3">
-            <span
-              className={cn(
-                "flex h-9 w-9 items-center justify-center rounded-md",
-                module.iconBg,
-                !isOn && "grayscale",
-              )}
-            >
-              <module.Icon size={20} className={module.iconColor} />
+            <span className="flex h-9 w-9 items-center justify-center rounded-md bg-muted">
+              <module.Icon size={20} className="text-foreground" />
             </span>
             {module.name}
           </span>
@@ -78,7 +91,9 @@ export function ModuleShell({
               <Switch
                 size="sm"
                 checked={isOn}
-                onCheckedChange={() => toggleModuleEnabled(module.key)}
+                disabled={switchDisabled}
+                className="enabled:hover:border-primary"
+                onCheckedChange={handleToggle}
                 aria-label={`Toggle ${module.name}`}
               />
               <span className="text-xs font-medium text-muted-foreground">
