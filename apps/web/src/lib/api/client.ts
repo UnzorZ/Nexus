@@ -124,4 +124,9 @@ export const apiClient = {
     body?: RequestOptions["body"],
     options: RequestOptions = {},
   ) => apiRequest<T>(url, { ...options, method: "PATCH", body }),
+  put: <T>(
+    url: string,
+    body?: RequestOptions["body"],
+    options: RequestOptions = {},
+  ) => apiRequest<T>(url, { ...options, method: "PUT", body }),
 };
