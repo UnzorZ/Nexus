@@ -131,7 +131,7 @@ export default function RolesPage() {
   return (
     <Stagger root className="mx-auto flex w-full max-w-7xl flex-1 flex-col">
       <PageHeader
-        crumbs={["Projects", "F-Shop", "Roles"]}
+        crumbs={["Projects", "Unknown project", "Roles"]}
         title="Roles"
         description="Bundles of permission keys assigned to project users. Role permissions may use wildcards; roles and direct permissions are additive."
         badge={<StatusBadge tone="blue" dot pulse>{roles.length} roles</StatusBadge>}

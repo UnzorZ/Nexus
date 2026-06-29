@@ -27,14 +27,14 @@ const notifications = [
   {
     id: 1,
     title: "API key near expiration",
-    message: "f-shop-api key expires in 7 days.",
+    message: "demo-api key expires in 7 days.",
     time: "10 min ago",
     unread: true,
   },
   {
     id: 2,
     title: "New member joined",
-    message: "Marcos added Ana to F-Shop.",
+    message: "Marcos added Ana to the project.",
     time: "2 h ago",
     unread: true,
   },

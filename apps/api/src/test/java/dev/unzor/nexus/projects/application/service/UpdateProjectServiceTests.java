@@ -28,29 +28,29 @@ class UpdateProjectServiceTests {
     void updatesEditableFieldsAndKeepsSlug() {
         UUID projectId = UUID.randomUUID();
         UUID accountId = UUID.randomUUID();
-        Project project = new Project("f-shop", "F-Shop", "Old description", "https://old.example.com");
+        Project project = new Project("acme-app", "Acme App", "Old description", "https://old.example.com");
 
         when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
-        when(projectRepository.save(any(Project.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(projectRepository.saveAndFlush(any(Project.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(projectAccessService.canManage(projectId, accountId, false)).thenReturn(true);
         when(projectAccessService.canDelete(projectId, accountId, false)).thenReturn(true);
 
         ProjectDetails result = service.update(
                 projectId,
-                "F-Shop Pro",
+                "Acme App Pro",
                 "New description",
                 "https://new.example.com",
                 accountId,
                 false
         );
 
-        assertThat(result.slug()).isEqualTo("f-shop");
-        assertThat(result.name()).isEqualTo("F-Shop Pro");
+        assertThat(result.slug()).isEqualTo("acme-app");
+        assertThat(result.name()).isEqualTo("Acme App Pro");
         assertThat(result.description()).isEqualTo("New description");
         assertThat(result.publicBaseUrl()).isEqualTo("https://new.example.com");
         assertThat(result.canManage()).isTrue();
         assertThat(result.canDelete()).isTrue();
-        verify(projectRepository).save(project);
+        verify(projectRepository).saveAndFlush(project);
     }
 
     @Test

@@ -19,15 +19,15 @@ import {
 import { tint } from "@/components/dashboard/anim";
 
 const buckets = [
-  { id: "b-1", name: "fshop-assets", visibility: "Private" as const, objects: "12 480", size: "4.2 GB", created: "Jan 12, 2026" },
-  { id: "b-2", name: "fshop-uploads", visibility: "Private" as const, objects: "3 120", size: "812 MB", created: "Jan 12, 2026" },
-  { id: "b-3", name: "fshop-public", visibility: "Public" as const, objects: "86", size: "54 MB", created: "Feb 1, 2026" },
-  { id: "b-4", name: "fshop-temp", visibility: "Private" as const, objects: "2 041", size: "128 MB", created: "Mar 3, 2026" },
+  { id: "b-1", name: "demo-assets", visibility: "Private" as const, objects: "12 480", size: "4.2 GB", created: "Jan 12, 2026" },
+  { id: "b-2", name: "demo-uploads", visibility: "Private" as const, objects: "3 120", size: "812 MB", created: "Jan 12, 2026" },
+  { id: "b-3", name: "demo-public", visibility: "Public" as const, objects: "86", size: "54 MB", created: "Feb 1, 2026" },
+  { id: "b-4", name: "demo-temp", visibility: "Private" as const, objects: "2 041", size: "128 MB", created: "Mar 3, 2026" },
 ];
 
 const lifecycleRules = [
-  { id: "l-1", bucket: "fshop-temp", rule: "Delete objects after 30 days" },
-  { id: "l-2", bucket: "fshop-uploads", rule: "Move to cold storage after 60 days" },
+  { id: "l-1", bucket: "demo-temp", rule: "Delete objects after 30 days" },
+  { id: "l-2", bucket: "demo-uploads", rule: "Move to cold storage after 60 days" },
 ];
 
 export function StorageModule() {

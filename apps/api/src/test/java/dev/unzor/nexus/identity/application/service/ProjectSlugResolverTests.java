@@ -23,13 +23,13 @@ class ProjectSlugResolverTests {
     @Test
     void resolvesProjectSlugToContext() {
         UUID projectId = UUID.randomUUID();
-        when(resolveProjectBySlugService.resolve("f-shop"))
-                .thenReturn(new ProjectSlugReference(projectId, "f-shop"));
+        when(resolveProjectBySlugService.resolve("acme-app"))
+                .thenReturn(new ProjectSlugReference(projectId, "acme-app"));
 
-        ProjectAuthenticationContext context = resolver.resolve("f-shop");
+        ProjectAuthenticationContext context = resolver.resolve("acme-app");
 
         assertThat(context.projectId()).isEqualTo(projectId);
-        assertThat(context.projectSlug()).isEqualTo("f-shop");
+        assertThat(context.projectSlug()).isEqualTo("acme-app");
     }
 
     @Test

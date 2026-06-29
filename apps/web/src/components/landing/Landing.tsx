@@ -229,7 +229,7 @@ export function Landing() {
             <Card className="overflow-hidden shadow-xl shadow-foreground/5">
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle className="font-heading text-base">F-Shop</CardTitle>
+                  <CardTitle className="font-heading text-base">Unknown project</CardTitle>
                   <Badge className="gap-1.5 bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/15 dark:text-emerald-300">
                     <span className="nexus-live relative h-1.5 w-1.5 rounded-full bg-emerald-500 text-emerald-500" />
                     Active

@@ -90,7 +90,7 @@ function colorFor(seed: string) {
 const users: ProjectUser[] = [
   { id: "u-1", name: "Elena Vidal", email: "elena@vidal.me", username: "@elena", status: "active", verified: true, lastLogin: "5 min ago", roles: ["customer"], permissions: ["orders.read"], authz: 4, created: "Apr 2, 2026" },
   { id: "u-2", name: "Pablo Soto", email: "pablo@soto.io", username: "@pablo", status: "active", verified: true, lastLogin: "3 hours ago", roles: ["customer", "vip"], permissions: ["orders.*"], authz: 7, created: "Mar 18, 2026" },
-  { id: "u-3", name: "Marta Roca", email: "marta@fshop.dev", username: "@marta", status: "active", verified: true, lastLogin: "1 day ago", roles: ["support-agent"], permissions: ["orders.cancel", "users.read"], authz: 3, created: "Feb 9, 2026" },
+  { id: "u-3", name: "Marta Roca", email: "marta@example.com", username: "@marta", status: "active", verified: true, lastLogin: "1 day ago", roles: ["support-agent"], permissions: ["orders.cancel", "users.read"], authz: 3, created: "Feb 9, 2026" },
   { id: "u-4", name: "Vera Lago", email: "vera@lago.net", username: "@vera", status: "active", verified: true, lastLogin: "2 days ago", roles: ["admin"], permissions: ["*"], authz: 9, created: "Jan 25, 2026" },
   { id: "u-5", name: "Carla Méndez", email: "carla@mendez.es", username: "@carlam", status: "active", verified: true, lastLogin: "8 min ago", roles: ["customer"], permissions: ["orders.read"], authz: 2, created: "May 1, 2026" },
   { id: "u-6", name: "Diego Fuentes", email: "diego@fuentes.co", username: null, status: "pending", verified: false, lastLogin: "never", roles: ["customer"], permissions: ["orders.read"], authz: 1, created: "2 days ago" },
@@ -125,9 +125,9 @@ export default function ProjectUsersPage() {
   return (
     <Stagger root className="mx-auto flex w-full max-w-7xl flex-1 flex-col">
       <PageHeader
-        crumbs={["Projects", "F-Shop", "Project users"]}
+        crumbs={["Projects", "Unknown project", "Project users"]}
         title="Project users"
-        description="End users in F-Shop's identity realm. Isolated per project — the same email in another project is a different user. These are not Nexus accounts."
+        description="End users in this project's identity realm. Isolated per project — the same email in another project is a different user. These are not Nexus accounts."
         badge={<StatusBadge tone="indigo" dot pulse>{TOTAL_USERS} users</StatusBadge>}
         actions={
           <>
@@ -140,7 +140,7 @@ export default function ProjectUsersPage() {
       <Stagger className="mt-6 grid flex-1 grid-cols-1 gap-6">
         <Panel
           title="Project users"
-          description="Authenticated through F-Shop's OAuth/OIDC realm."
+          description="Authenticated through this project's OAuth/OIDC realm."
           action={<Button variant="link" size="sm" className="h-auto px-0 text-xs">View OAuth clients</Button>}
         >
           <div className="mb-4 grid grid-cols-2 divide-x divide-border md:grid-cols-4">
