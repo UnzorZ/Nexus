@@ -5,8 +5,11 @@ import dev.unzor.nexus.modules.domain.entity.ProjectModule;
 import dev.unzor.nexus.modules.domain.enums.NexusModule;
 import dev.unzor.nexus.modules.persistence.repository.ProjectModuleRepository;
 import dev.unzor.nexus.projects.application.service.ProjectLookupService;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.Arrays;
 import java.util.List;
@@ -20,18 +23,23 @@ import java.util.stream.Collectors;
  * <p>Los módulos sin fila persistida heredan el valor por defecto del catálogo.</p>
  */
 @Service
-@Transactional
 public class ProjectModuleService {
 
     private final ProjectModuleRepository projectModuleRepository;
     private final ProjectLookupService projectLookupService;
+    private final TransactionTemplate transactionTemplate;
 
     public ProjectModuleService(
             ProjectModuleRepository projectModuleRepository,
-            ProjectLookupService projectLookupService
+            ProjectLookupService projectLookupService,
+            PlatformTransactionManager transactionManager
     ) {
         this.projectModuleRepository = projectModuleRepository;
         this.projectLookupService = projectLookupService;
+        // Una TransactionTemplate propia: cada execute() corre en su transacción, de
+        // modo que un reintento tras una violación de restricción única no hereda una
+        // transacción ya marcada como rollback-only.
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
     @Transactional(readOnly = true)
@@ -53,11 +61,34 @@ public class ProjectModuleService {
                 .toList();
     }
 
+    /**
+     * Persiste el estado de un módulo (upsert).
+     *
+     * <p>Verifica primero la existencia del proyecto (consistencia con
+     * {@link #listForProject}: 404 en vez de 403/500 para un proyecto inexistente).
+     * La upsert (find → modify → save) corre en su propia transacción y se reintenta
+     * una vez si una petición concurrente insertó la fila justo antes y ganó la
+     * carrera (violación de {@code uk_project_module_project_module}); en el reintento
+     * la fila ya existe y se actualiza. Sin una transacción nueva por intento, la
+     * condición de carrera se traduciría en un 500 para el cliente.</p>
+     */
     public ProjectModuleStatus setEnabled(UUID projectId, NexusModule module, boolean enabled) {
-        ProjectModule row = projectModuleRepository.findByProjectIdAndModule(projectId, module)
-                .orElseGet(() -> new ProjectModule(projectId, module, enabled));
-        row.setEnabled(enabled);
-        projectModuleRepository.save(row);
-        return new ProjectModuleStatus(module.key(), enabled, module.enabledByDefault());
+        projectLookupService.requireById(projectId);
+        try {
+            return applySetEnabled(projectId, module, enabled);
+        } catch (DataIntegrityViolationException raceLost) {
+            // Inserción concurrente: en el reintento la fila ya existe.
+            return applySetEnabled(projectId, module, enabled);
+        }
+    }
+
+    private ProjectModuleStatus applySetEnabled(UUID projectId, NexusModule module, boolean enabled) {
+        return transactionTemplate.execute(status -> {
+            ProjectModule row = projectModuleRepository.findByProjectIdAndModule(projectId, module)
+                    .orElseGet(() -> new ProjectModule(projectId, module, enabled));
+            row.setEnabled(enabled);
+            projectModuleRepository.save(row);
+            return new ProjectModuleStatus(module.key(), enabled, module.enabledByDefault());
+        });
     }
 }

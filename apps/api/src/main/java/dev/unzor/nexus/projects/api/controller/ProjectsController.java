@@ -10,6 +10,7 @@ import dev.unzor.nexus.projects.application.service.CreateProjectService;
 import dev.unzor.nexus.projects.application.service.GetProjectService;
 import dev.unzor.nexus.projects.application.service.ListAccessibleProjectsService;
 import dev.unzor.nexus.projects.application.service.ProjectAccessService;
+import dev.unzor.nexus.projects.application.service.RestoreProjectService;
 import dev.unzor.nexus.projects.application.service.UpdateProjectService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -38,6 +39,7 @@ class ProjectsController {
     private final ProjectAccessService projectAccessService;
     private final UpdateProjectService updateProjectService;
     private final ArchiveProjectService archiveProjectService;
+    private final RestoreProjectService restoreProjectService;
 
     ProjectsController(
             CreateProjectService createProjectService,
@@ -45,7 +47,8 @@ class ProjectsController {
             ListAccessibleProjectsService listAccessibleProjectsService,
             ProjectAccessService projectAccessService,
             UpdateProjectService updateProjectService,
-            ArchiveProjectService archiveProjectService
+            ArchiveProjectService archiveProjectService,
+            RestoreProjectService restoreProjectService
     ) {
         this.createProjectService = createProjectService;
         this.getProjectService = getProjectService;
@@ -53,6 +56,7 @@ class ProjectsController {
         this.projectAccessService = projectAccessService;
         this.updateProjectService = updateProjectService;
         this.archiveProjectService = archiveProjectService;
+        this.restoreProjectService = restoreProjectService;
     }
 
     @PostMapping
@@ -126,6 +130,21 @@ class ProjectsController {
         // a separate requireAccess query (see updateProject).
         projectAccessService.requireDelete(projectId, principal.accountId(), isInstanceAdmin);
         archiveProjectService.archive(projectId);
+    }
+
+    @PostMapping("/{projectId}/restore")
+    ProjectDetails restoreProject(
+            @PathVariable UUID projectId,
+            @AuthenticationPrincipal AuthenticatedAccount principal,
+            Authentication authentication
+    ) {
+        boolean isInstanceAdmin = isInstanceAdmin(authentication);
+        // Restore is the inverse of archive, so it requires the same OWNER-level
+        // privilege (see archiveProject). requireDelete already enforces an ACTIVE
+        // OWNER membership, so no separate requireAccess query is needed.
+        projectAccessService.requireDelete(projectId, principal.accountId(), isInstanceAdmin);
+        restoreProjectService.restore(projectId);
+        return getProjectService.getById(projectId, principal.accountId(), isInstanceAdmin);
     }
 
     private static boolean isInstanceAdmin(Authentication authentication) {
