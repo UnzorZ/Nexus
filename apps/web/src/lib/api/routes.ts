@@ -33,6 +33,10 @@ export const apiRoutes = {
       root: apiUrl("/api/panel/v1/projects"),
       byId: (projectId: string) =>
         apiUrl(`/api/panel/v1/projects/${encodeURIComponent(projectId)}`),
+      restore: (projectId: string) =>
+        apiUrl(
+          `/api/panel/v1/projects/${encodeURIComponent(projectId)}/restore`,
+        ),
       modules: {
         root: (projectId: string) =>
           apiUrl(

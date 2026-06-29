@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Archive, Check } from "lucide-react";
+import { Archive, ArchiveRestore, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,6 +30,7 @@ import {
 import {
   archiveProject,
   parseFieldErrors,
+  restoreProject,
   updateProject,
   type ProjectDetails,
 } from "@/features/projects/api";
@@ -124,6 +125,9 @@ export default function ProjectSettingsPage() {
   const [confirmSlug, setConfirmSlug] = useState("");
   const [archiving, setArchiving] = useState(false);
   const [archiveError, setArchiveError] = useState<string | null>(null);
+
+  const [restoring, setRestoring] = useState(false);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
 
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -233,6 +237,35 @@ export default function ProjectSettingsPage() {
       }
     } finally {
       setArchiving(false);
+    }
+  }
+
+  async function onRestore() {
+    if (!project) return;
+    setRestoring(true);
+    setRestoreError(null);
+    try {
+      const token = await ensureCsrfToken();
+      await restoreProject(project.id, token);
+      // The restore succeeded; a stale re-read is non-critical, so don't let a
+      // refresh failure mask the success with an error message.
+      try {
+        await refresh({ silent: true });
+      } catch {
+        /* restore worked; ignore a stale re-read */
+      }
+    } catch (e) {
+      if (e instanceof NexusApiError && e.status === 403 && e.code === "permission_denied") {
+        setRestoreError("You don't have permission to restore this project.");
+      } else if (e instanceof NexusApiError && e.status === 403) {
+        setRestoreError("Your session expired. Reload the page and try again.");
+      } else if (e instanceof NexusApiError && e.status === 404) {
+        setRestoreError("This project no longer exists.");
+      } else {
+        setRestoreError(e instanceof NexusApiError ? e.message : "Something went wrong.");
+      }
+    } finally {
+      setRestoring(false);
     }
   }
 
@@ -427,29 +460,66 @@ export default function ProjectSettingsPage() {
           description="Reversible actions. Require an active Owner."
           cardClassName="ring-destructive/30"
         >
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-2.5">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-red-500/10 text-red-600 dark:text-red-400">
-                <TriangleAlertIcon size={16} />
+          {project.status === "ARCHIVED" ? (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-2.5">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                  <ArchiveRestore size={16} />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Restore this project</p>
+                  <p className="text-xs text-muted-foreground">
+                    Bring <strong>{name}</strong> back to an active state. Members
+                    can use it again immediately.
+                  </p>
+                  {restoreError ? (
+                    <p className="mt-1.5 text-xs text-destructive">{restoreError}</p>
+                  ) : null}
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-medium">Archive this project</p>
-                <p className="text-xs text-muted-foreground">
-                  Archiving marks <strong>{name}</strong> as inactive. It stays in your
-                  project list as Archived — reactivation isn't available in the UI yet.
-                </p>
-              </div>
+              <Button
+                onClick={onRestore}
+                disabled={!canDelete || restoring}
+                className="shrink-0"
+              >
+                {restoring ? (
+                  <>
+                    <span className="nexus-live relative h-2 w-2 rounded-full bg-current" />
+                    Restoring…
+                  </>
+                ) : (
+                  <>
+                    <ArchiveRestore size={14} />
+                    Restore project
+                  </>
+                )}
+              </Button>
             </div>
-            <Button
-              variant="destructive"
-              onClick={() => setArchiveOpen(true)}
-              disabled={!canDelete}
-              className="shrink-0"
-            >
-              <Archive size={14} />
-              Archive project
-            </Button>
-          </div>
+          ) : (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-2.5">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-red-500/10 text-red-600 dark:text-red-400">
+                  <TriangleAlertIcon size={16} />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Archive this project</p>
+                  <p className="text-xs text-muted-foreground">
+                    Archiving marks <strong>{name}</strong> as inactive. It stays
+                    in your project list and can be restored later.
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="destructive"
+                onClick={() => setArchiveOpen(true)}
+                disabled={!canDelete}
+                className="shrink-0"
+              >
+                <Archive size={14} />
+                Archive project
+              </Button>
+            </div>
+          )}
         </Panel>
       </Stagger>
 
