@@ -1,15 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
-  fetchCurrentAccount,
-  fetchPanelSessions,
-  revokeAllPanelSessions,
-  revokePanelSession,
-  type PanelSessionSummary,
-} from "@/features/session/api";
+  useCurrentAccount,
+  usePanelSessions,
+  useRevokeAllPanelSessions,
+  useRevokePanelSession,
+} from "@/features/session/queries";
+import { type PanelSessionSummary } from "@/features/session/api";
 import { NexusApiError } from "@/lib/api/client";
+import { toMessage } from "@/lib/api/errors";
 import { buildPanelLoginUrl } from "@/lib/auth/continue-url";
 
 function formatInstant(value: string | null | undefined): string {
@@ -33,119 +34,61 @@ function describeUserAgent(userAgent: string | null | undefined): string {
   return userAgent;
 }
 
+const SESSIONS_MESSAGES = {
+  codes: {
+    csrf_rejected:
+      "El formulario expiró o falta protección CSRF. Recarga e inténtalo de nuevo.",
+  },
+};
+
+const LOGIN_URL = buildPanelLoginUrl("/settings/sessions");
+
+function isUnauthorized(err: unknown): boolean {
+  return err instanceof NexusApiError && err.status === 401;
+}
+
 export default function SessionsPage() {
   const router = useRouter();
-  const [ready, setReady] = useState(false);
-  const [sessions, setSessions] = useState<PanelSessionSummary[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [pendingId, setPendingId] = useState<string | null>(null);
-  const [revokingAll, setRevokingAll] = useState(false);
+  const accountQ = useCurrentAccount();
+  const sessionsQ = usePanelSessions();
+  const revokeM = useRevokePanelSession();
+  const revokeAllM = useRevokeAllPanelSessions();
 
-  const refreshSessions = useCallback(async () => {
-    try {
-      setSessions(await fetchPanelSessions());
-      setError(null);
-    } catch (loadError) {
-      if (loadError instanceof NexusApiError && loadError.status === 401) {
-        window.location.href = buildPanelLoginUrl("/settings/sessions");
-        return;
-      }
-      if (loadError instanceof NexusApiError) {
-        setError(loadError.message);
-      } else {
-        setError("No se pudieron cargar las sesiones.");
-      }
-    }
-  }, []);
+  const sessions = sessionsQ.data ?? [];
+  const ready = !accountQ.isLoading;
+  const pendingId = revokeM.isPending ? revokeM.variables ?? null : null;
+  const revokingAll = revokeAllM.isPending;
 
+  const rawErr =
+    accountQ.error ?? sessionsQ.error ?? revokeM.error ?? revokeAllM.error;
+  const error =
+    rawErr && !isUnauthorized(rawErr) ? toMessage(rawErr, SESSIONS_MESSAGES) : null;
+
+  // Sin sesión (401 en /me resuelve null, o 401 directo en /sessions) → al login.
   useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      try {
-        const currentAccount = await fetchCurrentAccount();
-        if (cancelled) {
-          return;
-        }
-
-        if (!currentAccount) {
-          window.location.href = buildPanelLoginUrl("/settings/sessions");
-          return;
-        }
-
-        const currentSessions = await fetchPanelSessions();
-        if (cancelled) {
-          return;
-        }
-
-        setSessions(currentSessions);
-        setError(null);
-      } catch (loadError) {
-        if (cancelled) {
-          return;
-        }
-
-        if (loadError instanceof NexusApiError && loadError.status === 401) {
-          window.location.href = buildPanelLoginUrl("/settings/sessions");
-          return;
-        }
-
-        if (loadError instanceof NexusApiError) {
-          setError(loadError.message);
-        } else {
-          setError("No se pudo comprobar la sesión del panel.");
-        }
-      } finally {
-        if (!cancelled) {
-          setReady(true);
-        }
-      }
+    if (accountQ.data === null || isUnauthorized(sessionsQ.error)) {
+      window.location.href = LOGIN_URL;
     }
-
-    load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  }, [accountQ.data, sessionsQ.error]);
 
   async function handleRevoke(session: PanelSessionSummary) {
-    setError(null);
-    setPendingId(session.id);
-
     try {
-      await revokePanelSession(session.id);
+      await revokeM.mutateAsync(session.id);
       if (session.current) {
         router.push("/login");
-        return;
       }
-      await refreshSessions();
-    } catch (revokeError) {
-      if (revokeError instanceof NexusApiError) {
-        setError(revokeError.message);
-      } else {
-        setError("No se pudo revocar la sesión.");
-      }
-    } finally {
-      setPendingId(null);
+      // revokeM.onSuccess invalida /sessions → la lista se refresca sola.
+    } catch {
+      /* error via revokeM.error */
     }
   }
 
   async function handleRevokeAll() {
-    setError(null);
-    setRevokingAll(true);
-
     try {
-      await revokeAllPanelSessions();
+      await revokeAllM.mutateAsync();
       router.push("/login");
-    } catch (revokeError) {
-      if (revokeError instanceof NexusApiError) {
-        setError(revokeError.message);
-      } else {
-        setError("No se pudieron cerrar todas las sesiones.");
-      }
-    } finally {
-      setRevokingAll(false);
+    } catch {
+      /* error via revokeAllM.error */
     }
   }
 

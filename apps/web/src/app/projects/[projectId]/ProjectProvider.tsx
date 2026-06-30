@@ -2,8 +2,9 @@
 
 import { createContext, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { fetchProject, type ProjectDetails } from "@/features/projects/api";
+import { useQueryClient } from "@tanstack/react-query";
+import { type ProjectDetails } from "@/features/projects/api";
+import { useProjectDetail } from "@/features/projects/queries";
 import { queryKeys } from "@/lib/api/queryKeys";
 import { NexusApiError } from "@/lib/api/client";
 
@@ -41,10 +42,7 @@ export function ProjectProvider({
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const query = useQuery({
-    queryKey: queryKeys.projects.detail(projectId),
-    queryFn: () => fetchProject(projectId),
-  });
+  const query = useProjectDetail(projectId);
 
   // 404 → el proyecto ya no existe (o no es accesible): vuelve al listado.
   useEffect(() => {

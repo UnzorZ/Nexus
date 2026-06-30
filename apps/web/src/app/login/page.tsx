@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useState } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { motion } from "motion/react";
 import { CheckCircle2, Eye, EyeOff, ShieldAlert } from "lucide-react";
 import { apiClient, NexusApiError } from "@/lib/api/client";
@@ -93,33 +94,18 @@ function LoginScreen() {
   const loggedOut = searchParams.get("logout") === "1";
 
   const [error, setError] = useState<string | null>(null);
-  const [isPending, setIsPending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(null);
-    setIsPending(true);
-
-    const formData = new FormData(event.currentTarget);
-    const email = String(formData.get("email") ?? "").trim();
-    const password = String(formData.get("password") ?? "");
-
-    if (!email) {
-      setError("Please enter your email address.");
-      setIsPending(false);
-      return;
-    }
-    if (!password) {
-      setError("Please enter your password.");
-      setIsPending(false);
-      return;
-    }
-
-    try {
+  const loginM = useMutation({
+    mutationFn: async ({
+      email,
+      password,
+    }: {
+      email: string;
+      password: string;
+    }) => {
       const csrfToken = await ensureCsrfToken();
-
-      await apiClient.post<unknown>(
+      return apiClient.post<unknown>(
         apiRoutes.panel.session.loginJson,
         { email, password },
         {
@@ -128,7 +114,29 @@ function LoginScreen() {
           errorMessage: "Incorrect email address or password.",
         },
       );
+    },
+  });
+  const isPending = loginM.isPending;
 
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+
+    const formData = new FormData(event.currentTarget);
+    const email = String(formData.get("email") ?? "").trim();
+    const password = String(formData.get("password") ?? "");
+
+    if (!email) {
+      setError("Please enter your email address.");
+      return;
+    }
+    if (!password) {
+      setError("Please enter your password.");
+      return;
+    }
+
+    try {
+      await loginM.mutateAsync({ email, password });
       router.push(continuePath);
       router.refresh();
     } catch (err) {
@@ -142,8 +150,6 @@ function LoginScreen() {
       } else {
         setError("Could not connect to the Nexus API.");
       }
-    } finally {
-      setIsPending(false);
     }
   }
 

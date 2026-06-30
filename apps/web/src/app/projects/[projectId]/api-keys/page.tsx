@@ -51,11 +51,25 @@ import {
 import {
   KNOWN_SCOPES,
   isValidScope,
-  type ApiKeyCreated,
   type ApiKeySummary,
 } from "@/features/api-keys/api";
-import { useProjectApiKeys } from "@/features/api-keys/useProjectApiKeys";
+import {
+  useCreateApiKey,
+  useDeleteApiKey,
+  useProjectApiKeys,
+  useRotateApiKey,
+  useUpdateApiKey,
+  type ApiKeyCreated,
+} from "@/features/api-keys/queries";
+import { toFieldErrors, toMessage } from "@/lib/api/errors";
 import { useProject } from "../useProject";
+
+/** Mensajes de error específicos de API keys para toMessage. */
+const API_KEYS_MESSAGES = {
+  permission: "You don't have permission to manage API keys for this project.",
+  forbidden: "Your session expired. Reload the page and try again.",
+  notFound: "This API key no longer exists.",
+};
 
 function ApiKeysLoading() {
   return (
@@ -89,19 +103,37 @@ function formatInstant(value: string | null): string {
 
 export default function ProjectApiKeysPage() {
   const { project, loading: projectLoading, error: projectError } = useProject();
-  const {
-    keys,
-    loading,
-    error,
-    actionError,
-    fieldErrors,
-    busy,
-    create,
-    update,
-    rotate,
-    remove,
-    refresh,
-  } = useProjectApiKeys(project?.id ?? "");
+  const projectId = project?.id ?? "";
+
+  const keysQ = useProjectApiKeys(projectId);
+  const createM = useCreateApiKey(projectId);
+  const updateM = useUpdateApiKey(projectId);
+  const rotateM = useRotateApiKey(projectId);
+  const removeM = useDeleteApiKey(projectId);
+
+  const keys = keysQ.data ?? null;
+  const loading = keysQ.isLoading;
+  const error = keysQ.error ? toMessage(keysQ.error) : null;
+  const refresh = () => keysQ.refetch();
+
+  const fieldErrors = toFieldErrors(createM.error);
+  const createError =
+    createM.error && Object.keys(fieldErrors).length === 0
+      ? toMessage(createM.error, API_KEYS_MESSAGES)
+      : null;
+  const actionErr =
+    updateM.error ??
+    rotateM.error ??
+    removeM.error ??
+    // Un error de creación que no es de validación (p. ej. permisos) se
+    // muestra en el banner superior, igual que el resto de acciones.
+    (createError ? createM.error : null);
+  const actionError = actionErr ? toMessage(actionErr, API_KEYS_MESSAGES) : null;
+  const busy =
+    createM.isPending ||
+    updateM.isPending ||
+    rotateM.isPending ||
+    removeM.isPending;
 
   const canManage = project?.canManage ?? false;
   const name = project?.name ?? "...";
@@ -145,21 +177,59 @@ export default function ProjectApiKeysPage() {
 
   async function onCreate() {
     if (!keyName.trim()) return;
-    const created = await create({
-      name: keyName.trim(),
-      scopes,
-      expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
-    });
-    if (created) {
+    try {
+      const created = await createM.mutateAsync({
+        name: keyName.trim(),
+        scopes,
+        expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
+      });
       setRevealed(created);
       setCreateOpen(false);
       resetCreateForm();
+    } catch {
+      /* el error se muestra vía createM.error (fieldErrors/createError) */
     }
   }
 
   async function onRotate(key: ApiKeySummary) {
-    const created = await rotate(key.id);
-    if (created) setRevealed(created);
+    resetActionErrors();
+    try {
+      const created = await rotateM.mutateAsync(key.id);
+      setRevealed(created);
+    } catch {
+      /* actionError */
+    }
+  }
+
+  function resetActionErrors() {
+    updateM.reset();
+    rotateM.reset();
+    removeM.reset();
+  }
+
+  async function onDisableToggle(key: ApiKeySummary) {
+    resetActionErrors();
+    try {
+      await updateM.mutateAsync({
+        keyId: key.id,
+        name: key.name,
+        status: key.status === "ACTIVE" ? "DISABLED" : "ACTIVE",
+        expiresAt: key.expiresAt,
+      });
+    } catch {
+      /* actionError */
+    }
+  }
+
+  async function onRemove() {
+    if (!removeTarget) return;
+    resetActionErrors();
+    try {
+      await removeM.mutateAsync(removeTarget.id);
+    } catch {
+      /* actionError */
+    }
+    setRemoveTarget(null);
   }
 
   if (loadingState) {
@@ -305,16 +375,7 @@ export default function ProjectApiKeysPage() {
                           <DropdownMenuContent align="end" className="w-44">
                             <DropdownMenuItem
                               disabled={busy}
-                              onClick={() =>
-                                update(key.id, {
-                                  name: key.name,
-                                  status:
-                                    key.status === "ACTIVE"
-                                      ? "DISABLED"
-                                      : "ACTIVE",
-                                  expiresAt: key.expiresAt,
-                                })
-                              }
+                              onClick={() => onDisableToggle(key)}
                             >
                               {key.status === "ACTIVE" ? "Disable" : "Enable"}
                             </DropdownMenuItem>
@@ -525,12 +586,7 @@ export default function ProjectApiKeysPage() {
             <Button
               variant="destructive"
               disabled={busy}
-              onClick={async () => {
-                if (removeTarget) {
-                  await remove(removeTarget.id);
-                }
-                setRemoveTarget(null);
-              }}
+              onClick={onRemove}
             >
               Delete key
             </Button>

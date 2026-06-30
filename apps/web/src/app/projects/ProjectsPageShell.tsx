@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import Image from "next/image";
@@ -26,19 +26,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { NexusApiError } from "@/lib/api/client";
-import { ensureCsrfToken } from "@/lib/api/csrf";
 import { cn } from "@/lib/utils";
 import {
   SPRING_SNAPPY,
   fadeUp,
   staggerContainer,
 } from "@/components/dashboard/anim";
-import {
-  createProject,
-  fetchProjects,
-  type ProjectSummary,
-} from "@/features/projects/api";
+import { type ProjectSummary } from "@/features/projects/api";
+import { useCreateProject, useProjects } from "@/features/projects/queries";
+import { toMessage } from "@/lib/api/errors";
 
 const toneMap = {
   ACTIVE: { bg: "bg-emerald-500/15", text: "text-emerald-700 dark:text-emerald-300", dot: "bg-emerald-500" },
@@ -124,46 +120,33 @@ function ProjectCard({
 }
 
 export function ProjectsPageShell() {
-  const [projects, setProjects] = useState<ProjectSummary[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const projectsQ = useProjects();
+  const createM = useCreateProject();
   const [createOpen, setCreateOpen] = useState(false);
   const router = useRouter();
 
-  const loadProjects = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await fetchProjects();
-      setProjects(data);
-    } catch (err) {
-      const message =
-        err instanceof NexusApiError
-          ? err.message
-          : "No se pudieron cargar los proyectos.";
-      setError(message);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadProjects();
-  }, [loadProjects]);
+  const projects = projectsQ.data ?? [];
+  const loading = projectsQ.isLoading;
+  const error = projectsQ.error ? toMessage(projectsQ.error) : null;
+  const loadProjects = () => projectsQ.refetch();
 
   async function handleCreate(formData: FormData) {
     const slug = formData.get("slug") as string;
     const name = formData.get("name") as string;
     const description = (formData.get("description") as string) || null;
     const publicBaseUrl = (formData.get("publicBaseUrl") as string) || null;
-
-    const csrfToken = await ensureCsrfToken();
-    const project = await createProject(
-      { slug, name, description, publicBaseUrl },
-      csrfToken,
-    );
-    setCreateOpen(false);
-    router.push(`/projects/${project.id}`);
+    try {
+      const project = await createM.mutateAsync({
+        slug,
+        name,
+        description,
+        publicBaseUrl,
+      });
+      setCreateOpen(false);
+      router.push(`/projects/${project.id}`);
+    } catch {
+      /* la creación falló: el diálogo se queda abierto (sin UI de error aún) */
+    }
   }
 
   if (error) {
