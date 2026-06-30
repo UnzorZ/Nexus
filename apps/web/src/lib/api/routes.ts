@@ -47,6 +47,20 @@ export const apiRoutes = {
             `/api/panel/v1/projects/${encodeURIComponent(projectId)}/modules/${encodeURIComponent(key)}`,
           ),
       },
+      apiKeys: {
+        root: (projectId: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/api-keys`,
+          ),
+        byId: (projectId: string, keyId: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/api-keys/${encodeURIComponent(keyId)}`,
+          ),
+        rotate: (projectId: string, keyId: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/api-keys/${encodeURIComponent(keyId)}/rotate`,
+          ),
+      },
     },
   },
 } as const;
