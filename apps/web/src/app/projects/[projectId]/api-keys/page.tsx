@@ -251,7 +251,7 @@ export default function ProjectApiKeysPage() {
                     <TableCell className="font-medium">{key.name}</TableCell>
                     <TableCell>
                       <code className="font-mono text-xs text-muted-foreground">
-                        nxs_…_{key.prefix}
+                        {key.prefix}
                       </code>
                     </TableCell>
                     <TableCell>

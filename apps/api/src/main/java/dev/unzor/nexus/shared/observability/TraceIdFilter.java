@@ -7,10 +7,19 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.UUID;
 import org.slf4j.MDC;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+/**
+ * Pone el trace ID en MDC para toda la petición, incluidas las cadenas de
+ * seguridad (auditoría ADR-0006). Se ejecuta antes que el FilterChainProxy de
+ * Spring Security (DEFAULT_FILTER_ORDER = -100) para que los filtros de auth
+ * (p. ej. el de API key) también vean el trace ID.
+ */
 @Component
+@Order(Ordered.HIGHEST_PRECEDENCE)
 class TraceIdFilter extends OncePerRequestFilter {
 
     private static final String TRACE_ID_HEADER = "X-Trace-Id";

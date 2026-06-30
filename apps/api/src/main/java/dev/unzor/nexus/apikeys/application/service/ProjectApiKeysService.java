@@ -9,6 +9,7 @@ import dev.unzor.nexus.apikeys.domain.exception.ApiKeyNotFoundException;
 import dev.unzor.nexus.apikeys.persistence.repository.ProjectApiKeyRepository;
 import dev.unzor.nexus.apikeys.security.ApiKeyHasher;
 import dev.unzor.nexus.projects.application.service.ProjectLookupService;
+import org.slf4j.MDC;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,9 +47,9 @@ public class ProjectApiKeysService {
 
     @Transactional(readOnly = true)
     public List<ApiKeySummary> listForProject(UUID projectId) {
-        projectLookupService.requireById(projectId);
+        String slug = projectLookupService.requireSlug(projectId);
         return repository.findAllByProjectId(projectId).stream()
-                .map(ApiKeySummary::from)
+                .map(key -> ApiKeySummary.from(key, "nxs_" + slug + "_" + key.getKeyPrefix()))
                 .toList();
     }
 
@@ -65,9 +66,10 @@ public class ProjectApiKeysService {
         ProjectApiKey key = new ProjectApiKey(
                 projectId, name, generated.keyPrefix(), generated.keyHash(), scopes, expiresAt, creatorAccountId);
         repository.saveAndFlush(key);
+        String displayPrefix = "nxs_" + slug + "_" + generated.keyPrefix();
         audit("api_key.created", projectId, key.getId(), creatorAccountId,
-                Map.of("name", name, "prefix", generated.keyPrefix()));
-        return ApiKeyCreated.of(key, generated.fullKey());
+                Map.of("name", name, "prefix", displayPrefix));
+        return ApiKeyCreated.of(key, displayPrefix, generated.fullKey());
     }
 
     @Transactional
@@ -79,7 +81,7 @@ public class ProjectApiKeysService {
             Instant expiresAt,
             UUID actorAccountId
     ) {
-        projectLookupService.requireById(projectId);
+        String slug = projectLookupService.requireSlug(projectId);
         ProjectApiKey key = requireKey(projectId, keyId);
         ApiKeyStatus previousStatus = key.getStatus();
         key.rename(name);
@@ -89,7 +91,8 @@ public class ProjectApiKeysService {
             key.enable();
         }
         key.expireAt(expiresAt);
-        ApiKeySummary summary = ApiKeySummary.from(repository.save(key));
+        String displayPrefix = "nxs_" + slug + "_" + key.getKeyPrefix();
+        ApiKeySummary summary = ApiKeySummary.from(repository.save(key), displayPrefix);
 
         String action;
         if (status == ApiKeyStatus.DISABLED && previousStatus != ApiKeyStatus.DISABLED) {
@@ -123,10 +126,11 @@ public class ProjectApiKeysService {
         repository.saveAndFlush(replacement);
         old.disable();
         repository.save(old);
+        String displayPrefix = "nxs_" + slug + "_" + generated.keyPrefix();
         audit("api_key.rotated", projectId, replacement.getId(), actorAccountId,
-                Map.of("name", replacement.getName(), "prefix", generated.keyPrefix(),
+                Map.of("name", replacement.getName(), "prefix", displayPrefix,
                         "rotatedKeyId", keyId.toString()));
-        return ApiKeyCreated.of(replacement, generated.fullKey());
+        return ApiKeyCreated.of(replacement, displayPrefix, generated.fullKey());
     }
 
     @Transactional
@@ -146,6 +150,6 @@ public class ProjectApiKeysService {
     private void audit(String action, UUID projectId, UUID keyId, UUID actorId, Map<String, Object> metadata) {
         eventPublisher.publishEvent(new ApiKeyAuditEvent(
                 action, projectId, keyId, "NEXUS_ACCOUNT",
-                actorId == null ? null : actorId.toString(), null, metadata));
+                actorId == null ? null : actorId.toString(), null, metadata, MDC.get("traceId")));
     }
 }
