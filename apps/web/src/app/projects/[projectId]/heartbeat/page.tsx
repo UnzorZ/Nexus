@@ -1,9 +1,8 @@
 "use client";
 
+import { Info } from "lucide-react";
 import { ActivityIcon } from "@/components/ui/activity";
 import { ClockIcon } from "@/components/ui/clock";
-import { ConnectIcon } from "@/components/ui/connect";
-import { GaugeIcon } from "@/components/ui/gauge";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -13,22 +12,26 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Stagger, tint } from "@/components/dashboard/anim";
+import { Stagger } from "@/components/dashboard/anim";
 import {
   EmptyState,
   MonoChip,
   PageHeader,
   Panel,
-  StatTile,
   StatusBadge,
 } from "@/components/dashboard/shared";
 import { livenessMeta, formatRelativeTime } from "@/features/heartbeat/display";
-import type { HeartbeatLiveness } from "@/features/heartbeat/api";
 import { useProjectHeartbeats } from "@/features/heartbeat/useProjectHeartbeats";
 import { useProject } from "../useProject";
 
-/** Offline timeout (server default, spec §13.1). Shown read-only in the footer. */
+/** Offline timeout (server default, spec §13.1). Shown read-only. */
 const OFFLINE_TIMEOUT_SECONDS = 90;
 
 function HeartbeatsLoading() {
@@ -41,11 +44,6 @@ function HeartbeatsLoading() {
       </div>
       <Stagger className="mt-6">
         <Panel title="Instances">
-          <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-4">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-16 w-full" />
-            ))}
-          </div>
           <div className="flex flex-col gap-2">
             {Array.from({ length: 3 }).map((_, i) => (
               <Skeleton key={i} className="h-10 w-full" />
@@ -100,7 +98,7 @@ export default function ProjectHeartbeatPage() {
     return null;
   }
 
-  const counts = countByLiveness(instances);
+  const online = instances.filter((i) => i.liveness === "ONLINE").length;
 
   return (
     <Stagger root className="mx-auto flex w-full max-w-7xl flex-1 flex-col">
@@ -111,7 +109,7 @@ export default function ProjectHeartbeatPage() {
         projectId={project.id}
         badge={
           <StatusBadge tone="emerald" dot pulse>
-            {counts.ONLINE} online
+            {online} online
           </StatusBadge>
         }
       />
@@ -121,39 +119,13 @@ export default function ProjectHeartbeatPage() {
           title="Instances"
           description="Each heartbeat is tied to the API key that reported it."
         >
-          <div className="mb-4 grid grid-cols-2 divide-x divide-border md:grid-cols-4">
-            <StatTile
-              Icon={ActivityIcon}
-              iconBg={tint.emerald.bg}
-              iconColor={tint.emerald.text}
-              label="Online"
-              value={counts.ONLINE}
-              hint="Within beat interval"
-            />
-            <StatTile
-              Icon={ClockIcon}
-              iconBg={tint.amber.bg}
-              iconColor={tint.amber.text}
-              label="Stale"
-              value={counts.STALE}
-              hint="Grace window"
-            />
-            <StatTile
-              Icon={ConnectIcon}
-              iconBg={tint.red.bg}
-              iconColor={tint.red.text}
-              label="Offline"
-              value={counts.OFFLINE}
-              hint="Assumed down"
-            />
-            <StatTile
-              Icon={GaugeIcon}
-              iconBg={tint.cyan.bg}
-              iconColor={tint.cyan.text}
-              label="Instances"
-              value={instances.length}
-              hint="Across envs"
-            />
+          <div className="mb-4 flex items-center gap-2 text-[11px] text-muted-foreground">
+            <ClockIcon size={14} className="shrink-0 text-emerald-500" />
+            An instance is{" "}
+            <span className="text-foreground">offline</span> after{" "}
+            {OFFLINE_TIMEOUT_SECONDS}s with no heartbeat.{" "}
+            <span className="text-foreground">Stale</span> sits in the grace
+            window before that.
           </div>
 
           {instances.length === 0 ? (
@@ -167,9 +139,33 @@ export default function ProjectHeartbeatPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Instance</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Last seen</TableHead>
-                  <TableHead>Reported by</TableHead>
+                  <TableHead className="w-32 whitespace-nowrap">
+                    Status
+                  </TableHead>
+                  <TableHead className="w-44 whitespace-nowrap">
+                    Last seen
+                  </TableHead>
+                  <TableHead className="w-48 whitespace-nowrap">
+                    <span className="inline-flex items-center gap-1">
+                      Reported by
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              aria-label="Reported by: the API key that reported this heartbeat"
+                              className="text-muted-foreground transition-colors hover:text-foreground"
+                            >
+                              <Info size={13} />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            The API key that last reported this heartbeat.
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </span>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -187,7 +183,11 @@ export default function ProjectHeartbeatPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <StatusBadge tone={meta.tone} dot={meta.dot} pulse={meta.pulse}>
+                        <StatusBadge
+                          tone={meta.tone}
+                          dot={meta.dot}
+                          pulse={meta.pulse}
+                        >
                           {meta.label}
                         </StatusBadge>
                         {inst.status && inst.status !== "up" ? (
@@ -197,7 +197,7 @@ export default function ProjectHeartbeatPage() {
                         ) : null}
                       </TableCell>
                       <TableCell>
-                        <span className="flex items-center gap-1.5 text-muted-foreground">
+                        <span className="flex items-center gap-1.5 whitespace-nowrap tabular-nums text-muted-foreground">
                           {inst.liveness === "ONLINE" ? (
                             <span className="nexus-live relative h-1.5 w-1.5 rounded-full bg-emerald-500 text-emerald-500" />
                           ) : null}
@@ -213,31 +213,8 @@ export default function ProjectHeartbeatPage() {
               </TableBody>
             </Table>
           )}
-
-          <div className="mt-4 flex items-center gap-2 border-t pt-3 text-[11px] text-muted-foreground">
-            <ClockIcon size={14} className="shrink-0 text-emerald-500" />
-            An instance is{" "}
-            <span className="text-foreground">offline</span> after{" "}
-            {OFFLINE_TIMEOUT_SECONDS}s with no heartbeat.
-            <span className="text-foreground">Stale</span> sits in the grace
-            window before that.
-          </div>
         </Panel>
       </Stagger>
     </Stagger>
   );
-}
-
-function countByLiveness(
-  instances: { liveness: HeartbeatLiveness }[],
-): Record<HeartbeatLiveness, number> {
-  const base: Record<HeartbeatLiveness, number> = {
-    ONLINE: 0,
-    STALE: 0,
-    OFFLINE: 0,
-  };
-  for (const inst of instances) {
-    base[inst.liveness] += 1;
-  }
-  return base;
 }
