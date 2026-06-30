@@ -18,12 +18,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -67,27 +67,39 @@ const RANGE_MS: Record<RangeKey, number> = {
   "30d": 2_592_000_000,
 };
 
-/** Definición de columnas (estable a nivel de módulo). El filtrado de
- * búsqueda/actor/resultado se hace aguas arriba (`filtered`); TanStack aporta el
- * modelo de columnas, de filas y el ordenamiento por cabecera. */
+/** Módulo = namespace de la acción (p. ej. "member.invited" → "member"). */
+function moduleOf(action: string): string {
+  const i = action.indexOf(".");
+  return i > 0 ? action.slice(0, i) : action;
+}
+
+/** Definición de columnas (estable a nivel de módulo) con tamaños para el resize.
+ * El filtrado se hace aguas arriba (`filtered`); TanStack aporta columnas, filas,
+ * ordenamiento por cabecera y resize de columnas. */
 const columns: ColumnDef<AuditEvent>[] = [
   {
     id: "actor",
     header: "Actor",
     enableSorting: false,
+    size: 200,
+    minSize: 130,
     cell: ({ row }) => <ActorCell event={row.original} />,
   },
   {
     accessorKey: "action",
     header: "Action",
+    size: 150,
+    minSize: 90,
     cell: ({ row }) => <MonoChip>{row.original.action}</MonoChip>,
   },
   {
     id: "resource",
     header: "Resource",
     enableSorting: false,
+    size: 180,
+    minSize: 110,
     cell: ({ row }) => (
-      <span className="text-xs text-muted-foreground">
+      <span className="block truncate text-xs text-muted-foreground">
         {row.original.resourceType ?? "—"}:
         <span className="text-foreground">{row.original.resourceId ?? "—"}</span>
       </span>
@@ -96,6 +108,8 @@ const columns: ColumnDef<AuditEvent>[] = [
   {
     accessorKey: "outcome",
     header: "Outcome",
+    size: 120,
+    minSize: 90,
     cell: ({ row }) => {
       const meta = outcomeMeta[row.original.outcome];
       return (
@@ -108,6 +122,8 @@ const columns: ColumnDef<AuditEvent>[] = [
   {
     accessorKey: "ip",
     header: "IP",
+    size: 130,
+    minSize: 90,
     cell: ({ row }) => (
       <span className="font-mono text-[11px] text-muted-foreground">
         {row.original.ip ?? "—"}
@@ -117,6 +133,8 @@ const columns: ColumnDef<AuditEvent>[] = [
   {
     accessorKey: "occurredAt",
     header: "Time",
+    size: 130,
+    minSize: 90,
     cell: ({ row }) => (
       <span className="whitespace-nowrap tabular-nums text-xs text-muted-foreground">
         {formatRelativeTime(row.original.occurredAt)}
@@ -151,6 +169,7 @@ export default function ProjectAuditPage() {
 
   const [query, setQuery] = useState("");
   const [actorFilter, setActorFilter] = useState<string>("all");
+  const [moduleFilter, setModuleFilter] = useState<string>("all");
   const [outcomeFilter, setOutcomeFilter] = useState<AuditOutcome | "all">(
     "all",
   );
@@ -172,11 +191,24 @@ export default function ProjectAuditPage() {
   const name = project?.name ?? "...";
   const loadingState = projectLoading || (Boolean(project) && loading);
 
+  /** Módulos (namespaces de acción) presentes en el lote cargado, para el filtro. */
+  const modules = useMemo(() => {
+    if (!events) return [];
+    const set = new Set<string>();
+    for (const e of events) {
+      const m = moduleOf(e.action);
+      if (m) set.add(m);
+    }
+    return [...set].sort();
+  }, [events]);
+
   const filtered = useMemo(() => {
     if (!events) return [];
     const q = query.trim().toLowerCase();
     return events.filter((e) => {
       if (actorFilter !== "all" && e.actorType !== actorFilter) return false;
+      if (moduleFilter !== "all" && moduleOf(e.action) !== moduleFilter)
+        return false;
       if (outcomeFilter !== "all" && e.outcome !== outcomeFilter) return false;
       if (!q) return true;
       return (
@@ -184,16 +216,20 @@ export default function ProjectAuditPage() {
         (e.resourceType ?? "").toLowerCase().includes(q) ||
         (e.resourceId ?? "").toLowerCase().includes(q) ||
         (e.traceId ?? "").toLowerCase().includes(q) ||
-        (e.actorId ?? "").toLowerCase().includes(q)
+        (e.actorId ?? "").toLowerCase().includes(q) ||
+        (e.actorDisplayName ?? "").toLowerCase().includes(q) ||
+        (e.actorEmail ?? "").toLowerCase().includes(q)
       );
     });
-  }, [events, query, actorFilter, outcomeFilter]);
+  }, [events, query, actorFilter, moduleFilter, outcomeFilter]);
 
   const table = useReactTable({
     data: filtered,
     columns,
     state: { sorting },
     onSortingChange: setSorting,
+    enableColumnResizing: true,
+    columnResizeMode: "onChange",
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
   });
@@ -291,6 +327,19 @@ export default function ProjectAuditPage() {
                 className="h-8 pl-8"
               />
             </div>
+            <Select value={moduleFilter} onValueChange={setModuleFilter}>
+              <SelectTrigger size="sm" className="w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All modules</SelectItem>
+                {modules.map((m) => (
+                  <SelectItem key={m} value={m}>
+                    {m}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Select value={actorFilter} onValueChange={setActorFilter}>
               <SelectTrigger size="sm" className="w-44">
                 <SelectValue />
@@ -340,15 +389,26 @@ export default function ProjectAuditPage() {
               description="Try widening the time range or clearing the search."
             />
           ) : (
-            <Table>
+            <Table
+              style={{
+                width: table.getTotalSize(),
+                minWidth: "100%",
+                tableLayout: "fixed",
+              }}
+            >
               <TableHeader>
                 {table.getHeaderGroups().map((headerGroup) => (
                   <TableRow key={headerGroup.id}>
                     {headerGroup.headers.map((header) => {
                       const sortable = header.column.getCanSort();
+                      const resizing = header.column.getIsResizing();
                       return (
                         <TableHead
                           key={header.id}
+                          style={{
+                            width: header.getSize(),
+                            position: "relative",
+                          }}
                           className={
                             sortable ? "cursor-pointer select-none" : undefined
                           }
@@ -374,6 +434,18 @@ export default function ProjectAuditPage() {
                               <SortIcon dir={header.column.getIsSorted()} />
                             ) : null}
                           </span>
+                          {header.column.getCanResize() ? (
+                            <div
+                              role="separator"
+                              aria-orientation="vertical"
+                              onMouseDown={header.getResizeHandler()}
+                              onTouchStart={header.getResizeHandler()}
+                              onClick={(e) => e.stopPropagation()}
+                              className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize touch-none select-none bg-transparent transition-colors hover:bg-border ${
+                                resizing ? "bg-primary" : ""
+                              }`}
+                            />
+                          ) : null}
                         </TableHead>
                       );
                     })}
@@ -388,7 +460,10 @@ export default function ProjectAuditPage() {
                     className="cursor-pointer"
                   >
                     {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id}>
+                      <TableCell
+                        key={cell.id}
+                        style={{ width: cell.column.getSize() }}
+                      >
                         {flexRender(
                           cell.column.columnDef.cell,
                           cell.getContext(),
@@ -400,75 +475,124 @@ export default function ProjectAuditPage() {
               </TableBody>
             </Table>
           )}
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Drag a column header edge to resize · click a row for details.
+          </p>
         </Panel>
       </Stagger>
 
-      <Sheet
+      <Dialog
         open={selected !== null}
         onOpenChange={(open) => {
           if (!open) setSelectedId(null);
         }}
       >
-        <SheetContent className="flex w-full flex-col gap-0 sm:max-w-md">
-          <SheetHeader className="gap-2">
-            <SheetTitle className="flex items-center gap-2">
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader className="gap-2">
+            <DialogTitle className="flex items-center gap-2">
               <MonoChip>{selected?.action}</MonoChip>
-            </SheetTitle>
-            <SheetDescription>
+              {selected ? (
+                <StatusBadge tone={outcomeMeta[selected.outcome].tone} dot>
+                  {outcomeMeta[selected.outcome].label}
+                </StatusBadge>
+              ) : null}
+            </DialogTitle>
+            <DialogDescription>
               {selected?.resourceType}:{selected?.resourceId}
-            </SheetDescription>
-          </SheetHeader>
+            </DialogDescription>
+          </DialogHeader>
 
-          {selected ? (
-            <div className="-mx-6 flex-1 overflow-y-auto px-6">
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-3 border-t py-4 text-xs">
-                <Detail label="Actor type" value={selected.actorType} />
-                <Detail label="Actor" value={selected.actorId ?? "—"} mono />
-                <Detail
-                  label="Outcome"
-                  value={outcomeMeta[selected.outcome].label}
-                />
-                <Detail label="IP address" value={selected.ip ?? "—"} mono />
-                <Detail label="Trace ID" value={selected.traceId ?? "—"} mono />
-                <Detail
-                  label="Time"
-                  value={formatRelativeTime(selected.occurredAt)}
-                />
-              </dl>
-
-              <div className="border-t py-4">
-                <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  User agent
-                </p>
-                <p className="break-all font-mono text-[11px] text-muted-foreground">
-                  {selected.userAgent ?? "—"}
-                </p>
-              </div>
-
-              <div className="border-t py-4">
-                <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Metadata
-                </p>
-                <pre className="overflow-x-auto rounded-md bg-muted p-3 font-mono text-[11px] leading-relaxed text-muted-foreground">
-                  {selected.metadata
-                    ? JSON.stringify(selected.metadata, null, 2)
-                    : "—"}
-                </pre>
-                <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-                  Payloads are kept small on purpose — never full keys, passwords
-                  or tokens.
-                </p>
-              </div>
-            </div>
-          ) : null}
-        </SheetContent>
-      </Sheet>
+          {selected ? <AuditDetail event={selected} /> : null}
+        </DialogContent>
+      </Dialog>
     </Stagger>
+  );
+}
+
+function AuditDetail({ event }: { event: AuditEvent }) {
+  const actor = actorMetaFor(event.actorType);
+  const hasAccount =
+    event.actorDisplayName != null || event.actorEmail != null;
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Actor / usuario */}
+      <div className="rounded-lg border p-3">
+        <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          Actor
+        </p>
+        <div className="flex items-center gap-2.5">
+          <div
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${actor.chipBg}`}
+          >
+            <actor.Icon size={15} className={actor.chipColor} />
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium text-foreground">
+              {event.actorDisplayName ??
+                event.actorEmail ??
+                (event.actorId ? shortId(event.actorId) : "—")}
+            </p>
+            <p className="truncate text-xs text-muted-foreground">
+              {event.actorEmail ?? actor.label}
+            </p>
+          </div>
+        </div>
+        {hasAccount || event.actorId ? (
+          <dl className="mt-3 grid grid-cols-1 gap-y-1 text-xs">
+            {hasAccount ? (
+              <div className="flex justify-between gap-3">
+                <dt className="text-muted-foreground">Account ID</dt>
+                <dd className="break-all font-mono text-foreground">
+                  {event.actorId ?? "—"}
+                </dd>
+              </div>
+            ) : null}
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted-foreground">Type</dt>
+              <dd className="text-foreground">{event.actorType}</dd>
+            </div>
+          </dl>
+        ) : null}
+      </div>
+
+      {/* Detalle del evento */}
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
+        <Detail label="IP address" value={event.ip ?? "—"} mono />
+        <Detail label="Trace ID" value={event.traceId ?? "—"} mono />
+        <Detail label="Resource" value={`${event.resourceType ?? "—"}:${event.resourceId ?? "—"}`} />
+        <Detail label="Time" value={formatRelativeTime(event.occurredAt)} />
+      </dl>
+
+      <div>
+        <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          User agent
+        </p>
+        <p className="break-all font-mono text-[11px] text-muted-foreground">
+          {event.userAgent ?? "—"}
+        </p>
+      </div>
+
+      <div>
+        <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          Metadata
+        </p>
+        <pre className="overflow-x-auto rounded-md bg-muted p-3 font-mono text-[11px] leading-relaxed text-muted-foreground">
+          {event.metadata ? JSON.stringify(event.metadata, null, 2) : "—"}
+        </pre>
+        <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+          Payloads are kept small on purpose — never full keys, passwords or
+          tokens.
+        </p>
+      </div>
+    </div>
   );
 }
 
 function ActorCell({ event }: { event: AuditEvent }) {
   const actor = actorMetaFor(event.actorType);
+  const name = event.actorDisplayName ?? event.actorEmail;
+  const primary =
+    name ?? (event.actorId ? shortId(event.actorId) : "—");
   return (
     <div className="flex items-center gap-2">
       <div
@@ -476,13 +600,18 @@ function ActorCell({ event }: { event: AuditEvent }) {
       >
         <actor.Icon size={13} className={actor.chipColor} />
       </div>
-      <div className="flex flex-col">
+      <div className="flex min-w-0 flex-col">
         <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          {event.actorType}
+          {actor.label}
         </span>
-        <span className="max-w-[160px] truncate text-xs text-foreground">
-          {event.actorId ? shortId(event.actorId) : "—"}
+        <span className="max-w-[180px] truncate text-xs text-foreground">
+          {primary}
         </span>
+        {event.actorEmail && event.actorDisplayName ? (
+          <span className="max-w-[180px] truncate text-[10px] text-muted-foreground">
+            {event.actorEmail}
+          </span>
+        ) : null}
       </div>
     </div>
   );
