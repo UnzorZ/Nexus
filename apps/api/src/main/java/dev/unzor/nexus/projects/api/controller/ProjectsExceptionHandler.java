@@ -1,8 +1,13 @@
 package dev.unzor.nexus.projects.api.controller;
 
+import dev.unzor.nexus.projects.domain.exception.LastOwnerProtectionException;
+import dev.unzor.nexus.projects.domain.exception.MembershipAlreadyOwnerException;
+import dev.unzor.nexus.projects.domain.exception.MembershipNotActiveException;
+import dev.unzor.nexus.projects.domain.exception.MembershipNotFoundException;
 import dev.unzor.nexus.projects.domain.exception.ProjectAccessDeniedException;
 import dev.unzor.nexus.projects.domain.exception.ProjectAlreadyExistException;
 import dev.unzor.nexus.projects.domain.exception.ProjectNotFoundException;
+import dev.unzor.nexus.projects.domain.exception.UnknownAccountException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -48,6 +53,63 @@ class ProjectsExceptionHandler {
         problem.setTitle("Forbidden");
         problem.setProperty("code", "permission_denied");
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(problem);
+    }
+
+    @ExceptionHandler(MembershipNotFoundException.class)
+    ResponseEntity<ProblemDetail> handleMembershipNotFound(MembershipNotFoundException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.NOT_FOUND,
+                "Membership not found."
+        );
+        problem.setTitle("Not found");
+        problem.setProperty("code", "resource_not_found");
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
+    }
+
+    @ExceptionHandler(MembershipAlreadyOwnerException.class)
+    ResponseEntity<ProblemDetail> handleAlreadyOwner(MembershipAlreadyOwnerException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT,
+                "That member is already the owner."
+        );
+        problem.setTitle("Conflict");
+        problem.setProperty("code", "already_owner");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler(MembershipNotActiveException.class)
+    ResponseEntity<ProblemDetail> handleNotActive(MembershipNotActiveException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT,
+                "That member is not active and cannot receive ownership."
+        );
+        problem.setTitle("Conflict");
+        problem.setProperty("code", "member_not_active");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler(LastOwnerProtectionException.class)
+    ResponseEntity<ProblemDetail> handleLastOwnerProtection(LastOwnerProtectionException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT,
+                "The project must keep at least one active owner."
+        );
+        problem.setTitle("Conflict");
+        problem.setProperty("code", "last_owner");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler(UnknownAccountException.class)
+    ResponseEntity<ProblemDetail> handleUnknownAccount(UnknownAccountException exception) {
+        // Detail con formato "field: msg" para que el frontend lo muestre inline
+        // bajo el campo email (parseFieldErrors en features/projects/api.ts).
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST,
+                "email: No NexusAccount with that address."
+        );
+        problem.setTitle("Validation failed");
+        problem.setProperty("code", "validation_error");
+        return ResponseEntity.badRequest().body(problem);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
