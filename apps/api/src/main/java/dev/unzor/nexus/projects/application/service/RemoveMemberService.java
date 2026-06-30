@@ -7,7 +7,6 @@ import dev.unzor.nexus.projects.domain.exception.LastOwnerProtectionException;
 import dev.unzor.nexus.projects.domain.exception.MembershipNotFoundException;
 import dev.unzor.nexus.projects.persistence.repository.ProjectMembershipRepository;
 import dev.unzor.nexus.shared.audit.AuditEvent;
-import dev.unzor.nexus.shared.audit.AuditOutcome;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,7 +49,7 @@ public class RemoveMemberService {
         membershipRepository.save(membership);
         eventPublisher.publishEvent(AuditEvent.byAccount(
                 projectId, "member.removed", "member", membershipId.toString(),
-                AuditOutcome.SUCCESS, actorAccountId, null));
+                actorAccountId, null));
     }
 
     private long activeOwnerCount(UUID projectId) {

@@ -4,7 +4,7 @@ import { ShieldCheckIcon } from "@/components/ui/shield-check";
 import { UserIcon } from "@/components/ui/user";
 import { UsersRoundIcon } from "@/components/ui/users-round";
 import type { ElementType } from "react";
-import type { AuditOutcome } from "./api";
+import type { Severity } from "./api";
 
 const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
 
@@ -57,7 +57,9 @@ export function actorMetaFor(actorType: string): ActorMeta {
   return actorMeta[actorType] ?? defaultActorMeta;
 }
 
-export const outcomeMeta: Record<AuditOutcome, { label: string; tone: Tone }> = {
-  SUCCESS: { label: "Success", tone: "emerald" },
-  FAILURE: { label: "Failure", tone: "red" },
+export const severityMeta: Record<Severity, { label: string; tone: Tone }> = {
+  INFO: { label: "Info", tone: "blue" },
+  WARNING: { label: "Warning", tone: "amber" },
+  MODERATE: { label: "Moderate", tone: "violet" },
+  CRITICAL: { label: "Critical", tone: "red" },
 };

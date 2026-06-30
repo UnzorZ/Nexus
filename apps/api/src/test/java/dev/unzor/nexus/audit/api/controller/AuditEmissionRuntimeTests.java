@@ -61,14 +61,14 @@ class AuditEmissionRuntimeTests {
                         .header("X-XSRF-TOKEN", owner.csrfToken())
                         .cookie(owner.csrfCookie(), owner.sessionCookie()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.action == 'project.created')]").exists())
-                .andExpect(jsonPath("$[?(@.action == 'api_key.created')]").exists())
-                .andExpect(jsonPath("$[?(@.action == 'member.invited')]").exists())
-                .andExpect(jsonPath("$[?(@.action == 'api_key.created')].outcome")
-                        .value(hasItem("SUCCESS")))
-                .andExpect(jsonPath("$[?(@.action == 'api_key.created')].actorType")
+                .andExpect(jsonPath("$.items[?(@.action =='project.created')]").exists())
+                .andExpect(jsonPath("$.items[?(@.action =='api_key.created')]").exists())
+                .andExpect(jsonPath("$.items[?(@.action =='member.invited')]").exists())
+                .andExpect(jsonPath("$.items[?(@.action =='api_key.created')].severity")
+                        .value(hasItem("INFO")))
+                .andExpect(jsonPath("$.items[?(@.action =='api_key.created')].actorType")
                         .value(hasItem("NEXUS_ACCOUNT")))
-                .andExpect(jsonPath("$[?(@.action == 'api_key.created')].ip").exists());
+                .andExpect(jsonPath("$.items[?(@.action =='api_key.created')].ip").exists());
     }
 
     @Test
@@ -105,14 +105,14 @@ class AuditEmissionRuntimeTests {
                         .header("X-XSRF-TOKEN", owner.csrfToken())
                         .cookie(owner.csrfCookie(), owner.sessionCookie()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0]").doesNotExist());
+                .andExpect(jsonPath("$.items[0]").doesNotExist());
 
         // Sin `since` sí aparecen.
         mockMvc.perform(get("/api/panel/v1/projects/{projectId}/audit", projectId)
                         .header("X-XSRF-TOKEN", owner.csrfToken())
                         .cookie(owner.csrfCookie(), owner.sessionCookie()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.action == 'api_key.created')]").exists());
+                .andExpect(jsonPath("$.items[?(@.action =='api_key.created')]").exists());
     }
 
     // --- helpers -----------------------------------------------------------------

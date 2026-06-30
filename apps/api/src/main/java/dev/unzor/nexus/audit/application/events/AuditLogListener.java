@@ -37,9 +37,9 @@ class AuditLogListener {
 
     @EventListener
     void onAuditEvent(AuditEvent event) {
-        log.info("action={} project={} resource={}:{} outcome={} actor={}:{} trace={} ip={}",
+        log.info("action={} project={} resource={}:{} severity={} actor={}:{} trace={} ip={}",
                 event.action(), event.projectId(), event.resourceType(), event.resourceId(),
-                event.outcome(), event.actorType(), event.actorId(), event.traceId(), event.ip());
+                event.severity(), event.actorType(), event.actorId(), event.traceId(), event.ip());
         try {
             transactionTemplate.executeWithoutResult(status -> repository.save(AuditLogEntry.from(event)));
         } catch (RuntimeException e) {

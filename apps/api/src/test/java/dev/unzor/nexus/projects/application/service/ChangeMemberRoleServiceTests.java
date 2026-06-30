@@ -39,7 +39,7 @@ class ChangeMemberRoleServiceTests {
         when(membershipRepository.findByProjectIdAndId(projectId, membershipId))
                 .thenReturn(Optional.of(membership));
         when(accountDirectory.findById(accountId))
-                .thenReturn(Optional.of(new AccountSummary(accountId, "m@example.com", "M", false, null)));
+                .thenReturn(Optional.of(new AccountSummary(accountId, "m@example.com", "M", false, false, null)));
         when(membershipRepository.save(any(ProjectMembership.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -76,7 +76,7 @@ class ChangeMemberRoleServiceTests {
         when(membershipRepository.countByProjectIdAndRoleAndStatus(
                 projectId, ProjectMembershipRole.OWNER, ProjectMembershipStatus.ACTIVE)).thenReturn(2L);
         when(accountDirectory.findById(accountId))
-                .thenReturn(Optional.of(new AccountSummary(accountId, "o@example.com", "O", false, null)));
+                .thenReturn(Optional.of(new AccountSummary(accountId, "o@example.com", "O", false, false, null)));
         when(membershipRepository.save(any(ProjectMembership.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 

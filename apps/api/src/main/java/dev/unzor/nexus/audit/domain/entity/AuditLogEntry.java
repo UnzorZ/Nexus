@@ -2,7 +2,7 @@ package dev.unzor.nexus.audit.domain.entity;
 
 import dev.unzor.nexus.audit.domain.MetadataConverter;
 import dev.unzor.nexus.shared.audit.AuditEvent;
-import dev.unzor.nexus.shared.audit.AuditOutcome;
+import dev.unzor.nexus.shared.audit.Severity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
@@ -51,7 +51,7 @@ public class AuditLogEntry {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 16)
-    private AuditOutcome outcome;
+    private Severity severity;
 
     @Column(name = "actor_type", nullable = false, length = 32)
     private String actorType;
@@ -82,7 +82,7 @@ public class AuditLogEntry {
         entry.action = event.action();
         entry.resourceType = event.resourceType();
         entry.resourceId = event.resourceId();
-        entry.outcome = event.outcome();
+        entry.severity = event.severity();
         entry.actorType = event.actorType();
         entry.actorId = event.actorId();
         entry.ip = event.ip();

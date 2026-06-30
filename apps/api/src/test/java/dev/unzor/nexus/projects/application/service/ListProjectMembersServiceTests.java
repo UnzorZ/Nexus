@@ -38,8 +38,8 @@ class ListProjectMembersServiceTests {
         when(membershipRepository.findAllByProjectIdAndStatus(projectId, ProjectMembershipStatus.ACTIVE))
                 .thenReturn(List.of(owner, member));
         when(accountDirectory.findAllById(anySet())).thenReturn(Map.of(
-                ownerId, new AccountSummary(ownerId, "owner@example.com", "Owner", true, Instant.parse("2026-01-01T00:00:00Z")),
-                memberId, new AccountSummary(memberId, "member@example.com", "Member", false, null)
+                ownerId, new AccountSummary(ownerId, "owner@example.com", "Owner", true, false, Instant.parse("2026-01-01T00:00:00Z")),
+                memberId, new AccountSummary(memberId, "member@example.com", "Member", false, false, null)
         ));
 
         List<MembershipDetails> result = service.list(projectId);
