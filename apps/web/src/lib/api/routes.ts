@@ -99,6 +99,12 @@ export const apiRoutes = {
             `/api/panel/v1/projects/${encodeURIComponent(projectId)}/roles/${encodeURIComponent(roleId)}/permissions`,
           ),
       },
+      heartbeats: {
+        root: (projectId: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/heartbeats`,
+          ),
+      },
     },
   },
 } as const;
