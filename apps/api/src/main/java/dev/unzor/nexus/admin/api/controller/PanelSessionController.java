@@ -92,6 +92,19 @@ class PanelSessionController {
             throw new BadCredentialsException("Invalid email or password.");
         }
 
+        // Defensa contra session fixation: rotar el id de sesión tras autenticar.
+        // El login JSON es un endpoint manual y no pasa por el
+        // SessionAuthenticationStrategy que Spring aplica al form-login (que rota el
+        // JSESSIONID por defecto); sin esta rotación, autenticar sobre una sesión
+        // preexistente dejaría el contexto autenticado ligado al mismo id anónimo.
+        // changeSessionId exige que la petición tenga una sesión "current", así que
+        // la aseguramos primero (igual que Spring en
+        // ChangeSessionIdAuthenticationStrategy): se carga de la cookie o se crea, y
+        // luego se rota. Los atributos (token CSRF, metadatos de sesión) migran al
+        // nuevo id, así que nada se pierde.
+        servletRequest.getSession();
+        servletRequest.changeSessionId();
+
         // Persistir SecurityContext en la sesión HTTP
         var securityContext = org.springframework.security.core.context.SecurityContextHolder.createEmptyContext();
         securityContext.setAuthentication(authenticated);

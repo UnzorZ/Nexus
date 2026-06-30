@@ -61,6 +61,44 @@ export const apiRoutes = {
             `/api/panel/v1/projects/${encodeURIComponent(projectId)}/api-keys/${encodeURIComponent(keyId)}/rotate`,
           ),
       },
+      members: {
+        root: (projectId: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/members`,
+          ),
+        byId: (projectId: string, memberId: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/members/${encodeURIComponent(memberId)}`,
+          ),
+        transferOwnership: (projectId: string, memberId: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/members/${encodeURIComponent(memberId)}/transfer-ownership`,
+          ),
+      },
+      permissions: {
+        root: (projectId: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/permissions`,
+          ),
+        byId: (projectId: string, permissionId: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/permissions/${encodeURIComponent(permissionId)}`,
+          ),
+      },
+      roles: {
+        root: (projectId: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/roles`,
+          ),
+        byId: (projectId: string, roleId: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/roles/${encodeURIComponent(roleId)}`,
+          ),
+        permissions: (projectId: string, roleId: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/roles/${encodeURIComponent(roleId)}/permissions`,
+          ),
+      },
     },
   },
 } as const;
