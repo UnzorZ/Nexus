@@ -68,9 +68,8 @@ class ProjectApiKeysControllerTests {
         AuthenticatedAccount principal = () -> accountId;
         when(service.create(projectId, "ci", List.of("registry:heartbeat"), null, accountId))
                 .thenReturn(new ApiKeyCreated(
-                        new ApiKeySummary(UUID.randomUUID(), "ci", "prefix", ApiKeyStatus.ACTIVE,
-                                List.of("registry:heartbeat"), null, null, null),
-                        "nxs_shop_secret"));
+                        UUID.randomUUID(), "ci", "prefix", "nxs_shop_secret", ApiKeyStatus.ACTIVE,
+                        List.of("registry:heartbeat"), null, null, null));
 
         controller.create(
                 projectId,
@@ -93,7 +92,7 @@ class ProjectApiKeysControllerTests {
         controller.rotate(projectId, keyId, principal, authentication(principal));
 
         verify(projectAccessService).requireManage(projectId, accountId, false);
-        verify(service).rotate(projectId, keyId);
+        verify(service).rotate(projectId, keyId, accountId);
     }
 
     @Test
@@ -106,7 +105,7 @@ class ProjectApiKeysControllerTests {
         controller.delete(projectId, keyId, principal, authentication(principal));
 
         verify(projectAccessService).requireManage(projectId, accountId, false);
-        verify(service).delete(projectId, keyId);
+        verify(service).delete(projectId, keyId, accountId);
     }
 
     private static UsernamePasswordAuthenticationToken authentication(AuthenticatedAccount principal) {

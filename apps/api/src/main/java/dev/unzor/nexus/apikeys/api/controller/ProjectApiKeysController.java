@@ -75,7 +75,8 @@ class ProjectApiKeysController {
     ) {
         boolean isInstanceAdmin = isInstanceAdmin(authentication);
         projectAccessService.requireManage(projectId, principal.accountId(), isInstanceAdmin);
-        return service.update(projectId, keyId, request.name(), request.status(), request.expiresAt());
+        return service.update(projectId, keyId, request.name(), request.status(), request.expiresAt(),
+                principal.accountId());
     }
 
     @PostMapping("/{keyId}/rotate")
@@ -87,7 +88,7 @@ class ProjectApiKeysController {
     ) {
         boolean isInstanceAdmin = isInstanceAdmin(authentication);
         projectAccessService.requireManage(projectId, principal.accountId(), isInstanceAdmin);
-        return service.rotate(projectId, keyId);
+        return service.rotate(projectId, keyId, principal.accountId());
     }
 
     @DeleteMapping("/{keyId}")
@@ -100,7 +101,7 @@ class ProjectApiKeysController {
     ) {
         boolean isInstanceAdmin = isInstanceAdmin(authentication);
         projectAccessService.requireManage(projectId, principal.accountId(), isInstanceAdmin);
-        service.delete(projectId, keyId);
+        service.delete(projectId, keyId, principal.accountId());
     }
 
     private static boolean isInstanceAdmin(Authentication authentication) {

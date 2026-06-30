@@ -7,6 +7,7 @@ import dev.unzor.nexus.apikeys.domain.exception.ApiKeyExpiredException;
 import dev.unzor.nexus.apikeys.domain.exception.ApiKeyInvalidException;
 import dev.unzor.nexus.apikeys.persistence.repository.ProjectApiKeyRepository;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -16,7 +17,8 @@ import java.util.List;
  *
  * <p>La búsqueda es por prefijo (global, puede devolver varias candidatas por
  * colisión de prefijo entre proyectos) y la confirmación por comparación
- * constant-time del hash, así nunca se fía del slug legible.</p>
+ * constant-time del hash, así nunca se fía del slug legible. En caso de éxito,
+ * actualiza {@code last_used_at} (spec §21.1).</p>
  */
 @Component
 public class ApiKeyResolver {
@@ -29,6 +31,7 @@ public class ApiKeyResolver {
         this.hasher = hasher;
     }
 
+    @Transactional
     public ResolvedApiKey resolve(String rawKey) {
         String prefix = hasher.prefixOf(rawKey);
         if (prefix == null) {
@@ -42,11 +45,13 @@ public class ApiKeyResolver {
                 .orElseThrow(ApiKeyInvalidException::new);
 
         if (matched.getStatus() == ApiKeyStatus.DISABLED) {
-            throw new ApiKeyDisabledException();
+            throw new ApiKeyDisabledException(matched.getId(), matched.getProjectId());
         }
         if (matched.isExpired()) {
-            throw new ApiKeyExpiredException();
+            throw new ApiKeyExpiredException(matched.getId(), matched.getProjectId());
         }
+        matched.touchUsed();
+        repository.save(matched);
         return new ResolvedApiKey(matched.getProjectId(), matched.getId(), matched.getScopes());
     }
 }

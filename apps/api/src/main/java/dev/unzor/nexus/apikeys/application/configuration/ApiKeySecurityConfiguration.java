@@ -4,6 +4,7 @@ import dev.unzor.nexus.apikeys.infrastructure.interceptor.RequiredScopeIntercept
 import dev.unzor.nexus.apikeys.security.ApiKeyAuthenticationFilter;
 import dev.unzor.nexus.apikeys.security.ApiKeyResolver;
 import dev.unzor.nexus.apikeys.security.ProjectApiProblemWriter;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -36,14 +37,15 @@ public class ApiKeySecurityConfiguration implements WebMvcConfigurer {
     public SecurityFilterChain apiKeySecurityFilterChain(
             HttpSecurity http,
             ApiKeyResolver resolver,
-            ProjectApiProblemWriter problemWriter
+            ProjectApiProblemWriter problemWriter,
+            ApplicationEventPublisher eventPublisher
     ) throws Exception {
         http
                 .securityMatcher("/api/v1/**")
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .addFilterBefore(
-                        new ApiKeyAuthenticationFilter(resolver, problemWriter),
+                        new ApiKeyAuthenticationFilter(resolver, problemWriter, eventPublisher),
                         UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(authorize -> authorize.anyRequest().authenticated());
         return http.build();

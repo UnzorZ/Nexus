@@ -7,7 +7,7 @@ export type ApiKeyStatus = "ACTIVE" | "DISABLED";
 export type ApiKeySummary = {
   id: string;
   name: string;
-  keyPrefix: string;
+  prefix: string;
   status: ApiKeyStatus;
   scopes: string[];
   expiresAt: string | null;
@@ -15,9 +15,9 @@ export type ApiKeySummary = {
   createdAt: string;
 };
 
-export type ApiKeyCreated = {
-  summary: ApiKeySummary;
-  key: string;
+/** Respuesta flat de create/rotate (spec §12.2): metadatos + el secreto (una vez). */
+export type ApiKeyCreated = ApiKeySummary & {
+  secret: string;
 };
 
 /**

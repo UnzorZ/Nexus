@@ -140,7 +140,7 @@ class ProjectApiRuntimeTests {
                 .andExpect(status().isCreated())
                 .andReturn();
         JsonNode root = objectMapper.readTree(result.getResponse().getContentAsString());
-        return new CreatedKey(root.at("/summary/id").asText(), root.at("/key").asText());
+        return new CreatedKey(root.at("/id").asText(), root.at("/secret").asText());
     }
 
     private void disableKey(LoginSession owner, String projectId, String keyId) throws Exception {
