@@ -20,6 +20,8 @@ public record AuditEventView(
         String outcome,
         String actorType,
         String actorId,
+        String actorDisplayName,
+        String actorEmail,
         String ip,
         String userAgent,
         String traceId,
@@ -28,6 +30,17 @@ public record AuditEventView(
 ) {
 
     public static AuditEventView from(AuditLogEntry entry) {
+        return from(entry, null, null);
+    }
+
+    /**
+     * Vista enriquecida con el {@code displayName}/email del actor cuando es una
+     * cuenta Nexus (resuelto vía {@code AccountDirectory} en el servicio de
+     * lectura). Los eventos anónimos o sin cuenta dejan ambos a {@code null}; el
+     * UI los trata mostrando el actor crudo o un guion.
+     */
+    public static AuditEventView from(
+            AuditLogEntry entry, String actorDisplayName, String actorEmail) {
         return new AuditEventView(
                 entry.getId(),
                 entry.getProjectId(),
@@ -37,6 +50,8 @@ public record AuditEventView(
                 entry.getOutcome().name(),
                 entry.getActorType(),
                 entry.getActorId(),
+                actorDisplayName,
+                actorEmail,
                 entry.getIp(),
                 entry.getUserAgent(),
                 entry.getTraceId(),
