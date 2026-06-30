@@ -103,6 +103,70 @@ class RegistryHeartbeatRuntimeTests {
                 .andExpect(jsonPath("$[0].liveness").value("ONLINE"));
     }
 
+    @Test
+    void registerMintsInstanceToken() throws Exception {
+        String ownerEmail = unique("reg-ok");
+        registerAccount(ownerEmail);
+        LoginSession owner = login(ownerEmail);
+        String projectId = createProject(owner, randomSlug("reg"));
+        String key = createKey(owner, projectId,
+                "{\"name\":\"CI\",\"scopes\":[\"registry:heartbeat\"],\"expiresAt\":null}");
+
+        mockMvc.perform(post("/api/v1/registry/register").header("X-Nexus-Api-Key", key))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.token").isString())
+                .andExpect(jsonPath("$.tokenType").value("bearer"))
+                .andExpect(jsonPath("$.expiresInSeconds").value(3600))
+                .andExpect(jsonPath("$.projectId").value(projectId));
+    }
+
+    @Test
+    void heartbeatAcceptsInstanceToken() throws Exception {
+        String ownerEmail = unique("tok-ok");
+        registerAccount(ownerEmail);
+        LoginSession owner = login(ownerEmail);
+        String projectId = createProject(owner, randomSlug("tok"));
+        String key = createKey(owner, projectId,
+                "{\"name\":\"CI\",\"scopes\":[\"registry:heartbeat\"],\"expiresAt\":null}");
+
+        MvcResult reg = mockMvc.perform(post("/api/v1/registry/register").header("X-Nexus-Api-Key", key))
+                .andExpect(status().isOk())
+                .andReturn();
+        String token = objectMapper.readTree(reg.getResponse().getContentAsString()).at("/token").asText();
+
+        mockMvc.perform(post("/api/v1/registry/heartbeat")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Nexus-Instance-Token", token)
+                        .content(validBody()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.projectId").value(projectId))
+                .andExpect(jsonPath("$.nextHeartbeatInSeconds").value(30));
+    }
+
+    @Test
+    void heartbeatRejectsInvalidInstanceToken() throws Exception {
+        mockMvc.perform(post("/api/v1/registry/heartbeat")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Nexus-Instance-Token", "bogus-token")
+                        .content(validBody()))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("invalid_instance_token"));
+    }
+
+    @Test
+    void registerRequiresScope() throws Exception {
+        String ownerEmail = unique("reg-scope");
+        registerAccount(ownerEmail);
+        LoginSession owner = login(ownerEmail);
+        String projectId = createProject(owner, randomSlug("reg"));
+        String key = createKey(owner, projectId,
+                "{\"name\":\"CI\",\"scopes\":[\"other:thing\"],\"expiresAt\":null}");
+
+        mockMvc.perform(post("/api/v1/registry/register").header("X-Nexus-Api-Key", key))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("missing_scope"));
+    }
+
     // --- helpers -----------------------------------------------------------------
 
     private static String validBody() {
