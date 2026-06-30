@@ -3,6 +3,7 @@ import "./globals.css";
 import { Geist, Inter } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { ThemeProvider } from "@/components/theme-provider";
+import { QueryProvider } from "@/components/query-provider";
 
 const interHeading = Inter({subsets:['latin'],variable:'--font-heading'});
 
@@ -30,7 +31,7 @@ export default function RootLayout({
           defaultTheme="light"
           enableSystem={false}
         >
-          {children}
+          <QueryProvider>{children}</QueryProvider>
         </ThemeProvider>
       </body>
     </html>

@@ -36,16 +36,10 @@ export type UpdateProjectPayload = {
   publicBaseUrl: string | null;
 };
 
-export function parseFieldErrors(detail: string): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const part of detail.split(/\s*;\s*/)) {
-    const match = part.match(/^(\w+):\s*(.+)$/);
-    if (match) {
-      out[match[1]] = match[2];
-    }
-  }
-  return out;
-}
+// Re-exportado desde la capa de API para mantener los imports existentes
+// (`from "@/features/projects/api"`); la implementación ahora vive centralizada
+// en `lib/api/errors.ts`.
+export { parseFieldErrors } from "@/lib/api/errors";
 
 export async function fetchProjects(): Promise<ProjectSummary[]> {
   return apiClient.get<ProjectSummary[]>(apiRoutes.panel.projects.root, {
