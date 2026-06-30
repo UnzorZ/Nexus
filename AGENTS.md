@@ -638,14 +638,14 @@ file — each tunnel is a `zrok share public` process.
    SPRING_PROFILES_ACTIVE=remote-dev \
    NEXUS_FRONTEND_BASE_URL=<$FRONT> \
    NEXUS_ALLOWED_DEV_ORIGINS=<$FRONT> \
-   SPRING_DOCKER_COMPOSE_LIFECYCLE=start-only \
+   SPRING_DOCKER_COMPOSE_LIFECYCLE_MANAGEMENT=START_ONLY \
    ./gradlew :apps:nexus-api:bootRun
    ```
    Notes:
    - Task path is `:apps:nexus-api:bootRun` — the module is renamed in
      `settings.gradle` (`project(':apps:api').name = 'nexus-api'`), so
      `:apps:api:bootRun` does not resolve.
-   - `SPRING_DOCKER_COMPOSE_LIFECYCLE=start-only` prevents a backend shutdown
+   - `SPRING_DOCKER_COMPOSE_LIFECYCLE_MANAGEMENT=START_ONLY` prevents a backend shutdown
      from running `docker compose down` and tearing down the shared stack.
    - The backend reads these from the **shell env**, not the repo-root `.env`.
 
