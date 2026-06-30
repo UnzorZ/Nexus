@@ -8,6 +8,7 @@ import dev.unzor.nexus.apikeys.domain.enums.ApiKeyStatus;
 import dev.unzor.nexus.apikeys.domain.exception.ApiKeyNotFoundException;
 import dev.unzor.nexus.apikeys.persistence.repository.ProjectApiKeyRepository;
 import dev.unzor.nexus.apikeys.security.ApiKeyHasher;
+import dev.unzor.nexus.apikeys.security.InstanceTokenService;
 import dev.unzor.nexus.projects.application.service.ProjectLookupService;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationEventPublisher;
@@ -29,9 +30,10 @@ class ProjectApiKeysServiceTests {
     private final ProjectApiKeyRepository repository = mock(ProjectApiKeyRepository.class);
     private final ApiKeyHasher hasher = new ApiKeyHasher();
     private final ProjectLookupService projectLookupService = mock(ProjectLookupService.class);
+    private final InstanceTokenService instanceTokenService = mock(InstanceTokenService.class);
     private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
     private final ProjectApiKeysService service =
-            new ProjectApiKeysService(repository, hasher, projectLookupService, eventPublisher);
+            new ProjectApiKeysService(repository, hasher, projectLookupService, instanceTokenService, eventPublisher);
 
     @Test
     void createReturnsFlatCreatedKeyWithSecret() {
@@ -82,6 +84,7 @@ class ProjectApiKeysServiceTests {
 
         assertThat(updated.status()).isEqualTo(ApiKeyStatus.DISABLED);
         assertThat(key.getStatus()).isEqualTo(ApiKeyStatus.DISABLED);
+        verify(instanceTokenService).revokeFor(keyId);
         verify(eventPublisher).publishEvent(any(ApiKeyAuditEvent.class));
     }
 
@@ -102,6 +105,7 @@ class ProjectApiKeysServiceTests {
         assertThat(created.scopes()).containsExactly("a:b");
         assertThat(old.getStatus()).isEqualTo(ApiKeyStatus.DISABLED);
         verify(repository).save(old);
+        verify(instanceTokenService).revokeFor(keyId);
         verify(eventPublisher).publishEvent(any(ApiKeyAuditEvent.class));
     }
 
@@ -116,6 +120,7 @@ class ProjectApiKeysServiceTests {
         service.delete(projectId, keyId, UUID.randomUUID());
 
         verify(repository).delete(key);
+        verify(instanceTokenService).revokeFor(keyId);
         verify(eventPublisher).publishEvent(any(ApiKeyAuditEvent.class));
     }
 

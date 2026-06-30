@@ -18,29 +18,42 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Filtro de autenticación del API de proyecto ({@code /api/v1/**}): resuelve la
- * cabecera {@code X-Nexus-Api-Key} a un proyecto vía {@link ApiKeyResolver} y, si
- * es válida, fija el {@code SecurityContext} (principal {@link ResolvedApiKey}).
- * Si falta, no coincide, está deshabilitada o expirada, escribe el error §11
- * correspondiente y emite un {@link ApiKeyAuditEvent} de rechazo (ADR-0004).
+ * Filtro de autenticación del API de proyecto ({@code /api/v1/**}). Acepta dos
+ * credenciales:
+ * <ul>
+ *   <li>{@code X-Nexus-Instance-Token} — token efímero (ADR-0012) verificado en
+ *       Redis; pensado para latidos de alta frecuencia.</li>
+ *   <li>{@code X-Nexus-Api-Key} — la API key larga, verificada por
+ *       {@link ApiKeyResolver} (SHA-256 en tiempo constante). Back-compat y
+ *       bootstrap del handshake (el {@code register} la usa para mintear el
+ *       token).</li>
+ * </ul>
+ * Si alguna es válida, fija el {@code SecurityContext} (principal
+ * {@link ResolvedApiKey}). Si no llega ninguna, o es inválida, escribe el error
+ * §11 y emite un {@link ApiKeyAuditEvent} de rechazo (ADR-0004).
  */
 public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
 
     public static final String HEADER = "X-Nexus-Api-Key";
+    public static final String TOKEN_HEADER = "X-Nexus-Instance-Token";
 
     private final ApiKeyResolver resolver;
+    private final InstanceTokenService instanceTokenService;
     private final ProjectApiProblemWriter problemWriter;
     private final ApplicationEventPublisher eventPublisher;
 
     public ApiKeyAuthenticationFilter(
             ApiKeyResolver resolver,
+            InstanceTokenService instanceTokenService,
             ProjectApiProblemWriter problemWriter,
             ApplicationEventPublisher eventPublisher
     ) {
         this.resolver = resolver;
+        this.instanceTokenService = instanceTokenService;
         this.problemWriter = problemWriter;
         this.eventPublisher = eventPublisher;
     }
@@ -51,6 +64,22 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
+        // Instance token (ADR-0012): credencial efímera de alta frecuencia.
+        String token = request.getHeader(TOKEN_HEADER);
+        if (token != null && !token.isBlank()) {
+            Optional<ResolvedApiKey> resolved = instanceTokenService.resolve(token);
+            if (resolved.isEmpty()) {
+                reject(response, HttpStatus.UNAUTHORIZED, "invalid_instance_token", "Invalid instance token",
+                        "The instance token is invalid or expired.", "instance_token.auth_invalid",
+                        null, null, "no_match");
+                return;
+            }
+            authenticate(resolved.get(), ResolvedCredential.INSTANCE_TOKEN);
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        // API key (back-compat + bootstrap del handshake).
         String rawKey = request.getHeader(HEADER);
         if (rawKey == null || rawKey.isBlank()) {
             reject(response, HttpStatus.UNAUTHORIZED, "invalid_api_key", "Invalid API key",
@@ -59,8 +88,7 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
         }
         try {
             ResolvedApiKey resolved = resolver.resolve(rawKey);
-            var authentication = new UsernamePasswordAuthenticationToken(resolved, null, List.of());
-            SecurityContextHolder.getContext().setAuthentication(authentication);
+            authenticate(resolved, ResolvedCredential.API_KEY);
         } catch (ApiKeyInvalidException exception) {
             reject(response, HttpStatus.UNAUTHORIZED, "invalid_api_key", "Invalid API key",
                     "The API key is invalid.", "api_key.auth_invalid", null, null, "no_match");
@@ -77,6 +105,13 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
         filterChain.doFilter(request, response);
+    }
+
+    private void authenticate(ResolvedApiKey resolved, ResolvedCredential credential) {
+        UsernamePasswordAuthenticationToken auth =
+                new UsernamePasswordAuthenticationToken(resolved, null, List.of());
+        auth.setDetails(credential);
+        SecurityContextHolder.getContext().setAuthentication(auth);
     }
 
     private void reject(

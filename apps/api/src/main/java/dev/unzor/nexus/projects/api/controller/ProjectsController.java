@@ -79,10 +79,7 @@ class ProjectsController {
             @AuthenticationPrincipal AuthenticatedAccount principal,
             Authentication authentication
     ) {
-        return listAccessibleProjectsService.listAccessible(
-                principal.accountId(),
-                isInstanceAdmin(authentication)
-        );
+        return listAccessibleProjectsService.listAccessible(principal.accountId());
     }
 
     @GetMapping("/{projectId}")
