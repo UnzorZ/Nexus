@@ -27,15 +27,13 @@ import {
   StatusBadge,
   type Tone,
 } from "@/components/dashboard/shared";
+import { type ProjectDetails } from "@/features/projects/api";
 import {
-  archiveProject,
-  parseFieldErrors,
-  restoreProject,
-  updateProject,
-  type ProjectDetails,
-} from "@/features/projects/api";
-import { NexusApiError } from "@/lib/api/client";
-import { ensureCsrfToken } from "@/lib/api/csrf";
+  useArchiveProject,
+  useRestoreProject,
+  useUpdateProject,
+} from "@/features/projects/queries";
+import { toFieldErrors, toMessage } from "@/lib/api/errors";
 import { useProject } from "../useProject";
 
 function formatInstant(value: string | null | undefined): string {
@@ -111,31 +109,54 @@ function SettingsLoading() {
   );
 }
 
+const UPDATE_MESSAGES = {
+  permission: "You don't have permission to change this project.",
+  notFound: "This project no longer exists.",
+};
+const ARCHIVE_MESSAGES = {
+  permission: "You don't have permission to archive this project.",
+  notFound: "This project no longer exists.",
+};
+const RESTORE_MESSAGES = {
+  permission: "You don't have permission to restore this project.",
+  notFound: "This project no longer exists.",
+};
+
 export default function ProjectSettingsPage() {
   const router = useRouter();
   const { project, loading, error, refresh } = useProject();
 
-  const [form, setForm] = useState<FormState>({ name: "", description: "", publicBaseUrl: "" });
-  const [saving, setSaving] = useState(false);
-  const [savedFlash, setSavedFlash] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const updateM = useUpdateProject(project?.id ?? "");
+  const archiveM = useArchiveProject(project?.id ?? "");
+  const restoreM = useRestoreProject(project?.id ?? "");
 
+  const [form, setForm] = useState<FormState>({ name: "", description: "", publicBaseUrl: "" });
+  const [savedFlash, setSavedFlash] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [confirmSlug, setConfirmSlug] = useState("");
-  const [archiving, setArchiving] = useState(false);
-  const [archiveError, setArchiveError] = useState<string | null>(null);
 
-  const [restoring, setRestoring] = useState(false);
-  const [restoreError, setRestoreError] = useState<string | null>(null);
+  const saving = updateM.isPending;
+  const archiving = archiveM.isPending;
+  const restoring = restoreM.isPending;
+  const fieldErrors = toFieldErrors(updateM.error);
+  const submitError =
+    updateM.error && Object.keys(fieldErrors).length === 0
+      ? toMessage(updateM.error, UPDATE_MESSAGES)
+      : null;
+  const archiveError = archiveM.error
+    ? toMessage(archiveM.error, ARCHIVE_MESSAGES)
+    : null;
+  const restoreError = restoreM.error
+    ? toMessage(restoreM.error, RESTORE_MESSAGES)
+    : null;
 
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!project) return;
+    // Reset del formulario cuando cambia el proyecto (patrón establecido en el repo).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setForm(formFromProject(project));
-    setFieldErrors({});
-    setSubmitError(null);
   }, [project?.id, project?.updatedAt]);
 
   useEffect(() => {
@@ -176,96 +197,43 @@ export default function ProjectSettingsPage() {
 
   async function onSave() {
     if (!project) return;
-    setSaving(true);
-    setFieldErrors({});
-    setSubmitError(null);
+    updateM.reset();
     try {
-      const token = await ensureCsrfToken();
-      await updateProject(
-        project.id,
-        {
-          name: form.name.trim(),
-          description: form.description.trim() ? form.description.trim() : null,
-          publicBaseUrl: form.publicBaseUrl.trim()
-            ? form.publicBaseUrl.trim()
-            : null,
-        },
-        token,
-      );
-      // The save succeeded; a stale re-read is non-critical, so don't let a
-      // refresh failure mask the success with an error message.
-      try {
-        await refresh({ silent: true });
-      } catch {
-        /* save worked; ignore a stale re-read */
-      }
+      await updateM.mutateAsync({
+        name: form.name.trim(),
+        description: form.description.trim() ? form.description.trim() : null,
+        publicBaseUrl: form.publicBaseUrl.trim()
+          ? form.publicBaseUrl.trim()
+          : null,
+      });
+      // updateM.onSuccess invalida la ficha del proyecto → el header y el
+      // formulario se refrescan solos; flashSaved confirma el guardado.
       flashSaved();
-    } catch (e) {
-      if (e instanceof NexusApiError && e.status === 400 && e.code === "validation_error") {
-        setFieldErrors(parseFieldErrors(e.message));
-      } else if (e instanceof NexusApiError && e.status === 403 && e.code === "permission_denied") {
-        setSubmitError("You don't have permission to change this project.");
-      } else if (e instanceof NexusApiError && e.status === 403) {
-        setSubmitError("Your session expired. Reload the page and try again.");
-      } else if (e instanceof NexusApiError && e.status === 404) {
-        setSubmitError("This project no longer exists.");
-      } else {
-        setSubmitError(e instanceof NexusApiError ? e.message : "Something went wrong.");
-      }
-    } finally {
-      setSaving(false);
+    } catch {
+      /* submitError/fieldErrors se muestran vía updateM.error */
     }
   }
 
   async function onArchive() {
     if (!project) return;
-    setArchiving(true);
-    setArchiveError(null);
+    archiveM.reset();
     try {
-      const token = await ensureCsrfToken();
-      await archiveProject(project.id, token);
+      await archiveM.mutateAsync();
       router.push("/projects");
-    } catch (e) {
-      if (e instanceof NexusApiError && e.status === 403 && e.code === "permission_denied") {
-        setArchiveError("You don't have permission to archive this project.");
-      } else if (e instanceof NexusApiError && e.status === 403) {
-        setArchiveError("Your session expired. Reload the page and try again.");
-      } else if (e instanceof NexusApiError && e.status === 404) {
-        setArchiveError("This project no longer exists.");
-      } else {
-        setArchiveError(e instanceof NexusApiError ? e.message : "Something went wrong.");
-      }
-    } finally {
-      setArchiving(false);
+    } catch {
+      /* archiveError via archiveM.error */
     }
   }
 
   async function onRestore() {
     if (!project) return;
-    setRestoring(true);
-    setRestoreError(null);
+    restoreM.reset();
     try {
-      const token = await ensureCsrfToken();
-      await restoreProject(project.id, token);
-      // The restore succeeded; a stale re-read is non-critical, so don't let a
-      // refresh failure mask the success with an error message.
-      try {
-        await refresh({ silent: true });
-      } catch {
-        /* restore worked; ignore a stale re-read */
-      }
-    } catch (e) {
-      if (e instanceof NexusApiError && e.status === 403 && e.code === "permission_denied") {
-        setRestoreError("You don't have permission to restore this project.");
-      } else if (e instanceof NexusApiError && e.status === 403) {
-        setRestoreError("Your session expired. Reload the page and try again.");
-      } else if (e instanceof NexusApiError && e.status === 404) {
-        setRestoreError("This project no longer exists.");
-      } else {
-        setRestoreError(e instanceof NexusApiError ? e.message : "Something went wrong.");
-      }
-    } finally {
-      setRestoring(false);
+      // restoreM.onSuccess invalida la ficha → el estado y el badge se
+      // actualizan solos.
+      await restoreM.mutateAsync();
+    } catch {
+      /* restoreError via restoreM.error */
     }
   }
 
@@ -529,7 +497,7 @@ export default function ProjectSettingsPage() {
           setArchiveOpen(open);
           if (!open) {
             setConfirmSlug("");
-            setArchiveError(null);
+            archiveM.reset();
           }
         }}
       >

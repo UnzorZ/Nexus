@@ -41,8 +41,14 @@ import {
   Panel,
   StatusBadge,
 } from "@/components/dashboard/shared";
-import { useProjectPermissions } from "@/features/permissions/useProjectPermissions";
+import {
+  useCreatePermission,
+  useDeletePermission,
+  useProjectPermissions,
+  useUpdatePermission,
+} from "@/features/permissions/queries";
 import type { Permission } from "@/features/permissions/api";
+import { toFieldErrors, toMessage } from "@/lib/api/errors";
 import { useProject } from "../useProject";
 
 function PermissionsLoading() {
@@ -70,20 +76,27 @@ type FormState = { key: string; label: string; description: string };
 
 const EMPTY_FORM: FormState = { key: "", label: "", description: "" };
 
+/** Mensajes de error específicos de permisos para toMessage. */
+const PERMISSIONS_MESSAGES = {
+  permission: "You don't have permission to manage permissions for this project.",
+  forbidden: "Your session expired. Reload the page and try again.",
+  notFound: "This permission no longer exists.",
+  codes: {},
+};
+
 export default function ProjectPermissionsPage() {
   const { project, loading: projectLoading, error: projectError } = useProject();
-  const {
-    permissions,
-    loading,
-    error,
-    actionError,
-    fieldErrors,
-    busy,
-    create,
-    update,
-    remove,
-    refresh,
-  } = useProjectPermissions(project?.id ?? "");
+  const projectId = project?.id ?? "";
+
+  const permissionsQ = useProjectPermissions(projectId);
+  const createM = useCreatePermission(projectId);
+  const updateM = useUpdatePermission(projectId);
+  const deleteM = useDeletePermission(projectId);
+
+  const permissions = permissionsQ.data ?? null;
+  const loading = permissionsQ.isLoading;
+  const error = permissionsQ.error ? toMessage(permissionsQ.error) : null;
+  const refresh = () => permissionsQ.refetch();
 
   const canManage = project?.canManage ?? false;
   const name = project?.name ?? "...";
@@ -92,6 +105,8 @@ export default function ProjectPermissionsPage() {
   const [removeTarget, setRemoveTarget] = useState<Permission | null>(null);
 
   useEffect(() => {
+    // Sync del formulario al crear/editar (patrón del repo).
+    /* eslint-disable react-hooks/set-state-in-effect */
     if (editing === "new") {
       setForm(EMPTY_FORM);
     } else if (editing) {
@@ -101,15 +116,32 @@ export default function ProjectPermissionsPage() {
         description: editing.description ?? "",
       });
     }
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [editing]);
+
+  const busy = createM.isPending || updateM.isPending || deleteM.isPending;
+  const formErr = createM.error ?? updateM.error ?? null;
+  const fieldErrors = toFieldErrors(formErr);
+  const actionError =
+    formErr ?? deleteM.error
+      ? toMessage(formErr ?? deleteM.error, PERMISSIONS_MESSAGES)
+      : null;
 
   const loadingState = projectLoading || (Boolean(project) && loading);
 
+  function resetActionErrors() {
+    createM.reset();
+    updateM.reset();
+    deleteM.reset();
+  }
+
   function openCreate() {
+    resetActionErrors();
     setEditing("new");
   }
 
   function openEdit(permission: Permission) {
+    resetActionErrors();
     setEditing(permission);
   }
 
@@ -120,16 +152,21 @@ export default function ProjectPermissionsPage() {
       description: form.description.trim() ? form.description.trim() : null,
     };
     if (!body.label) return;
-    const ok =
-      editing === "new"
-        ? await create(body)
-        : editing
-          ? await update(editing.id, {
-              label: body.label,
-              description: body.description,
-            })
-          : false;
-    if (ok) setEditing(null);
+    resetActionErrors();
+    try {
+      if (editing === "new") {
+        await createM.mutateAsync(body);
+      } else if (editing) {
+        await updateM.mutateAsync({
+          permissionId: editing.id,
+          label: body.label,
+          description: body.description,
+        });
+      }
+      setEditing(null);
+    } catch {
+      /* el error se muestra vía createM.error / updateM.error */
+    }
   }
 
   if (loadingState) {
@@ -387,7 +424,12 @@ export default function ProjectPermissionsPage() {
               disabled={busy}
               onClick={async () => {
                 if (removeTarget) {
-                  await remove(removeTarget.id);
+                  resetActionErrors();
+                  try {
+                    await deleteM.mutateAsync(removeTarget.id);
+                  } catch {
+                    /* actionError */
+                  }
                 }
                 setRemoveTarget(null);
               }}

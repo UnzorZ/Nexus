@@ -18,7 +18,12 @@ import {
   Panel,
   StatusBadge,
 } from "@/components/dashboard/shared";
-import { useProjectModules } from "@/features/modules/useProjectModules";
+import {
+  MODULE_MESSAGES,
+  useProjectModules,
+  useSetModuleEnabled,
+} from "@/features/modules/queries";
+import { toMessage } from "@/lib/api/errors";
 import { useProject } from "../useProject";
 
 function ModulesLoading() {
@@ -45,15 +50,15 @@ function ModulesLoading() {
 export default function ProjectModulesPage() {
   const router = useRouter();
   const { project, loading: projectLoading, error: projectError } = useProject();
-  const {
-    modules,
-    loading: modulesLoading,
-    error: modulesError,
-    toggleError,
-    setEnabled,
-    refresh,
-    isToggling,
-  } = useProjectModules(project?.id ?? "");
+  const projectId = project?.id ?? "";
+  const modulesQ = useProjectModules(projectId);
+  const { setEnabled, isToggling, error: toggleErr } =
+    useSetModuleEnabled(projectId);
+  const modules = modulesQ.data ?? null;
+  const modulesLoading = modulesQ.isLoading;
+  const modulesError = modulesQ.error ? toMessage(modulesQ.error) : null;
+  const toggleError = toggleErr ? toMessage(toggleErr, MODULE_MESSAGES) : null;
+  const refresh = () => modulesQ.refetch();
 
   const loading = projectLoading || (Boolean(project) && modulesLoading);
   const name = project?.name ?? "...";
