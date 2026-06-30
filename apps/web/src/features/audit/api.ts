@@ -20,6 +20,7 @@ export type AuditEvent = {
   actorId: string | null;
   actorDisplayName: string | null;
   actorEmail: string | null;
+  actorAdmin: boolean | null;
   ip: string | null;
   userAgent: string | null;
   traceId: string | null;
