@@ -64,6 +64,54 @@ class PanelSessionManagementTests {
     }
 
     @Test
+    void jsonLoginRotatesSessionIdAndInvalidatesThePreLoginId() throws Exception {
+        String email = unique("json-rotate");
+        registerAccount(email);
+
+        // Simula una sesión anónima fijada previamente (session fixation): el
+        // atacante la crea en Redis y la víctima reutiliza su JSESSIONID al
+        // loguearse por JSON.
+        var planted = sessionRepository.createSession();
+        sessionRepository.save(planted);
+        Cookie preLoginSession = new Cookie("JSESSIONID", planted.getId());
+
+        // La cookie CSRF es independiente de la sesión (CookieCsrfTokenRepository),
+        // así que GET /csrf no crea sesión: la pedimos aparte.
+        MvcResult csrfResult = mockMvc.perform(get("/api/panel/v1/csrf"))
+                .andExpect(status().isOk())
+                .andReturn();
+        Cookie xsrf = csrfResult.getResponse().getCookie("XSRF-TOKEN");
+        assertThat(xsrf).as("XSRF-TOKEN issued").isNotNull();
+
+        // Login JSON reutilizando la sesión anónima (vector de session fixation).
+        MvcResult loginResult = mockMvc.perform(post("/api/panel/v1/session/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .cookie(xsrf, preLoginSession)
+                        .header("X-XSRF-TOKEN", xsrf.getValue())
+                        .header("User-Agent", "Mozilla/5.0 (Test Runner) Nexus/1.0")
+                        .content(loginJson(email)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        Cookie postLoginSession = cookieByName(loginResult, "JSESSIONID");
+        assertThat(postLoginSession).as("JSON login should reissue JSESSIONID after rotation").isNotNull();
+        // Rotación: el id autenticado difiere del anónimo pre-login.
+        assertThat(postLoginSession.getValue()).isNotEqualTo(preLoginSession.getValue());
+
+        // El nuevo id está autenticado y conserva el principal.
+        mockMvc.perform(get("/api/panel/v1/me")
+                        .accept(MediaType.APPLICATION_JSON)
+                        .cookie(postLoginSession))
+                .andExpect(status().isOk());
+
+        // El id anónimo pre-login ya no sirve: session fixation cerrado.
+        mockMvc.perform(get("/api/panel/v1/me")
+                        .accept(MediaType.APPLICATION_JSON)
+                        .cookie(preLoginSession))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     void sessionIsRecoverableThroughASecondRepositoryInstanceOnSameRedis() throws Exception {
         String email = unique("second-repo");
@@ -301,6 +349,15 @@ class PanelSessionManagementTests {
                   "email": "%s",
                   "password": "plain-password",
                   "displayName": "Owner"
+                }
+                """.formatted(email);
+    }
+
+    private static String loginJson(String email) {
+        return """
+                {
+                  "email": "%s",
+                  "password": "plain-password"
                 }
                 """.formatted(email);
     }

@@ -42,8 +42,9 @@ out/
 ### Playwright MCP ###
 .playwright-mcp/
 
-### Local artifacts (machine-specific; never commit) ###
+### Local env overrides + artifacts (machine-specific; never commit) ###
 /.env
+/apps/web/.env.local
 /apps/web/.env*.local
 /apps/web/tmp/
 /docs/plans/
