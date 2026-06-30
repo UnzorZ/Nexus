@@ -35,6 +35,6 @@ class RegistryHeartbeatController {
     @RequiredScope("registry:heartbeat")
     HeartbeatReceipt heartbeat(@Valid @RequestBody HeartbeatRequest request,
                                @AuthenticationPrincipal ResolvedApiKey apiKey) {
-        return service.record(apiKey.projectId(), apiKey.keyId(), request, Instant.now());
+        return service.record(apiKey.projectId(), apiKey.keyId(), apiKey.keyPrefix(), request, Instant.now());
     }
 }

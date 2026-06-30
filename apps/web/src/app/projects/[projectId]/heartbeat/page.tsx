@@ -205,7 +205,7 @@ export default function ProjectHeartbeatPage() {
                         </span>
                       </TableCell>
                       <TableCell>
-                        <MonoChip>{inst.apiKeyId.slice(0, 8)}</MonoChip>
+                        <MonoChip>{inst.apiKeyPrefix}</MonoChip>
                       </TableCell>
                     </TableRow>
                   );

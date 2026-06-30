@@ -51,6 +51,9 @@ public class ProjectHeartbeat {
     @Column(name = "api_key_id", nullable = false)
     private UUID apiKeyId;
 
+    @Column(name = "api_key_prefix", nullable = false, length = 64)
+    private String apiKeyPrefix;
+
     @Column(name = "instance_id", nullable = false, length = 128)
     private String instanceId;
 
@@ -79,6 +82,7 @@ public class ProjectHeartbeat {
     public ProjectHeartbeat(
             UUID projectId,
             UUID apiKeyId,
+            String apiKeyPrefix,
             String instanceId,
             String appName,
             String appVersion,
@@ -88,6 +92,7 @@ public class ProjectHeartbeat {
     ) {
         this.projectId = Objects.requireNonNull(projectId);
         this.apiKeyId = Objects.requireNonNull(apiKeyId);
+        this.apiKeyPrefix = Objects.requireNonNull(apiKeyPrefix);
         this.instanceId = Objects.requireNonNull(instanceId);
         this.appName = Objects.requireNonNull(appName);
         this.appVersion = appVersion;
@@ -99,12 +104,13 @@ public class ProjectHeartbeat {
     /**
      * Actualiza los campos mutables con los datos de un nuevo latido de la misma
      * instancia (la identidad {@code projectId}/{@code instanceId} no cambia).
-     * Refresca {@code apiKeyId} al reportero actual para que la rotación de la
-     * clave quede reflejada.
+     * Refresca {@code apiKeyId}/{@code apiKeyPrefix} al reportero actual para que
+     * la rotación de la clave quede reflejada.
      */
-    public void touch(UUID apiKeyId, String appName, String appVersion, String status,
+    public void touch(UUID apiKeyId, String apiKeyPrefix, String appName, String appVersion, String status,
                       Map<String, Object> metadata, Instant lastSeenAt) {
         this.apiKeyId = Objects.requireNonNull(apiKeyId);
+        this.apiKeyPrefix = Objects.requireNonNull(apiKeyPrefix);
         this.appName = Objects.requireNonNull(appName);
         this.appVersion = appVersion;
         this.status = (status == null || status.isBlank()) ? DEFAULT_STATUS : status;
