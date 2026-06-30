@@ -7,6 +7,7 @@ import dev.unzor.nexus.projects.domain.exception.LastOwnerProtectionException;
 import dev.unzor.nexus.projects.domain.exception.MembershipNotFoundException;
 import dev.unzor.nexus.projects.persistence.repository.ProjectMembershipRepository;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -22,7 +23,8 @@ import static org.mockito.Mockito.when;
 class RemoveMemberServiceTests {
 
     private final ProjectMembershipRepository membershipRepository = mock(ProjectMembershipRepository.class);
-    private final RemoveMemberService service = new RemoveMemberService(membershipRepository);
+    private final RemoveMemberService service =
+            new RemoveMemberService(membershipRepository, mock(ApplicationEventPublisher.class));
 
     @Test
     void removeRevokesMembership() {
@@ -34,7 +36,7 @@ class RemoveMemberServiceTests {
         when(membershipRepository.save(any(ProjectMembership.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        service.remove(projectId, membershipId);
+        service.remove(projectId, membershipId, UUID.randomUUID());
 
         verify(membershipRepository).findForUpdateByProjectId(projectId);
         assertThat(membership.getStatus()).isEqualTo(ProjectMembershipStatus.REVOKED);
@@ -50,7 +52,7 @@ class RemoveMemberServiceTests {
         when(membershipRepository.countByProjectIdAndRoleAndStatus(
                 projectId, ProjectMembershipRole.OWNER, ProjectMembershipStatus.ACTIVE)).thenReturn(1L);
 
-        assertThatThrownBy(() -> service.remove(projectId, membershipId))
+        assertThatThrownBy(() -> service.remove(projectId, membershipId, UUID.randomUUID()))
                 .isInstanceOf(LastOwnerProtectionException.class);
         assertThat(owner.getStatus()).isEqualTo(ProjectMembershipStatus.ACTIVE);
         verify(membershipRepository, never()).save(any(ProjectMembership.class));
@@ -65,7 +67,7 @@ class RemoveMemberServiceTests {
         owner.revoke();
         when(membershipRepository.findByProjectIdAndId(projectId, membershipId)).thenReturn(Optional.of(owner));
 
-        service.remove(projectId, membershipId);
+        service.remove(projectId, membershipId, UUID.randomUUID());
 
         assertThat(owner.getStatus()).isEqualTo(ProjectMembershipStatus.REVOKED);
     }
@@ -76,7 +78,7 @@ class RemoveMemberServiceTests {
         UUID membershipId = UUID.randomUUID();
         when(membershipRepository.findByProjectIdAndId(projectId, membershipId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.remove(projectId, membershipId))
+        assertThatThrownBy(() -> service.remove(projectId, membershipId, UUID.randomUUID()))
                 .isInstanceOf(MembershipNotFoundException.class);
     }
 }

@@ -7,9 +7,14 @@ import dev.unzor.nexus.projects.domain.entity.ProjectMembership;
 import dev.unzor.nexus.projects.domain.enums.ProjectMembershipRole;
 import dev.unzor.nexus.projects.domain.exception.UnknownAccountException;
 import dev.unzor.nexus.projects.persistence.repository.ProjectMembershipRepository;
+import dev.unzor.nexus.shared.audit.AuditEvent;
+import dev.unzor.nexus.shared.audit.AuditOutcome;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -25,17 +30,20 @@ public class InviteMemberService {
 
     private final ProjectMembershipRepository membershipRepository;
     private final AccountDirectory accountDirectory;
+    private final ApplicationEventPublisher eventPublisher;
 
     public InviteMemberService(
             ProjectMembershipRepository membershipRepository,
-            AccountDirectory accountDirectory
+            AccountDirectory accountDirectory,
+            ApplicationEventPublisher eventPublisher
     ) {
         this.membershipRepository = membershipRepository;
         this.accountDirectory = accountDirectory;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
-    public MembershipDetails invite(UUID projectId, String email, ProjectMembershipRole role) {
+    public MembershipDetails invite(UUID projectId, String email, ProjectMembershipRole role, UUID actorAccountId) {
         AccountSummary account = accountDirectory.findByEmail(email)
                 .orElseThrow(() -> new UnknownAccountException(email));
 
@@ -48,6 +56,10 @@ public class InviteMemberService {
         membership.activate();
         membership.changeRole(role);
         ProjectMembership saved = membershipRepository.save(membership);
+        eventPublisher.publishEvent(AuditEvent.byAccount(
+                projectId, "member.invited", "member", Objects.toString(saved.getId(), null),
+                AuditOutcome.SUCCESS, actorAccountId,
+                Map.of("account", account.id().toString(), "role", role.name())));
         return MembershipDetails.from(saved, account);
     }
 }

@@ -65,7 +65,7 @@ class ProjectRolesControllerTests {
         UUID roleId = UUID.randomUUID();
         UUID accountId = UUID.randomUUID();
         AuthenticatedAccount principal = () -> accountId;
-        when(rolesService.setPermissions(projectId, roleId, List.of("orders.*")))
+        when(rolesService.setPermissions(projectId, roleId, List.of("orders.*"), accountId))
                 .thenReturn(new RoleDetails(roleId, "admin", "Admin", null, false, List.of("orders.*")));
 
         controller.setPermissions(
@@ -77,7 +77,7 @@ class ProjectRolesControllerTests {
         );
 
         verify(projectAccessService).requireManage(projectId, accountId, false);
-        verify(rolesService).setPermissions(projectId, roleId, List.of("orders.*"));
+        verify(rolesService).setPermissions(projectId, roleId, List.of("orders.*"), accountId);
     }
 
     @Test

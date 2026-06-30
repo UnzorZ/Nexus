@@ -64,7 +64,8 @@ class ProjectPermissionsController {
     ) {
         boolean isInstanceAdmin = isInstanceAdmin(authentication);
         projectAccessService.requireManage(projectId, principal.accountId(), isInstanceAdmin);
-        return permissionsService.create(projectId, request.key(), request.label(), request.description());
+        return permissionsService.create(projectId, request.key(), request.label(), request.description(),
+                principal.accountId());
     }
 
     @PatchMapping("/{permissionId}")
@@ -77,7 +78,8 @@ class ProjectPermissionsController {
     ) {
         boolean isInstanceAdmin = isInstanceAdmin(authentication);
         projectAccessService.requireManage(projectId, principal.accountId(), isInstanceAdmin);
-        return permissionsService.update(projectId, permissionId, request.label(), request.description());
+        return permissionsService.update(projectId, permissionId, request.label(), request.description(),
+                principal.accountId());
     }
 
     @DeleteMapping("/{permissionId}")
@@ -90,7 +92,7 @@ class ProjectPermissionsController {
     ) {
         boolean isInstanceAdmin = isInstanceAdmin(authentication);
         projectAccessService.requireManage(projectId, principal.accountId(), isInstanceAdmin);
-        permissionsService.delete(projectId, permissionId);
+        permissionsService.delete(projectId, permissionId, principal.accountId());
     }
 
     private static boolean isInstanceAdmin(Authentication authentication) {

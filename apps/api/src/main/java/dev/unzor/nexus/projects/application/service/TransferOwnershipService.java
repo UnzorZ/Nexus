@@ -7,6 +7,9 @@ import dev.unzor.nexus.projects.domain.exception.MembershipAlreadyOwnerException
 import dev.unzor.nexus.projects.domain.exception.MembershipNotActiveException;
 import dev.unzor.nexus.projects.domain.exception.MembershipNotFoundException;
 import dev.unzor.nexus.projects.persistence.repository.ProjectMembershipRepository;
+import dev.unzor.nexus.shared.audit.AuditEvent;
+import dev.unzor.nexus.shared.audit.AuditOutcome;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,13 +27,16 @@ import java.util.UUID;
 public class TransferOwnershipService {
 
     private final ProjectMembershipRepository membershipRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public TransferOwnershipService(ProjectMembershipRepository membershipRepository) {
+    public TransferOwnershipService(ProjectMembershipRepository membershipRepository,
+                                    ApplicationEventPublisher eventPublisher) {
         this.membershipRepository = membershipRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
-    public void transfer(UUID projectId, UUID targetMembershipId) {
+    public void transfer(UUID projectId, UUID targetMembershipId, UUID actorAccountId) {
         // SELECT … FOR UPDATE sobre las membresías del proyecto: serializa esta
         // mutación con cualquier otra que afecte al invariante de OWNER (cambio de
         // rol, eliminación), evitando la carrera check-then-act del último owner.
@@ -58,5 +64,13 @@ public class TransferOwnershipService {
         currentOwner.changeRole(ProjectMembershipRole.ADMIN);
         membershipRepository.save(target);
         membershipRepository.save(currentOwner);
+        // HashMap (no Map.of) para tolerar un currentOwner.getId() nulo en tests
+        // con mocks; en producción siempre está asignado tras persistir.
+        java.util.Map<String, Object> transferMeta = new java.util.HashMap<>();
+        transferMeta.put("from", currentOwner.getId());
+        transferMeta.put("to", targetMembershipId);
+        eventPublisher.publishEvent(AuditEvent.byAccount(
+                projectId, "member.ownership_transferred", "member", targetMembershipId.toString(),
+                AuditOutcome.SUCCESS, actorAccountId, transferMeta));
     }
 }

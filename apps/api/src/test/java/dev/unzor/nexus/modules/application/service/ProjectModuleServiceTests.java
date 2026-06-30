@@ -9,6 +9,7 @@ import dev.unzor.nexus.projects.application.service.ProjectLookupService;
 import dev.unzor.nexus.projects.domain.entity.Project;
 import dev.unzor.nexus.projects.domain.exception.ProjectNotFoundException;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -33,7 +34,8 @@ class ProjectModuleServiceTests {
     private final ProjectModuleRepository projectModuleRepository = mock(ProjectModuleRepository.class);
     private final ProjectLookupService projectLookupService = mock(ProjectLookupService.class);
     private final ProjectModuleService service =
-            new ProjectModuleService(projectModuleRepository, projectLookupService, noopTransactionManager());
+            new ProjectModuleService(projectModuleRepository, projectLookupService, noopTransactionManager(),
+                    mock(ApplicationEventPublisher.class));
 
     @Test
     void listForProjectReturnsAllModulesWithDefaultFlagsForFreshProject() {
@@ -94,7 +96,7 @@ class ProjectModuleServiceTests {
         when(projectModuleRepository.save(any(ProjectModule.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        ProjectModuleStatus result = service.setEnabled(projectId, NexusModule.NOTIFY, true);
+        ProjectModuleStatus result = service.setEnabled(projectId, NexusModule.NOTIFY, true, UUID.randomUUID());
 
         assertThat(result.key()).isEqualTo("notify");
         assertThat(result.enabled()).isTrue();
@@ -111,7 +113,7 @@ class ProjectModuleServiceTests {
         when(projectModuleRepository.save(any(ProjectModule.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        ProjectModuleStatus result = service.setEnabled(projectId, NexusModule.STORAGE, true);
+        ProjectModuleStatus result = service.setEnabled(projectId, NexusModule.STORAGE, true, UUID.randomUUID());
 
         assertThat(result.enabled()).isTrue();
         verify(projectModuleRepository).save(any(ProjectModule.class));
@@ -123,7 +125,7 @@ class ProjectModuleServiceTests {
         when(projectLookupService.requireById(projectId))
                 .thenThrow(new ProjectNotFoundException(projectId.toString()));
 
-        assertThatThrownBy(() -> service.setEnabled(projectId, NexusModule.VAULT, true))
+        assertThatThrownBy(() -> service.setEnabled(projectId, NexusModule.VAULT, true, UUID.randomUUID()))
                 .isInstanceOf(ProjectNotFoundException.class);
         verify(projectModuleRepository, never()).save(any(ProjectModule.class));
     }
@@ -143,7 +145,7 @@ class ProjectModuleServiceTests {
                 .thenThrow(new DataIntegrityViolationException("uk_project_module_project_module"))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        ProjectModuleStatus result = service.setEnabled(projectId, NexusModule.VAULT, true);
+        ProjectModuleStatus result = service.setEnabled(projectId, NexusModule.VAULT, true, UUID.randomUUID());
 
         assertThat(result.enabled()).isTrue();
         assertThat(winnerRow.isEnabled()).isTrue();

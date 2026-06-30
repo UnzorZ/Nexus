@@ -58,7 +58,8 @@ class ProjectModulesController {
         return projectModuleService.setEnabled(
                 projectId,
                 NexusModule.fromKey(moduleKey),
-                request.enabled()
+                request.enabled(),
+                principal.accountId()
         );
     }
 
