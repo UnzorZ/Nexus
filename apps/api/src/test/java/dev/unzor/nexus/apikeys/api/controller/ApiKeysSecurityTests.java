@@ -140,7 +140,7 @@ class ApiKeysSecurityTests {
 
     private CreatedKey extractKey(MvcResult result) throws Exception {
         JsonNode root = objectMapper.readTree(result.getResponse().getContentAsString());
-        return new CreatedKey(root.at("/summary/id").asText(), root.at("/key").asText());
+        return new CreatedKey(root.at("/id").asText(), root.at("/secret").asText());
     }
 
     private void addMember(String projectId, String email, ProjectMembershipRole role) {

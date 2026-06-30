@@ -251,7 +251,7 @@ export default function ProjectApiKeysPage() {
                     <TableCell className="font-medium">{key.name}</TableCell>
                     <TableCell>
                       <code className="font-mono text-xs text-muted-foreground">
-                        nxs_…_{key.keyPrefix}
+                        nxs_…_{key.prefix}
                       </code>
                     </TableCell>
                     <TableCell>
@@ -475,14 +475,14 @@ export default function ProjectApiKeysPage() {
           <div className="flex flex-col gap-3 py-1">
             <div className="flex items-center gap-2 rounded-md border bg-muted/40 p-3">
               <code className="flex-1 break-all font-mono text-xs">
-                {revealed?.key}
+                {revealed?.secret}
               </code>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  if (revealed?.key) {
-                    navigator.clipboard?.writeText(revealed.key);
+                  if (revealed?.secret) {
+                    navigator.clipboard?.writeText(revealed.secret);
                   }
                 }}
               >

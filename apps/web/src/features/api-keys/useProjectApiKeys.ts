@@ -69,6 +69,20 @@ function classify(
   return { actionError: fallback, fieldErrors: {} };
 }
 
+/** Crea un resumen sin secreto a partir de la respuesta flat de create/rotate. */
+function toSummary(created: ApiKeyCreated): ApiKeySummary {
+  return {
+    id: created.id,
+    name: created.name,
+    prefix: created.prefix,
+    status: created.status,
+    scopes: created.scopes,
+    expiresAt: created.expiresAt,
+    lastUsedAt: created.lastUsedAt,
+    createdAt: created.createdAt,
+  };
+}
+
 export function useProjectApiKeys(projectId: string): UseProjectApiKeysResult {
   const [keys, setKeys] = useState<ApiKeySummary[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -98,6 +112,10 @@ export function useProjectApiKeys(projectId: string): UseProjectApiKeysResult {
   }, [projectId]);
 
   useEffect(() => {
+    // Data fetch on mount: react-hooks/set-state-in-effect is overly strict for
+    // fetching (the established pattern across the codebase, e.g. useProjectModules,
+    // ProjectProvider). Broader repo lint debt is pre-existing and out of scope here.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, [load]);
 
@@ -114,7 +132,7 @@ export function useProjectApiKeys(projectId: string): UseProjectApiKeysResult {
       try {
         const token = await ensureCsrfToken();
         const created = await createApiKey(projectId, body, token);
-        setKeys((current) => [...(current ?? []), created.summary]);
+        setKeys((current) => [...(current ?? []), toSummary(created)]);
         return created;
       } catch (err) {
         const outcome = classify(err, "No se pudo crear la API key.");
@@ -170,7 +188,7 @@ export function useProjectApiKeys(projectId: string): UseProjectApiKeysResult {
             .map((k) =>
               k.id === keyId ? { ...k, status: "DISABLED" as const } : k,
             )
-            .concat(created.summary),
+            .concat(toSummary(created)),
         );
         return created;
       } catch (err) {

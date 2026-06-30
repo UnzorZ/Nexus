@@ -2,23 +2,27 @@ package dev.unzor.nexus.apikeys.application.service;
 
 import dev.unzor.nexus.apikeys.api.dto.ApiKeyCreated;
 import dev.unzor.nexus.apikeys.api.dto.ApiKeySummary;
+import dev.unzor.nexus.apikeys.application.events.ApiKeyAuditEvent;
 import dev.unzor.nexus.apikeys.domain.entity.ProjectApiKey;
 import dev.unzor.nexus.apikeys.domain.enums.ApiKeyStatus;
 import dev.unzor.nexus.apikeys.domain.exception.ApiKeyNotFoundException;
 import dev.unzor.nexus.apikeys.persistence.repository.ProjectApiKeyRepository;
 import dev.unzor.nexus.apikeys.security.ApiKeyHasher;
 import dev.unzor.nexus.projects.application.service.ProjectLookupService;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
  * Casos de uso de gestión de API keys de un proyecto (spec §9.3, §21.1). La
  * capa de seguridad está en {@link dev.unzor.nexus.apikeys.security.ApiKeyHasher}
- * y el secreto completo solo se devuelve al crear/rotar.
+ * y el secreto completo solo se devuelve al crear/rotar. Cada mutation emite un
+ * {@link ApiKeyAuditEvent} (ADR-0004) sin secretos.
  */
 @Service
 public class ProjectApiKeysService {
@@ -26,15 +30,18 @@ public class ProjectApiKeysService {
     private final ProjectApiKeyRepository repository;
     private final ApiKeyHasher hasher;
     private final ProjectLookupService projectLookupService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public ProjectApiKeysService(
             ProjectApiKeyRepository repository,
             ApiKeyHasher hasher,
-            ProjectLookupService projectLookupService
+            ProjectLookupService projectLookupService,
+            ApplicationEventPublisher eventPublisher
     ) {
         this.repository = repository;
         this.hasher = hasher;
         this.projectLookupService = projectLookupService;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional(readOnly = true)
@@ -58,7 +65,9 @@ public class ProjectApiKeysService {
         ProjectApiKey key = new ProjectApiKey(
                 projectId, name, generated.keyPrefix(), generated.keyHash(), scopes, expiresAt, creatorAccountId);
         repository.saveAndFlush(key);
-        return new ApiKeyCreated(ApiKeySummary.from(key), generated.fullKey());
+        audit("api_key.created", projectId, key.getId(), creatorAccountId,
+                Map.of("name", name, "prefix", generated.keyPrefix()));
+        return ApiKeyCreated.of(key, generated.fullKey());
     }
 
     @Transactional
@@ -67,10 +76,12 @@ public class ProjectApiKeysService {
             UUID keyId,
             String name,
             ApiKeyStatus status,
-            Instant expiresAt
+            Instant expiresAt,
+            UUID actorAccountId
     ) {
         projectLookupService.requireById(projectId);
         ProjectApiKey key = requireKey(projectId, keyId);
+        ApiKeyStatus previousStatus = key.getStatus();
         key.rename(name);
         if (status == ApiKeyStatus.DISABLED) {
             key.disable();
@@ -78,7 +89,18 @@ public class ProjectApiKeysService {
             key.enable();
         }
         key.expireAt(expiresAt);
-        return ApiKeySummary.from(repository.save(key));
+        ApiKeySummary summary = ApiKeySummary.from(repository.save(key));
+
+        String action;
+        if (status == ApiKeyStatus.DISABLED && previousStatus != ApiKeyStatus.DISABLED) {
+            action = "api_key.disabled";
+        } else if (status == ApiKeyStatus.ACTIVE && previousStatus == ApiKeyStatus.DISABLED) {
+            action = "api_key.enabled";
+        } else {
+            action = "api_key.updated";
+        }
+        audit(action, projectId, keyId, actorAccountId, Map.of("name", name));
+        return summary;
     }
 
     /**
@@ -86,7 +108,7 @@ public class ProjectApiKeysService {
      * devuelve una vez) y deshabilita la anterior.
      */
     @Transactional
-    public ApiKeyCreated rotate(UUID projectId, UUID keyId) {
+    public ApiKeyCreated rotate(UUID projectId, UUID keyId, UUID actorAccountId) {
         String slug = projectLookupService.requireSlug(projectId);
         ProjectApiKey old = requireKey(projectId, keyId);
         ApiKeyHasher.GeneratedKey generated = hasher.generate(slug);
@@ -101,19 +123,29 @@ public class ProjectApiKeysService {
         repository.saveAndFlush(replacement);
         old.disable();
         repository.save(old);
-        return new ApiKeyCreated(ApiKeySummary.from(replacement), generated.fullKey());
+        audit("api_key.rotated", projectId, replacement.getId(), actorAccountId,
+                Map.of("name", replacement.getName(), "prefix", generated.keyPrefix(),
+                        "rotatedKeyId", keyId.toString()));
+        return ApiKeyCreated.of(replacement, generated.fullKey());
     }
 
     @Transactional
-    public void delete(UUID projectId, UUID keyId) {
+    public void delete(UUID projectId, UUID keyId, UUID actorAccountId) {
         projectLookupService.requireById(projectId);
         ProjectApiKey key = requireKey(projectId, keyId);
         repository.delete(key);
+        audit("api_key.deleted", projectId, keyId, actorAccountId, Map.of("name", key.getName()));
     }
 
     private ProjectApiKey requireKey(UUID projectId, UUID keyId) {
         return repository.findByProjectIdAndId(projectId, keyId)
                 .orElseThrow(() -> new ApiKeyNotFoundException(
                         "API key " + keyId + " not found in project " + projectId + "."));
+    }
+
+    private void audit(String action, UUID projectId, UUID keyId, UUID actorId, Map<String, Object> metadata) {
+        eventPublisher.publishEvent(new ApiKeyAuditEvent(
+                action, projectId, keyId, "NEXUS_ACCOUNT",
+                actorId == null ? null : actorId.toString(), null, metadata));
     }
 }

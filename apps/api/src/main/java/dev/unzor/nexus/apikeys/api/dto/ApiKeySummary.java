@@ -14,7 +14,7 @@ import java.util.UUID;
 public record ApiKeySummary(
         UUID id,
         String name,
-        String keyPrefix,
+        String prefix,
         ApiKeyStatus status,
         List<String> scopes,
         Instant expiresAt,

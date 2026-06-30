@@ -2,6 +2,7 @@ package dev.unzor.nexus.apikeys.application.service;
 
 import dev.unzor.nexus.apikeys.api.dto.ApiKeyCreated;
 import dev.unzor.nexus.apikeys.api.dto.ApiKeySummary;
+import dev.unzor.nexus.apikeys.application.events.ApiKeyAuditEvent;
 import dev.unzor.nexus.apikeys.domain.entity.ProjectApiKey;
 import dev.unzor.nexus.apikeys.domain.enums.ApiKeyStatus;
 import dev.unzor.nexus.apikeys.domain.exception.ApiKeyNotFoundException;
@@ -9,6 +10,7 @@ import dev.unzor.nexus.apikeys.persistence.repository.ProjectApiKeyRepository;
 import dev.unzor.nexus.apikeys.security.ApiKeyHasher;
 import dev.unzor.nexus.projects.application.service.ProjectLookupService;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.Instant;
 import java.util.List;
@@ -27,11 +29,12 @@ class ProjectApiKeysServiceTests {
     private final ProjectApiKeyRepository repository = mock(ProjectApiKeyRepository.class);
     private final ApiKeyHasher hasher = new ApiKeyHasher();
     private final ProjectLookupService projectLookupService = mock(ProjectLookupService.class);
+    private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
     private final ProjectApiKeysService service =
-            new ProjectApiKeysService(repository, hasher, projectLookupService);
+            new ProjectApiKeysService(repository, hasher, projectLookupService, eventPublisher);
 
     @Test
-    void createReturnsCreatedKeyWithSecret() {
+    void createReturnsFlatCreatedKeyWithSecret() {
         UUID projectId = UUID.randomUUID();
         when(projectLookupService.requireSlug(projectId)).thenReturn("shop");
         when(repository.saveAndFlush(any(ProjectApiKey.class))).thenAnswer(i -> i.getArgument(0));
@@ -39,11 +42,12 @@ class ProjectApiKeysServiceTests {
         ApiKeyCreated created = service.create(
                 projectId, "ci", List.of("registry:heartbeat"), null, UUID.randomUUID());
 
-        assertThat(created.key()).startsWith("nxs_shop_");
-        assertThat(created.summary().name()).isEqualTo("ci");
-        assertThat(created.summary().scopes()).containsExactly("registry:heartbeat");
-        assertThat(created.summary().status()).isEqualTo(ApiKeyStatus.ACTIVE);
+        assertThat(created.secret()).startsWith("nxs_shop_");
+        assertThat(created.name()).isEqualTo("ci");
+        assertThat(created.scopes()).containsExactly("registry:heartbeat");
+        assertThat(created.status()).isEqualTo(ApiKeyStatus.ACTIVE);
         verify(repository).saveAndFlush(any(ProjectApiKey.class));
+        verify(eventPublisher).publishEvent(any(ApiKeyAuditEvent.class));
     }
 
     @Test
@@ -58,11 +62,11 @@ class ProjectApiKeysServiceTests {
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).id()).isEqualTo(keyId);
-        assertThat(result.get(0).keyPrefix()).isEqualTo("prefix");
+        assertThat(result.get(0).prefix()).isEqualTo("prefix");
     }
 
     @Test
-    void updateRenamesDisablesAndSetsExpiry() {
+    void updateDisablesAndEmitsDisabledAudit() {
         UUID projectId = UUID.randomUUID();
         UUID keyId = UUID.randomUUID();
         ProjectApiKey key = withId(new ProjectApiKey(
@@ -71,13 +75,12 @@ class ProjectApiKeysServiceTests {
         when(repository.save(any(ProjectApiKey.class))).thenAnswer(i -> i.getArgument(0));
         Instant expiry = Instant.now().plusSeconds(3600);
 
-        ApiKeySummary updated = service.update(projectId, keyId, "renamed", ApiKeyStatus.DISABLED, expiry);
+        ApiKeySummary updated = service.update(projectId, keyId, "renamed", ApiKeyStatus.DISABLED, expiry,
+                UUID.randomUUID());
 
-        assertThat(updated.name()).isEqualTo("renamed");
         assertThat(updated.status()).isEqualTo(ApiKeyStatus.DISABLED);
-        assertThat(key.getName()).isEqualTo("renamed");
         assertThat(key.getStatus()).isEqualTo(ApiKeyStatus.DISABLED);
-        assertThat(key.getExpiresAt()).isEqualTo(expiry);
+        verify(eventPublisher).publishEvent(any(ApiKeyAuditEvent.class));
     }
 
     @Test
@@ -91,12 +94,13 @@ class ProjectApiKeysServiceTests {
         when(projectLookupService.requireSlug(projectId)).thenReturn("shop");
         when(repository.saveAndFlush(any(ProjectApiKey.class))).thenAnswer(i -> i.getArgument(0));
 
-        ApiKeyCreated created = service.rotate(projectId, keyId);
+        ApiKeyCreated created = service.rotate(projectId, keyId, UUID.randomUUID());
 
-        assertThat(created.key()).startsWith("nxs_shop_");
-        assertThat(created.summary().scopes()).containsExactly("a:b");
+        assertThat(created.secret()).startsWith("nxs_shop_");
+        assertThat(created.scopes()).containsExactly("a:b");
         assertThat(old.getStatus()).isEqualTo(ApiKeyStatus.DISABLED);
         verify(repository).save(old);
+        verify(eventPublisher).publishEvent(any(ApiKeyAuditEvent.class));
     }
 
     @Test
@@ -107,9 +111,10 @@ class ProjectApiKeysServiceTests {
                 projectId, "ci", "prefix", "hash", List.of(), null, null), keyId);
         when(repository.findByProjectIdAndId(projectId, keyId)).thenReturn(Optional.of(key));
 
-        service.delete(projectId, keyId);
+        service.delete(projectId, keyId, UUID.randomUUID());
 
         verify(repository).delete(key);
+        verify(eventPublisher).publishEvent(any(ApiKeyAuditEvent.class));
     }
 
     @Test
@@ -118,7 +123,7 @@ class ProjectApiKeysServiceTests {
         UUID keyId = UUID.randomUUID();
         when(repository.findByProjectIdAndId(projectId, keyId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.update(projectId, keyId, "x", ApiKeyStatus.ACTIVE, null))
+        assertThatThrownBy(() -> service.update(projectId, keyId, "x", ApiKeyStatus.ACTIVE, null, UUID.randomUUID()))
                 .isInstanceOf(ApiKeyNotFoundException.class);
     }
 
