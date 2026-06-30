@@ -21,6 +21,7 @@ public record ApiKeyAuditEvent(
         String actorType,
         String actorId,
         String reason,
-        Map<String, Object> metadata
+        Map<String, Object> metadata,
+        String traceId
 ) {
 }

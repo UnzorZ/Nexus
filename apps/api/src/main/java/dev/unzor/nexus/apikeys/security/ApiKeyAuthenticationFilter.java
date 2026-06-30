@@ -8,6 +8,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.MDC;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -90,7 +91,7 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
             String reason
     ) {
         eventPublisher.publishEvent(new ApiKeyAuditEvent(
-                auditAction, projectId, keyId, "ANONYMOUS", null, reason, Map.of()));
+                auditAction, projectId, keyId, "ANONYMOUS", null, reason, Map.of(), MDC.get("traceId")));
         problemWriter.write(response, status, code, title, detail);
     }
 }

@@ -21,11 +21,11 @@ public record ApiKeySummary(
         Instant lastUsedAt,
         Instant createdAt
 ) {
-    public static ApiKeySummary from(ProjectApiKey key) {
+    public static ApiKeySummary from(ProjectApiKey key, String displayPrefix) {
         return new ApiKeySummary(
                 key.getId(),
                 key.getName(),
-                key.getKeyPrefix(),
+                displayPrefix,
                 key.getStatus(),
                 key.getScopes(),
                 key.getExpiresAt(),

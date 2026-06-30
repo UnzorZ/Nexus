@@ -23,11 +23,11 @@ public record ApiKeyCreated(
         Instant lastUsedAt,
         Instant createdAt
 ) {
-    public static ApiKeyCreated of(ProjectApiKey key, String secret) {
+    public static ApiKeyCreated of(ProjectApiKey key, String displayPrefix, String secret) {
         return new ApiKeyCreated(
                 key.getId(),
                 key.getName(),
-                key.getKeyPrefix(),
+                displayPrefix,
                 secret,
                 key.getStatus(),
                 key.getScopes(),

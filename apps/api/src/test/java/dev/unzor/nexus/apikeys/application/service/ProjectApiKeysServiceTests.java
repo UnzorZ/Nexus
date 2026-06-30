@@ -55,14 +55,15 @@ class ProjectApiKeysServiceTests {
         UUID projectId = UUID.randomUUID();
         UUID keyId = UUID.randomUUID();
         ProjectApiKey key = withId(new ProjectApiKey(
-                projectId, "ci", "prefix", "hash", List.of("registry:heartbeat"), null, null), keyId);
+                projectId, "ci", "partial123", "hash", List.of("registry:heartbeat"), null, null), keyId);
+        when(projectLookupService.requireSlug(projectId)).thenReturn("shop");
         when(repository.findAllByProjectId(projectId)).thenReturn(List.of(key));
 
         List<ApiKeySummary> result = service.listForProject(projectId);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).id()).isEqualTo(keyId);
-        assertThat(result.get(0).prefix()).isEqualTo("prefix");
+        assertThat(result.get(0).prefix()).isEqualTo("nxs_shop_partial123");
     }
 
     @Test
@@ -72,6 +73,7 @@ class ProjectApiKeysServiceTests {
         ProjectApiKey key = withId(new ProjectApiKey(
                 projectId, "ci", "prefix", "hash", List.of(), null, null), keyId);
         when(repository.findByProjectIdAndId(projectId, keyId)).thenReturn(Optional.of(key));
+        when(projectLookupService.requireSlug(projectId)).thenReturn("shop");
         when(repository.save(any(ProjectApiKey.class))).thenAnswer(i -> i.getArgument(0));
         Instant expiry = Instant.now().plusSeconds(3600);
 
