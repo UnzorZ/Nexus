@@ -22,6 +22,7 @@ public record AuditEventView(
         String actorId,
         String actorDisplayName,
         String actorEmail,
+        Boolean actorAdmin,
         String ip,
         String userAgent,
         String traceId,
@@ -30,7 +31,7 @@ public record AuditEventView(
 ) {
 
     public static AuditEventView from(AuditLogEntry entry) {
-        return from(entry, null, null);
+        return from(entry, null, null, null);
     }
 
     /**
@@ -40,7 +41,10 @@ public record AuditEventView(
      * UI los trata mostrando el actor crudo o un guion.
      */
     public static AuditEventView from(
-            AuditLogEntry entry, String actorDisplayName, String actorEmail) {
+            AuditLogEntry entry,
+            String actorDisplayName,
+            String actorEmail,
+            Boolean actorAdmin) {
         return new AuditEventView(
                 entry.getId(),
                 entry.getProjectId(),
@@ -52,6 +56,7 @@ public record AuditEventView(
                 entry.getActorId(),
                 actorDisplayName,
                 actorEmail,
+                actorAdmin,
                 entry.getIp(),
                 entry.getUserAgent(),
                 entry.getTraceId(),

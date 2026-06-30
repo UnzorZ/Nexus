@@ -16,6 +16,7 @@ public record AccountSummary(
         String email,
         String displayName,
         boolean mfaEnabled,
+        boolean instanceAdmin,
         Instant lastLoginAt
 ) {
 
@@ -25,6 +26,7 @@ public record AccountSummary(
                 account.getEmail(),
                 account.getDisplayName(),
                 account.isMfaEnabled(),
+                account.isInstanceAdmin(),
                 account.getLastLoginAt()
         );
     }
