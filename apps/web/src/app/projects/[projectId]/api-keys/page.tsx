@@ -35,6 +35,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Stagger } from "@/components/dashboard/anim";
 import {
   EmptyState,
@@ -250,9 +256,7 @@ export default function ProjectApiKeysPage() {
                   <TableRow key={key.id}>
                     <TableCell className="font-medium">{key.name}</TableCell>
                     <TableCell>
-                      <code className="font-mono text-xs text-muted-foreground">
-                        {key.prefix}
-                      </code>
+                      <KeyPrefix prefix={key.prefix} />
                     </TableCell>
                     <TableCell>
                       {key.status === "ACTIVE" ? (
@@ -534,5 +538,38 @@ export default function ProjectApiKeysPage() {
         </DialogContent>
       </Dialog>
     </Stagger>
+  );
+}
+
+/**
+ * Muestra el prefijo de una API key ({@code nxs_<slug>_<partial>}) con un
+ * resaltado suave en violeta sobre el fragmento que identifica la key (lo que
+ * cambia entre keys); la parte estructural {@code nxs_<slug>_} va en gris. El
+ * tooltip va solo sobre ese fragmento para dejar claro que ésa es la parte que
+ * identifica la key en toda la web y el SDK. Se divide por el segundo guión bajo
+ * (el slug no lleva {@code _}, pero el fragmento base64url sí puede).
+ */
+function KeyPrefix({ prefix }: { prefix: string }) {
+  const firstUnderscore = prefix.indexOf("_");
+  const separator =
+    firstUnderscore >= 0 ? prefix.indexOf("_", firstUnderscore + 1) : -1;
+  const structural = separator >= 0 ? prefix.slice(0, separator + 1) : "";
+  const fragment = separator >= 0 ? prefix.slice(separator + 1) : prefix;
+  return (
+    <code className="font-mono text-xs">
+      <span className="text-muted-foreground">{structural}</span>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="cursor-help text-violet-600 dark:text-violet-300">
+              {fragment}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>
+            This fragment identifies the key across the web app and SDK.
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </code>
   );
 }

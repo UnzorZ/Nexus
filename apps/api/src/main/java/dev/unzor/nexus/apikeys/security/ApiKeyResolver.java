@@ -52,6 +52,6 @@ public class ApiKeyResolver {
         }
         matched.touchUsed();
         repository.save(matched);
-        return new ResolvedApiKey(matched.getProjectId(), matched.getId(), matched.getScopes());
+        return new ResolvedApiKey(matched.getProjectId(), matched.getId(), matched.getKeyPrefix(), matched.getScopes());
     }
 }

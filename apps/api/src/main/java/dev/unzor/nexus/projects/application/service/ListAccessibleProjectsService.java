@@ -14,8 +14,12 @@ import java.util.UUID;
 
 /**
  * Caso de uso para listar los proyectos a los que una cuenta Nexus tiene
- * acceso. Los administradores de instancia ven todos los proyectos; el resto
- * solo aquellos en los que son miembros activos.
+ * acceso: aquellos en los que es miembro activo (ser OWNER es una membresía, así
+ * que el creador ve su propio proyecto). Los administradores de instancia siguen
+ * pudiendo ABRIR cualquier proyecto por URL/slug directo (requireAccess hace
+ * bypass del chequeo de membresía), pero aquí solo aparecen los proyectos de los
+ * que son miembros — el picker no se llena con todos los proyectos del sistema
+ * por el mero hecho de ser instance admin.
  */
 @Service
 public class ListAccessibleProjectsService {
@@ -32,14 +36,7 @@ public class ListAccessibleProjectsService {
     }
 
     @Transactional(readOnly = true)
-    public List<ProjectSummary> listAccessible(UUID accountId, boolean isInstanceAdmin) {
-        if (isInstanceAdmin) {
-            return projectRepository.findAll().stream()
-                    .map(ProjectSummary::from)
-                    .sorted(BY_NAME)
-                    .toList();
-        }
-
+    public List<ProjectSummary> listAccessible(UUID accountId) {
         List<UUID> projectIds = membershipRepository
                 .findAllByNexusAccountIdAndStatus(accountId, ProjectMembershipStatus.ACTIVE)
                 .stream()
