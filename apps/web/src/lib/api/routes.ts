@@ -105,6 +105,12 @@ export const apiRoutes = {
             `/api/panel/v1/projects/${encodeURIComponent(projectId)}/heartbeats`,
           ),
       },
+      audit: {
+        root: (projectId: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/audit`,
+          ),
+      },
     },
   },
 } as const;
