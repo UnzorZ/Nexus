@@ -8,6 +8,7 @@ import dev.unzor.nexus.apikeys.domain.enums.ApiKeyStatus;
 import dev.unzor.nexus.apikeys.domain.exception.ApiKeyNotFoundException;
 import dev.unzor.nexus.apikeys.persistence.repository.ProjectApiKeyRepository;
 import dev.unzor.nexus.apikeys.security.ApiKeyHasher;
+import dev.unzor.nexus.apikeys.security.InstanceTokenService;
 import dev.unzor.nexus.projects.application.service.ProjectLookupService;
 import org.slf4j.MDC;
 import org.springframework.context.ApplicationEventPublisher;
@@ -31,17 +32,20 @@ public class ProjectApiKeysService {
     private final ProjectApiKeyRepository repository;
     private final ApiKeyHasher hasher;
     private final ProjectLookupService projectLookupService;
+    private final InstanceTokenService instanceTokenService;
     private final ApplicationEventPublisher eventPublisher;
 
     public ProjectApiKeysService(
             ProjectApiKeyRepository repository,
             ApiKeyHasher hasher,
             ProjectLookupService projectLookupService,
+            InstanceTokenService instanceTokenService,
             ApplicationEventPublisher eventPublisher
     ) {
         this.repository = repository;
         this.hasher = hasher;
         this.projectLookupService = projectLookupService;
+        this.instanceTokenService = instanceTokenService;
         this.eventPublisher = eventPublisher;
     }
 
@@ -96,6 +100,7 @@ public class ProjectApiKeysService {
 
         String action;
         if (status == ApiKeyStatus.DISABLED && previousStatus != ApiKeyStatus.DISABLED) {
+            instanceTokenService.revokeFor(keyId);
             action = "api_key.disabled";
         } else if (status == ApiKeyStatus.ACTIVE && previousStatus == ApiKeyStatus.DISABLED) {
             action = "api_key.enabled";
@@ -126,6 +131,8 @@ public class ProjectApiKeysService {
         repository.saveAndFlush(replacement);
         old.disable();
         repository.save(old);
+        // La rotación deshabilita la key anterior: revoca sus instance tokens (P2).
+        instanceTokenService.revokeFor(keyId);
         String displayPrefix = "nxs_" + slug + "_" + generated.keyPrefix();
         audit("api_key.rotated", projectId, replacement.getId(), actorAccountId,
                 Map.of("name", replacement.getName(), "prefix", displayPrefix,
@@ -138,6 +145,8 @@ public class ProjectApiKeysService {
         projectLookupService.requireById(projectId);
         ProjectApiKey key = requireKey(projectId, keyId);
         repository.delete(key);
+        // La key deja de existir: revoca sus instance tokens (P2).
+        instanceTokenService.revokeFor(keyId);
         audit("api_key.deleted", projectId, keyId, actorAccountId, Map.of("name", key.getName()));
     }
 

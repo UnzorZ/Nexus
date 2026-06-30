@@ -14,6 +14,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -167,6 +168,61 @@ class RegistryHeartbeatRuntimeTests {
                 .andExpect(jsonPath("$.code").value("missing_scope"));
     }
 
+    @Test
+    void registerRejectsInstanceToken() throws Exception {
+        String ownerEmail = unique("reg-tok");
+        registerAccount(ownerEmail);
+        LoginSession owner = login(ownerEmail);
+        String projectId = createProject(owner, randomSlug("reg"));
+        String key = createKey(owner, projectId,
+                "{\"name\":\"CI\",\"scopes\":[\"registry:heartbeat\"],\"expiresAt\":null}");
+
+        // Bootstrap con la key cruda → token.
+        MvcResult reg = mockMvc.perform(post("/api/v1/registry/register").header("X-Nexus-Api-Key", key))
+                .andExpect(status().isOk())
+                .andReturn();
+        String token = objectMapper.readTree(reg.getResponse().getContentAsString()).at("/token").asText();
+
+        // Renovar a partir del token (sin la key) se rechaza — no se puede perpetuar un token.
+        mockMvc.perform(post("/api/v1/registry/register").header("X-Nexus-Instance-Token", token))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("raw_api_key_required"));
+    }
+
+    @Test
+    void heartbeatRejectsTokenAfterKeyDisabled() throws Exception {
+        String ownerEmail = unique("tok-rev");
+        registerAccount(ownerEmail);
+        LoginSession owner = login(ownerEmail);
+        String projectId = createProject(owner, randomSlug("tok"));
+        String key = createKey(owner, projectId,
+                "{\"name\":\"CI\",\"scopes\":[\"registry:heartbeat\"],\"expiresAt\":null}");
+
+        MvcResult reg = mockMvc.perform(post("/api/v1/registry/register").header("X-Nexus-Api-Key", key))
+                .andExpect(status().isOk())
+                .andReturn();
+        String token = objectMapper.readTree(reg.getResponse().getContentAsString()).at("/token").asText();
+
+        // El token funciona antes de tocar la key.
+        mockMvc.perform(post("/api/v1/registry/heartbeat")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Nexus-Instance-Token", token)
+                        .content(validBody()))
+                .andExpect(status().isOk());
+
+        // Deshabilitar la key por panel revoca sus tokens (P2).
+        String keyId = firstKeyId(owner, projectId);
+        disableKey(owner, projectId, keyId);
+
+        // El mismo token ya no vale → 401 invalid_instance_token (revocación inmediata).
+        mockMvc.perform(post("/api/v1/registry/heartbeat")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Nexus-Instance-Token", token)
+                        .content(validBody()))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("invalid_instance_token"));
+    }
+
     // --- helpers -----------------------------------------------------------------
 
     private static String validBody() {
@@ -183,6 +239,24 @@ class RegistryHeartbeatRuntimeTests {
                 .andExpect(status().isCreated())
                 .andReturn();
         return objectMapper.readTree(result.getResponse().getContentAsString()).at("/secret").asText();
+    }
+
+    private String firstKeyId(LoginSession owner, String projectId) throws Exception {
+        MvcResult result = mockMvc.perform(get("/api/panel/v1/projects/{projectId}/api-keys", projectId)
+                        .header("X-XSRF-TOKEN", owner.csrfToken())
+                        .cookie(owner.csrfCookie(), owner.sessionCookie()))
+                .andExpect(status().isOk())
+                .andReturn();
+        return objectMapper.readTree(result.getResponse().getContentAsString()).at("/0/id").asText();
+    }
+
+    private void disableKey(LoginSession owner, String projectId, String keyId) throws Exception {
+        mockMvc.perform(patch("/api/panel/v1/projects/{projectId}/api-keys/{keyId}", projectId, keyId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-XSRF-TOKEN", owner.csrfToken())
+                        .cookie(owner.csrfCookie(), owner.sessionCookie())
+                        .content("{\"name\":\"CI\",\"status\":\"DISABLED\",\"expiresAt\":null}"))
+                .andExpect(status().isOk());
     }
 
     private String createProject(LoginSession owner, String slug) throws Exception {

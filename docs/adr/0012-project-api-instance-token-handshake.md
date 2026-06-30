@@ -76,5 +76,27 @@ low-frequency calls), so the handshake is an **optimization, not a replacement**
 - **Backwards compatible:** existing `X-Nexus-Api-Key` callers keep working; the
   SDK adopts the handshake opportunistically.
 
+## Hardening (follow-up)
+
+Two gaps surfaced after the initial implementation and are now closed:
+
+1. **`/register` requires the raw API key.** The `/api/v1/**` filter authenticates
+   the instance token *before* the raw key, so left unchecked `/register` could be
+   called with a token — letting a client that holds one token renew forever
+   without ever re-presenting the long-lived key, defeating rotation/revocation.
+   The filter now marks **how** a request authenticated (`API_KEY` vs
+   `INSTANCE_TOKEN` on `Authentication.details`); `/register` rejects
+   token-authenticated requests with `401 raw_api_key_required`. `/heartbeat`
+   still accepts both.
+
+2. **Tokens are revoked immediately on key lifecycle changes.** The token store
+   only knew the Redis payload, so a token stayed valid up to its TTL even after
+   its key was disabled/rotated/deleted — contradicting the revocation promise
+   above. `mint` now indexes each token under its `keyId` (`itok:bykey:<keyId>`
+   set), and `ProjectApiKeysService` calls `revokeFor(keyId)` on disable / rotate
+   / delete to wipe outstanding tokens. `/heartbeat` stays Redis-only (no
+   per-beat key-state read), so the ADR's scalability win is preserved; only the
+   key-lifecycle path touches the index.
+
 This is implemented incrementally on the heartbeat endpoint; other high-frequency
 project-API endpoints adopt the same pattern when they appear.
