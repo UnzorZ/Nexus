@@ -2,7 +2,6 @@ package dev.unzor.nexus.apikeys.application.service;
 
 import dev.unzor.nexus.apikeys.api.dto.ApiKeyCreated;
 import dev.unzor.nexus.apikeys.api.dto.ApiKeySummary;
-import dev.unzor.nexus.apikeys.application.events.ApiKeyAuditEvent;
 import dev.unzor.nexus.apikeys.domain.entity.ProjectApiKey;
 import dev.unzor.nexus.apikeys.domain.enums.ApiKeyStatus;
 import dev.unzor.nexus.apikeys.domain.exception.ApiKeyNotFoundException;
@@ -10,6 +9,7 @@ import dev.unzor.nexus.apikeys.persistence.repository.ProjectApiKeyRepository;
 import dev.unzor.nexus.apikeys.security.ApiKeyHasher;
 import dev.unzor.nexus.apikeys.security.InstanceTokenService;
 import dev.unzor.nexus.projects.application.service.ProjectLookupService;
+import dev.unzor.nexus.shared.audit.AuditEvent;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationEventPublisher;
 
@@ -49,7 +49,7 @@ class ProjectApiKeysServiceTests {
         assertThat(created.scopes()).containsExactly("registry:heartbeat");
         assertThat(created.status()).isEqualTo(ApiKeyStatus.ACTIVE);
         verify(repository).saveAndFlush(any(ProjectApiKey.class));
-        verify(eventPublisher).publishEvent(any(ApiKeyAuditEvent.class));
+        verify(eventPublisher).publishEvent(any(AuditEvent.class));
     }
 
     @Test
@@ -85,7 +85,7 @@ class ProjectApiKeysServiceTests {
         assertThat(updated.status()).isEqualTo(ApiKeyStatus.DISABLED);
         assertThat(key.getStatus()).isEqualTo(ApiKeyStatus.DISABLED);
         verify(instanceTokenService).revokeFor(keyId);
-        verify(eventPublisher).publishEvent(any(ApiKeyAuditEvent.class));
+        verify(eventPublisher).publishEvent(any(AuditEvent.class));
     }
 
     @Test
@@ -106,7 +106,7 @@ class ProjectApiKeysServiceTests {
         assertThat(old.getStatus()).isEqualTo(ApiKeyStatus.DISABLED);
         verify(repository).save(old);
         verify(instanceTokenService).revokeFor(keyId);
-        verify(eventPublisher).publishEvent(any(ApiKeyAuditEvent.class));
+        verify(eventPublisher).publishEvent(any(AuditEvent.class));
     }
 
     @Test
@@ -121,7 +121,7 @@ class ProjectApiKeysServiceTests {
 
         verify(repository).delete(key);
         verify(instanceTokenService).revokeFor(keyId);
-        verify(eventPublisher).publishEvent(any(ApiKeyAuditEvent.class));
+        verify(eventPublisher).publishEvent(any(AuditEvent.class));
     }
 
     @Test

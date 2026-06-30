@@ -10,6 +10,7 @@ import dev.unzor.nexus.projects.domain.exception.LastOwnerProtectionException;
 import dev.unzor.nexus.projects.domain.exception.MembershipNotFoundException;
 import dev.unzor.nexus.projects.persistence.repository.ProjectMembershipRepository;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -27,7 +28,7 @@ class ChangeMemberRoleServiceTests {
     private final ProjectMembershipRepository membershipRepository = mock(ProjectMembershipRepository.class);
     private final AccountDirectory accountDirectory = mock(AccountDirectory.class);
     private final ChangeMemberRoleService service =
-            new ChangeMemberRoleService(membershipRepository, accountDirectory);
+            new ChangeMemberRoleService(membershipRepository, accountDirectory, mock(ApplicationEventPublisher.class));
 
     @Test
     void changeRoleUpdatesRole() {
@@ -42,7 +43,7 @@ class ChangeMemberRoleServiceTests {
         when(membershipRepository.save(any(ProjectMembership.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        MembershipDetails result = service.changeRole(projectId, membershipId, ProjectMembershipRole.ADMIN);
+        MembershipDetails result = service.changeRole(projectId, membershipId, ProjectMembershipRole.ADMIN, UUID.randomUUID());
 
         verify(membershipRepository).findForUpdateByProjectId(projectId);
         assertThat(membership.getRole()).isEqualTo(ProjectMembershipRole.ADMIN);
@@ -59,7 +60,7 @@ class ChangeMemberRoleServiceTests {
         when(membershipRepository.countByProjectIdAndRoleAndStatus(
                 projectId, ProjectMembershipRole.OWNER, ProjectMembershipStatus.ACTIVE)).thenReturn(1L);
 
-        assertThatThrownBy(() -> service.changeRole(projectId, membershipId, ProjectMembershipRole.ADMIN))
+        assertThatThrownBy(() -> service.changeRole(projectId, membershipId, ProjectMembershipRole.ADMIN, UUID.randomUUID()))
                 .isInstanceOf(LastOwnerProtectionException.class);
         assertThat(owner.getRole()).isEqualTo(ProjectMembershipRole.OWNER);
         verify(membershipRepository, never()).save(any(ProjectMembership.class));
@@ -79,7 +80,7 @@ class ChangeMemberRoleServiceTests {
         when(membershipRepository.save(any(ProjectMembership.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        service.changeRole(projectId, membershipId, ProjectMembershipRole.ADMIN);
+        service.changeRole(projectId, membershipId, ProjectMembershipRole.ADMIN, UUID.randomUUID());
 
         assertThat(owner.getRole()).isEqualTo(ProjectMembershipRole.ADMIN);
     }
@@ -90,7 +91,7 @@ class ChangeMemberRoleServiceTests {
         UUID membershipId = UUID.randomUUID();
         when(membershipRepository.findByProjectIdAndId(projectId, membershipId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.changeRole(projectId, membershipId, ProjectMembershipRole.ADMIN))
+        assertThatThrownBy(() -> service.changeRole(projectId, membershipId, ProjectMembershipRole.ADMIN, UUID.randomUUID()))
                 .isInstanceOf(MembershipNotFoundException.class);
     }
 }

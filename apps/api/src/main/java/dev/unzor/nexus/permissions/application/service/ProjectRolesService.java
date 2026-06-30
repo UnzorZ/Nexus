@@ -8,7 +8,10 @@ import dev.unzor.nexus.permissions.domain.exception.RoleNotFoundException;
 import dev.unzor.nexus.permissions.persistence.repository.ProjectRolePermissionRepository;
 import dev.unzor.nexus.permissions.persistence.repository.ProjectRoleRepository;
 import dev.unzor.nexus.projects.application.service.ProjectLookupService;
+import dev.unzor.nexus.shared.audit.AuditEvent;
+import dev.unzor.nexus.shared.audit.AuditOutcome;
 import org.hibernate.exception.ConstraintViolationException;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +21,7 @@ import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -33,15 +37,18 @@ public class ProjectRolesService {
     private final ProjectRoleRepository roleRepository;
     private final ProjectRolePermissionRepository rolePermissionRepository;
     private final ProjectLookupService projectLookupService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public ProjectRolesService(
             ProjectRoleRepository roleRepository,
             ProjectRolePermissionRepository rolePermissionRepository,
-            ProjectLookupService projectLookupService
+            ProjectLookupService projectLookupService,
+            ApplicationEventPublisher eventPublisher
     ) {
         this.roleRepository = roleRepository;
         this.rolePermissionRepository = rolePermissionRepository;
         this.projectLookupService = projectLookupService;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional(readOnly = true)
@@ -59,7 +66,7 @@ public class ProjectRolesService {
     }
 
     @Transactional
-    public RoleDetails create(UUID projectId, String key, String label, String description) {
+    public RoleDetails create(UUID projectId, String key, String label, String description, UUID actorAccountId) {
         projectLookupService.requireById(projectId);
         if (roleRepository.existsByProjectIdAndKey(projectId, key)) {
             throw new RoleAlreadyExistsException(
@@ -71,6 +78,9 @@ public class ProjectRolesService {
             // aquí y se traduzca a 409, no como 500 al hacer commit.
             ProjectRole saved = roleRepository.saveAndFlush(
                     new ProjectRole(projectId, key, label, description));
+            eventPublisher.publishEvent(AuditEvent.byAccount(
+                    projectId, "role.created", "role", Objects.toString(saved.getId(), null),
+                    AuditOutcome.SUCCESS, actorAccountId, Map.of("key", key)));
             return RoleDetails.from(saved, List.of());
         } catch (DataIntegrityViolationException exception) {
             if (isKeyUniqueViolation(exception)) {
@@ -99,19 +109,25 @@ public class ProjectRolesService {
     }
 
     @Transactional
-    public RoleDetails update(UUID projectId, UUID roleId, String label, String description) {
+    public RoleDetails update(UUID projectId, UUID roleId, String label, String description, UUID actorAccountId) {
         projectLookupService.requireById(projectId);
         ProjectRole role = requireRole(projectId, roleId);
         role.relabel(label, description);
         roleRepository.save(role);
+        eventPublisher.publishEvent(AuditEvent.byAccount(
+                projectId, "role.updated", "role", roleId.toString(),
+                AuditOutcome.SUCCESS, actorAccountId, Map.of("key", role.getKey())));
         return RoleDetails.from(role, keysForRole(roleId));
     }
 
     @Transactional
-    public void delete(UUID projectId, UUID roleId) {
+    public void delete(UUID projectId, UUID roleId, UUID actorAccountId) {
         projectLookupService.requireById(projectId);
         ProjectRole role = requireRole(projectId, roleId);
         roleRepository.delete(role);
+        eventPublisher.publishEvent(AuditEvent.byAccount(
+                projectId, "role.deleted", "role", roleId.toString(),
+                AuditOutcome.SUCCESS, actorAccountId, Map.of("key", role.getKey())));
         // project_role_permissions se elimina vía el ON DELETE CASCADE del FK.
     }
 
@@ -121,7 +137,8 @@ public class ProjectRolesService {
      * evita cualquier conflicto de unicidad con el conjunto anterior.
      */
     @Transactional
-    public RoleDetails setPermissions(UUID projectId, UUID roleId, List<String> permissionKeys) {
+    public RoleDetails setPermissions(UUID projectId, UUID roleId, List<String> permissionKeys,
+                                      UUID actorAccountId) {
         projectLookupService.requireById(projectId);
         ProjectRole role = requireRole(projectId, roleId);
         List<String> unique = new ArrayList<>(new LinkedHashSet<>(permissionKeys));
@@ -129,6 +146,9 @@ public class ProjectRolesService {
         for (String key : unique) {
             rolePermissionRepository.save(new ProjectRolePermission(projectId, roleId, key));
         }
+        eventPublisher.publishEvent(AuditEvent.byAccount(
+                projectId, "role.permissions_set", "role", roleId.toString(),
+                AuditOutcome.SUCCESS, actorAccountId, Map.of("count", unique.size())));
         return RoleDetails.from(role, unique);
     }
 

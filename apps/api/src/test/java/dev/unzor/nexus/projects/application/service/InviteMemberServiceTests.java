@@ -9,6 +9,7 @@ import dev.unzor.nexus.projects.domain.enums.ProjectMembershipStatus;
 import dev.unzor.nexus.projects.domain.exception.UnknownAccountException;
 import dev.unzor.nexus.projects.persistence.repository.ProjectMembershipRepository;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 import org.mockito.ArgumentCaptor;
 
 import java.util.Optional;
@@ -27,7 +28,7 @@ class InviteMemberServiceTests {
     private final ProjectMembershipRepository membershipRepository = mock(ProjectMembershipRepository.class);
     private final AccountDirectory accountDirectory = mock(AccountDirectory.class);
     private final InviteMemberService service =
-            new InviteMemberService(membershipRepository, accountDirectory);
+            new InviteMemberService(membershipRepository, accountDirectory, mock(ApplicationEventPublisher.class));
 
     @Test
     void inviteCreatesActiveMembershipWhenAccountHasNone() {
@@ -40,7 +41,7 @@ class InviteMemberServiceTests {
         when(membershipRepository.save(any(ProjectMembership.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        MembershipDetails result = service.invite(projectId, "new@example.com", ProjectMembershipRole.MEMBER);
+        MembershipDetails result = service.invite(projectId, "new@example.com", ProjectMembershipRole.MEMBER, UUID.randomUUID());
 
         ArgumentCaptor<ProjectMembership> captor = ArgumentCaptor.forClass(ProjectMembership.class);
         verify(membershipRepository).save(captor.capture());
@@ -62,7 +63,7 @@ class InviteMemberServiceTests {
         when(membershipRepository.save(any(ProjectMembership.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        MembershipDetails result = service.invite(projectId, "again@example.com", ProjectMembershipRole.ADMIN);
+        MembershipDetails result = service.invite(projectId, "again@example.com", ProjectMembershipRole.ADMIN, UUID.randomUUID());
 
         assertThat(existing.getStatus()).isEqualTo(ProjectMembershipStatus.ACTIVE);
         assertThat(existing.getRole()).isEqualTo(ProjectMembershipRole.ADMIN);
@@ -74,7 +75,7 @@ class InviteMemberServiceTests {
         UUID projectId = UUID.randomUUID();
         when(accountDirectory.findByEmail("ghost@example.com")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.invite(projectId, "ghost@example.com", ProjectMembershipRole.MEMBER))
+        assertThatThrownBy(() -> service.invite(projectId, "ghost@example.com", ProjectMembershipRole.MEMBER, UUID.randomUUID()))
                 .isInstanceOf(UnknownAccountException.class);
         verify(membershipRepository, never()).save(any(ProjectMembership.class));
     }

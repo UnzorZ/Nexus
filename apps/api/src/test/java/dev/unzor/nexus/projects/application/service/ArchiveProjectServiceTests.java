@@ -5,6 +5,7 @@ import dev.unzor.nexus.projects.domain.enums.ProjectStatus;
 import dev.unzor.nexus.projects.domain.exception.ProjectNotFoundException;
 import dev.unzor.nexus.projects.persistence.repository.ProjectRepository;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -19,7 +20,8 @@ import static org.mockito.Mockito.when;
 class ArchiveProjectServiceTests {
 
     private final ProjectRepository projectRepository = mock(ProjectRepository.class);
-    private final ArchiveProjectService service = new ArchiveProjectService(projectRepository);
+    private final ArchiveProjectService service =
+            new ArchiveProjectService(projectRepository, mock(ApplicationEventPublisher.class));
 
     @Test
     void archivesProject() {
@@ -29,7 +31,7 @@ class ArchiveProjectServiceTests {
         when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
         when(projectRepository.save(any(Project.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        service.archive(projectId);
+        service.archive(projectId, UUID.randomUUID());
 
         assertThat(project.getStatus()).isEqualTo(ProjectStatus.ARCHIVED);
         verify(projectRepository).save(project);
@@ -40,7 +42,7 @@ class ArchiveProjectServiceTests {
         UUID projectId = UUID.randomUUID();
         when(projectRepository.findById(projectId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.archive(projectId))
+        assertThatThrownBy(() -> service.archive(projectId, UUID.randomUUID()))
                 .isInstanceOf(ProjectNotFoundException.class);
     }
 }

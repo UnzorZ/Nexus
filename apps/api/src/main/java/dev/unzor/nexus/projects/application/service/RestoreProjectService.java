@@ -4,6 +4,9 @@ import dev.unzor.nexus.projects.domain.entity.Project;
 import dev.unzor.nexus.projects.domain.enums.ProjectStatus;
 import dev.unzor.nexus.projects.domain.exception.ProjectNotFoundException;
 import dev.unzor.nexus.projects.persistence.repository.ProjectRepository;
+import dev.unzor.nexus.shared.audit.AuditEvent;
+import dev.unzor.nexus.shared.audit.AuditOutcome;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,13 +23,15 @@ import java.util.UUID;
 public class RestoreProjectService {
 
     private final ProjectRepository projectRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public RestoreProjectService(ProjectRepository projectRepository) {
+    public RestoreProjectService(ProjectRepository projectRepository, ApplicationEventPublisher eventPublisher) {
         this.projectRepository = projectRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
-    public void restore(UUID projectId) {
+    public void restore(UUID projectId, UUID actorAccountId) {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new ProjectNotFoundException(projectId.toString()));
         // Idempotente: solo los proyectos archivados necesitan restaurarse (y así
@@ -37,5 +42,8 @@ public class RestoreProjectService {
         }
         project.reactivate();
         projectRepository.save(project);
+        eventPublisher.publishEvent(AuditEvent.byAccount(
+                projectId, "project.restored", "project", projectId.toString(),
+                AuditOutcome.SUCCESS, actorAccountId, null));
     }
 }
