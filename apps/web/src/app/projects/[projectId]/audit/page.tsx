@@ -53,7 +53,8 @@ import {
   formatRelativeTime,
   outcomeMeta,
 } from "@/features/audit/display";
-import { useProjectAudit } from "@/features/audit/useProjectAudit";
+import { useProjectAudit } from "@/features/audit/queries";
+import { toMessage } from "@/lib/api/errors";
 import { useProject } from "../useProject";
 
 type RangeKey = "all" | "24h" | "7d" | "30d";
@@ -159,10 +160,14 @@ export default function ProjectAuditPage() {
   ]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const { events, loading, error, refresh } = useProjectAudit(
-    project?.id ?? "",
-    RANGE_MS[range],
-  );
+  const {
+    data: events,
+    isLoading: loading,
+    error: auditError,
+    refetch,
+  } = useProjectAudit(project?.id ?? "", RANGE_MS[range]);
+  const error = auditError ? toMessage(auditError) : null;
+  const refresh = () => refetch();
 
   const name = project?.name ?? "...";
   const loadingState = projectLoading || (Boolean(project) && loading);
