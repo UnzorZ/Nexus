@@ -28,7 +28,8 @@ import {
   StatusBadge,
 } from "@/components/dashboard/shared";
 import { livenessMeta, formatRelativeTime } from "@/features/heartbeat/display";
-import { useProjectHeartbeats } from "@/features/heartbeat/useProjectHeartbeats";
+import { useProjectHeartbeats } from "@/features/heartbeat/queries";
+import { toMessage } from "@/lib/api/errors";
 import { useProject } from "../useProject";
 
 /** Offline timeout (server default, spec §13.1). Shown read-only. */
@@ -57,9 +58,14 @@ function HeartbeatsLoading() {
 
 export default function ProjectHeartbeatPage() {
   const { project, loading: projectLoading, error: projectError } = useProject();
-  const { instances, loading, error, refresh } = useProjectHeartbeats(
-    project?.id ?? "",
-  );
+  const {
+    data: instances,
+    isLoading: loading,
+    error: hbError,
+    refetch,
+  } = useProjectHeartbeats(project?.id ?? "");
+  const error = hbError ? toMessage(hbError) : null;
+  const refresh = () => refetch();
 
   const name = project?.name ?? "...";
   const loadingState = projectLoading || (Boolean(project) && loading);

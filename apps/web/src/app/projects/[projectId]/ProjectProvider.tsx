@@ -1,20 +1,19 @@
 "use client";
 
-import {
-  createContext,
-  use,
-  useCallback,
-  useEffect,
-  useState,
-} from "react";
+import { createContext, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchProject, type ProjectDetails } from "@/features/projects/api";
+import { queryKeys } from "@/lib/api/queryKeys";
 import { NexusApiError } from "@/lib/api/client";
 
 export type ProjectContextValue = {
   project: ProjectDetails | null;
   loading: boolean;
   error: string | null;
+  /** Invalida la caché del proyecto (y su subárbol) y dispara un refetch.
+   * `options.silent` se mantiene por compatibilidad pero se ignora: el refetch
+   * en TanStack ya es silencioso (no toggla `loading`). */
   refresh: (options?: { silent?: boolean }) => void;
 };
 
@@ -25,6 +24,12 @@ export const ProjectContext = createContext<ProjectContextValue>({
   refresh: () => {},
 });
 
+/**
+ * Provee la ficha del proyecto vía contexto (todas las subpáginas la consumen
+ * con `useProject()` para el id + breadcrumb). Ahora respaldada por TanStack
+ * Query: la caché es global (clave `["projects", id]`), así una invalidación
+ * desde settings/transfer actualiza el header y el breadcrumb en todas partes.
+ */
 export function ProjectProvider({
   children,
   params,
@@ -34,42 +39,36 @@ export function ProjectProvider({
 }) {
   const { projectId } = use(params);
   const router = useRouter();
+  const queryClient = useQueryClient();
 
-  const [project, setProject] = useState<ProjectDetails | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const query = useQuery({
+    queryKey: queryKeys.projects.detail(projectId),
+    queryFn: () => fetchProject(projectId),
+  });
 
-  const load = useCallback(async (options?: { silent?: boolean }) => {
-    try {
-      if (!options?.silent) {
-        setLoading(true);
-      }
-      setError(null);
-      const data = await fetchProject(projectId);
-      setProject(data);
-    } catch (err) {
-      if (err instanceof NexusApiError && err.status === 404) {
-        router.replace("/projects");
-        return;
-      }
-      const message =
-        err instanceof NexusApiError
-          ? err.message
-          : "No se pudo cargar el proyecto.";
-      setError(message);
-    } finally {
-      setLoading(false);
-    }
-  }, [projectId, router]);
-
+  // 404 → el proyecto ya no existe (o no es accesible): vuelve al listado.
   useEffect(() => {
-    load();
-  }, [load]);
+    if (query.error instanceof NexusApiError && query.error.status === 404) {
+      router.replace("/projects");
+    }
+  }, [query.error, router]);
+
+  const project = query.data ?? null;
+  const loading = query.isLoading;
+  const error = query.error
+    ? query.error instanceof NexusApiError
+      ? query.error.message
+      : "No se pudo cargar el proyecto."
+    : null;
+
+  const refresh = () => {
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.projects.detail(projectId),
+    });
+  };
 
   return (
-    <ProjectContext.Provider
-      value={{ project, loading, error, refresh: load }}
-    >
+    <ProjectContext.Provider value={{ project, loading, error, refresh }}>
       {children}
     </ProjectContext.Provider>
   );
