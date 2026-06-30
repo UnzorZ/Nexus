@@ -14,6 +14,7 @@ import {
   ArrowUpIcon,
   ChevronsUpDownIcon,
   Filter,
+  X,
 } from "lucide-react";
 import {
   Select,
@@ -187,6 +188,7 @@ export default function ProjectAuditPage() {
   const [actorFilter, setActorFilter] = useState<string>("all");
   const [moduleFilter, setModuleFilter] = useState<string>("all");
   const [severityFilter, setSeverityFilter] = useState<Severity | "all">("all");
+  const [ipFilter, setIpFilter] = useState<string>("all");
   const [range, setRange] = useState<RangeKey>("all");
   const [sorting, setSorting] = useState<SortingState>([
     { id: "occurredAt", desc: true },
@@ -221,6 +223,11 @@ export default function ProjectAuditPage() {
     return [...new Set(events.map((e) => e.actorType))].sort();
   }, [events]);
 
+  const ips = useMemo(() => {
+    if (!events) return [];
+    return [...new Set(events.map((e) => e.ip).filter(Boolean) as string[])].sort();
+  }, [events]);
+
   const filtered = useMemo(() => {
     if (!events) return [];
     const q = query.trim().toLowerCase();
@@ -230,6 +237,7 @@ export default function ProjectAuditPage() {
         return false;
       if (severityFilter !== "all" && e.severity !== severityFilter)
         return false;
+      if (ipFilter !== "all" && e.ip !== ipFilter) return false;
       if (!q) return true;
       return (
         e.action.toLowerCase().includes(q) ||
@@ -241,7 +249,7 @@ export default function ProjectAuditPage() {
         (e.actorEmail ?? "").toLowerCase().includes(q)
       );
     });
-  }, [events, query, actorFilter, moduleFilter, severityFilter]);
+  }, [events, query, actorFilter, moduleFilter, severityFilter, ipFilter]);
 
   const table = useReactTable({
     data: filtered,
@@ -355,8 +363,18 @@ export default function ProjectAuditPage() {
                 placeholder="Search action, resource, actor or trace…"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                className="h-8 pl-8"
+                className="h-8 pl-8 pr-8"
               />
+              {query ? (
+                <button
+                  type="button"
+                  onClick={() => setQuery("")}
+                  aria-label="Clear search"
+                  className="absolute top-1/2 right-2 inline-flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <X size={13} />
+                </button>
+              ) : null}
             </div>
             <Select value={moduleFilter} onValueChange={setModuleFilter}>
               <SelectTrigger size="sm" className="w-40">
@@ -396,6 +414,19 @@ export default function ProjectAuditPage() {
                 {SEVERITIES.map((s) => (
                   <SelectItem key={s} value={s}>
                     {severityMeta[s].label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={ipFilter} onValueChange={setIpFilter}>
+              <SelectTrigger size="sm" className="w-36">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All IPs</SelectItem>
+                {ips.map((ip) => (
+                  <SelectItem key={ip} value={ip}>
+                    {ip}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -513,10 +544,7 @@ export default function ProjectAuditPage() {
             </Table>
           )}
 
-          <div className="mt-3 flex items-center justify-between gap-3 text-[11px] text-muted-foreground">
-            <span>
-              Drag a column header edge to resize · click a row for details.
-            </span>
+          <div className="mt-3 flex items-center justify-end gap-3 text-[11px] text-muted-foreground">
             {audit.hasNextPage ? (
               <Button
                 variant="outline"
