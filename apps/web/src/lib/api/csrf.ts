@@ -31,3 +31,17 @@ export async function ensureCsrfToken() {
 
   return token;
 }
+
+/**
+ * Envuelve una mutación que necesita token CSRF: obtiene el token una vez y lo
+ * pasa al cuerpo de la mutación. Pensado para el `mutationFn` de `useMutation`,
+ * donde el caller ya no gestiona el token manualmente:
+ *
+ *     mutationFn: (payload) => withCsrf((token) => inviteMember(id, payload, token))
+ */
+export async function withCsrf<T>(
+  run: (token: string) => Promise<T>,
+): Promise<T> {
+  const token = await ensureCsrfToken();
+  return run(token);
+}
