@@ -6,6 +6,9 @@ import dev.unzor.nexus.projects.domain.enums.ProjectMembershipStatus;
 import dev.unzor.nexus.projects.domain.exception.LastOwnerProtectionException;
 import dev.unzor.nexus.projects.domain.exception.MembershipNotFoundException;
 import dev.unzor.nexus.projects.persistence.repository.ProjectMembershipRepository;
+import dev.unzor.nexus.shared.audit.AuditEvent;
+import dev.unzor.nexus.shared.audit.AuditOutcome;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,13 +22,16 @@ import java.util.UUID;
 public class RemoveMemberService {
 
     private final ProjectMembershipRepository membershipRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public RemoveMemberService(ProjectMembershipRepository membershipRepository) {
+    public RemoveMemberService(ProjectMembershipRepository membershipRepository,
+                               ApplicationEventPublisher eventPublisher) {
         this.membershipRepository = membershipRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
-    public void remove(UUID projectId, UUID membershipId) {
+    public void remove(UUID projectId, UUID membershipId, UUID actorAccountId) {
         // SELECT … FOR UPDATE sobre las membresías del proyecto: serializa esta
         // mutación con cualquier otra que afecte al invariante de OWNER, evitando
         // la carrera check-then-act del recuento de owners activos.
@@ -42,6 +48,9 @@ public class RemoveMemberService {
         }
         membership.revoke();
         membershipRepository.save(membership);
+        eventPublisher.publishEvent(AuditEvent.byAccount(
+                projectId, "member.removed", "member", membershipId.toString(),
+                AuditOutcome.SUCCESS, actorAccountId, null));
     }
 
     private long activeOwnerCount(UUID projectId) {

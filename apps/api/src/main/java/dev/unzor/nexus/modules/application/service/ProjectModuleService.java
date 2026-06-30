@@ -5,6 +5,9 @@ import dev.unzor.nexus.modules.domain.entity.ProjectModule;
 import dev.unzor.nexus.modules.domain.enums.NexusModule;
 import dev.unzor.nexus.modules.persistence.repository.ProjectModuleRepository;
 import dev.unzor.nexus.projects.application.service.ProjectLookupService;
+import dev.unzor.nexus.shared.audit.AuditEvent;
+import dev.unzor.nexus.shared.audit.AuditOutcome;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -28,11 +31,13 @@ public class ProjectModuleService {
     private final ProjectModuleRepository projectModuleRepository;
     private final ProjectLookupService projectLookupService;
     private final TransactionTemplate transactionTemplate;
+    private final ApplicationEventPublisher eventPublisher;
 
     public ProjectModuleService(
             ProjectModuleRepository projectModuleRepository,
             ProjectLookupService projectLookupService,
-            PlatformTransactionManager transactionManager
+            PlatformTransactionManager transactionManager,
+            ApplicationEventPublisher eventPublisher
     ) {
         this.projectModuleRepository = projectModuleRepository;
         this.projectLookupService = projectLookupService;
@@ -40,6 +45,7 @@ public class ProjectModuleService {
         // modo que un reintento tras una violación de restricción única no hereda una
         // transacción ya marcada como rollback-only.
         this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional(readOnly = true)
@@ -72,14 +78,20 @@ public class ProjectModuleService {
      * la fila ya existe y se actualiza. Sin una transacción nueva por intento, la
      * condición de carrera se traduciría en un 500 para el cliente.</p>
      */
-    public ProjectModuleStatus setEnabled(UUID projectId, NexusModule module, boolean enabled) {
+    public ProjectModuleStatus setEnabled(UUID projectId, NexusModule module, boolean enabled,
+                                          UUID actorAccountId) {
         projectLookupService.requireById(projectId);
+        ProjectModuleStatus status;
         try {
-            return applySetEnabled(projectId, module, enabled);
+            status = applySetEnabled(projectId, module, enabled);
         } catch (DataIntegrityViolationException raceLost) {
             // Inserción concurrente: en el reintento la fila ya existe.
-            return applySetEnabled(projectId, module, enabled);
+            status = applySetEnabled(projectId, module, enabled);
         }
+        eventPublisher.publishEvent(AuditEvent.byAccount(
+                projectId, enabled ? "module.enabled" : "module.disabled", "module", module.key(),
+                AuditOutcome.SUCCESS, actorAccountId, Map.of("module", module.key())));
+        return status;
     }
 
     private ProjectModuleStatus applySetEnabled(UUID projectId, NexusModule module, boolean enabled) {

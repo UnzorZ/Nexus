@@ -6,6 +6,7 @@ import dev.unzor.nexus.projects.domain.enums.ProjectStatus;
 import dev.unzor.nexus.projects.domain.exception.ProjectNotFoundException;
 import dev.unzor.nexus.projects.persistence.repository.ProjectRepository;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -22,7 +23,7 @@ class UpdateProjectServiceTests {
     private final ProjectRepository projectRepository = mock(ProjectRepository.class);
     private final ProjectAccessService projectAccessService = mock(ProjectAccessService.class);
     private final UpdateProjectService service =
-            new UpdateProjectService(projectRepository, projectAccessService);
+            new UpdateProjectService(projectRepository, projectAccessService, mock(ApplicationEventPublisher.class));
 
     @Test
     void updatesEditableFieldsAndKeepsSlug() {

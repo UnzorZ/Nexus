@@ -9,6 +9,7 @@ import dev.unzor.nexus.permissions.persistence.repository.ProjectRolePermissionR
 import dev.unzor.nexus.permissions.persistence.repository.ProjectRoleRepository;
 import dev.unzor.nexus.projects.application.service.ProjectLookupService;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.List;
 import java.util.Optional;
@@ -29,7 +30,8 @@ class ProjectRolesServiceTests {
     private final ProjectRolePermissionRepository rolePermissionRepository = mock(ProjectRolePermissionRepository.class);
     private final ProjectLookupService projectLookupService = mock(ProjectLookupService.class);
     private final ProjectRolesService service =
-            new ProjectRolesService(roleRepository, rolePermissionRepository, projectLookupService);
+            new ProjectRolesService(roleRepository, rolePermissionRepository, projectLookupService,
+                    mock(ApplicationEventPublisher.class));
 
     @Test
     void listReturnsRolesGroupedWithTheirKeys() {
@@ -57,7 +59,7 @@ class ProjectRolesServiceTests {
         when(roleRepository.existsByProjectIdAndKey(projectId, "admin")).thenReturn(false);
         when(roleRepository.saveAndFlush(any(ProjectRole.class))).thenAnswer(i -> i.getArgument(0));
 
-        RoleDetails result = service.create(projectId, "admin", "Admin", "desc");
+        RoleDetails result = service.create(projectId, "admin", "Admin", "desc", UUID.randomUUID());
 
         assertThat(result.key()).isEqualTo("admin");
         assertThat(result.system()).isFalse();
@@ -73,7 +75,7 @@ class ProjectRolesServiceTests {
         when(roleRepository.saveAndFlush(any(ProjectRole.class)))
                 .thenThrow(new org.springframework.dao.DataIntegrityViolationException("unique", violation));
 
-        assertThatThrownBy(() -> service.create(projectId, "admin", "Admin", null))
+        assertThatThrownBy(() -> service.create(projectId, "admin", "Admin", null, UUID.randomUUID()))
                 .isInstanceOf(RoleAlreadyExistsException.class);
     }
 
@@ -82,7 +84,7 @@ class ProjectRolesServiceTests {
         UUID projectId = UUID.randomUUID();
         when(roleRepository.existsByProjectIdAndKey(projectId, "admin")).thenReturn(true);
 
-        assertThatThrownBy(() -> service.create(projectId, "admin", "Admin", null))
+        assertThatThrownBy(() -> service.create(projectId, "admin", "Admin", null, UUID.randomUUID()))
                 .isInstanceOf(RoleAlreadyExistsException.class);
         verify(roleRepository, never()).save(any(ProjectRole.class));
     }
@@ -96,7 +98,8 @@ class ProjectRolesServiceTests {
         when(rolePermissionRepository.save(any(ProjectRolePermission.class))).thenAnswer(i -> i.getArgument(0));
 
         RoleDetails result = service.setPermissions(
-                projectId, roleId, List.of("orders.cancel", "orders.*", "orders.cancel"));
+                projectId, roleId, List.of("orders.cancel", "orders.*", "orders.cancel"),
+                UUID.randomUUID());
 
         verify(rolePermissionRepository).deleteByRoleId(roleId);
         verify(rolePermissionRepository, times(2)).save(any(ProjectRolePermission.class));
@@ -109,7 +112,7 @@ class ProjectRolesServiceTests {
         UUID roleId = UUID.randomUUID();
         when(roleRepository.findByProjectIdAndId(projectId, roleId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.setPermissions(projectId, roleId, List.of("orders.*")))
+        assertThatThrownBy(() -> service.setPermissions(projectId, roleId, List.of("orders.*"), UUID.randomUUID()))
                 .isInstanceOf(RoleNotFoundException.class);
         verify(rolePermissionRepository, never()).deleteByRoleId(roleId);
     }
@@ -121,7 +124,7 @@ class ProjectRolesServiceTests {
         ProjectRole role = withId(new ProjectRole(projectId, "admin", "Admin", null), roleId);
         when(roleRepository.findByProjectIdAndId(projectId, roleId)).thenReturn(Optional.of(role));
 
-        service.delete(projectId, roleId);
+        service.delete(projectId, roleId, UUID.randomUUID());
 
         verify(roleRepository).delete(role);
         // No borramos los grants a mano: el FK ON DELETE CASCADE lo hace la BD.

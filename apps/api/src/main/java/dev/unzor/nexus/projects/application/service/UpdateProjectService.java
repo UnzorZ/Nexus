@@ -4,6 +4,9 @@ import dev.unzor.nexus.projects.api.dto.ProjectDetails;
 import dev.unzor.nexus.projects.domain.entity.Project;
 import dev.unzor.nexus.projects.domain.exception.ProjectNotFoundException;
 import dev.unzor.nexus.projects.persistence.repository.ProjectRepository;
+import dev.unzor.nexus.shared.audit.AuditEvent;
+import dev.unzor.nexus.shared.audit.AuditOutcome;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,13 +21,16 @@ public class UpdateProjectService {
 
     private final ProjectRepository projectRepository;
     private final ProjectAccessService projectAccessService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public UpdateProjectService(
             ProjectRepository projectRepository,
-            ProjectAccessService projectAccessService
+            ProjectAccessService projectAccessService,
+            ApplicationEventPublisher eventPublisher
     ) {
         this.projectRepository = projectRepository;
         this.projectAccessService = projectAccessService;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -40,6 +46,9 @@ public class UpdateProjectService {
                 .orElseThrow(() -> new ProjectNotFoundException(projectId.toString()));
         project.updateDetails(name, description, publicBaseUrl);
         projectRepository.saveAndFlush(project);
+        eventPublisher.publishEvent(AuditEvent.byAccount(
+                projectId, "project.updated", "project", projectId.toString(),
+                AuditOutcome.SUCCESS, accountId, null));
         return ProjectDetails.from(
                 project,
                 projectAccessService.canManage(projectId, accountId, isInstanceAdmin),

@@ -2,7 +2,6 @@ package dev.unzor.nexus.apikeys.application.service;
 
 import dev.unzor.nexus.apikeys.api.dto.ApiKeyCreated;
 import dev.unzor.nexus.apikeys.api.dto.ApiKeySummary;
-import dev.unzor.nexus.apikeys.application.events.ApiKeyAuditEvent;
 import dev.unzor.nexus.apikeys.domain.entity.ProjectApiKey;
 import dev.unzor.nexus.apikeys.domain.enums.ApiKeyStatus;
 import dev.unzor.nexus.apikeys.domain.exception.ApiKeyNotFoundException;
@@ -10,7 +9,8 @@ import dev.unzor.nexus.apikeys.persistence.repository.ProjectApiKeyRepository;
 import dev.unzor.nexus.apikeys.security.ApiKeyHasher;
 import dev.unzor.nexus.apikeys.security.InstanceTokenService;
 import dev.unzor.nexus.projects.application.service.ProjectLookupService;
-import org.slf4j.MDC;
+import dev.unzor.nexus.shared.audit.AuditEvent;
+import dev.unzor.nexus.shared.audit.AuditOutcome;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,7 +24,7 @@ import java.util.UUID;
  * Casos de uso de gestión de API keys de un proyecto (spec §9.3, §21.1). La
  * capa de seguridad está en {@link dev.unzor.nexus.apikeys.security.ApiKeyHasher}
  * y el secreto completo solo se devuelve al crear/rotar. Cada mutation emite un
- * {@link ApiKeyAuditEvent} (ADR-0004) sin secretos.
+ * {@link AuditEvent} (ADR-0004) sin secretos, que el módulo {@code audit} persiste.
  */
 @Service
 public class ProjectApiKeysService {
@@ -157,8 +157,8 @@ public class ProjectApiKeysService {
     }
 
     private void audit(String action, UUID projectId, UUID keyId, UUID actorId, Map<String, Object> metadata) {
-        eventPublisher.publishEvent(new ApiKeyAuditEvent(
-                action, projectId, keyId, "NEXUS_ACCOUNT",
-                actorId == null ? null : actorId.toString(), null, metadata, MDC.get("traceId")));
+        eventPublisher.publishEvent(AuditEvent.byAccount(
+                projectId, action, "api_key", keyId == null ? null : keyId.toString(),
+                AuditOutcome.SUCCESS, actorId, metadata));
     }
 }

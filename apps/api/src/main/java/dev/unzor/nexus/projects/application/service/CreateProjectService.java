@@ -7,11 +7,15 @@ import dev.unzor.nexus.projects.domain.enums.ProjectMembershipRole;
 import dev.unzor.nexus.projects.domain.exception.ProjectAlreadyExistException;
 import dev.unzor.nexus.projects.persistence.repository.ProjectMembershipRepository;
 import dev.unzor.nexus.projects.persistence.repository.ProjectRepository;
+import dev.unzor.nexus.shared.audit.AuditEvent;
+import dev.unzor.nexus.shared.audit.AuditOutcome;
 import org.hibernate.exception.ConstraintViolationException;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -24,13 +28,16 @@ public class CreateProjectService {
 
     private final ProjectRepository projectRepository;
     private final ProjectMembershipRepository membershipRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     public CreateProjectService(
             ProjectRepository projectRepository,
-            ProjectMembershipRepository membershipRepository
+            ProjectMembershipRepository membershipRepository,
+            ApplicationEventPublisher eventPublisher
     ) {
         this.projectRepository = projectRepository;
         this.membershipRepository = membershipRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -74,6 +81,10 @@ public class CreateProjectService {
                 ProjectMembershipRole.OWNER
         );
         membershipRepository.save(membership);
+
+        eventPublisher.publishEvent(AuditEvent.byAccount(
+                savedProject.getId(), "project.created", "project", savedProject.getId().toString(),
+                AuditOutcome.SUCCESS, creatorAccountId, Map.of("slug", slug, "name", name)));
 
         return ProjectDetails.from(savedProject, true, true);
     }

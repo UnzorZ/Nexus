@@ -8,6 +8,7 @@ import dev.unzor.nexus.projects.domain.exception.MembershipNotActiveException;
 import dev.unzor.nexus.projects.domain.exception.MembershipNotFoundException;
 import dev.unzor.nexus.projects.persistence.repository.ProjectMembershipRepository;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.List;
 import java.util.Optional;
@@ -24,7 +25,8 @@ import static org.mockito.Mockito.when;
 class TransferOwnershipServiceTests {
 
     private final ProjectMembershipRepository membershipRepository = mock(ProjectMembershipRepository.class);
-    private final TransferOwnershipService service = new TransferOwnershipService(membershipRepository);
+    private final TransferOwnershipService service =
+            new TransferOwnershipService(membershipRepository, mock(ApplicationEventPublisher.class));
 
     @Test
     void transferPromotesTargetAndDemotesCurrentOwner() {
@@ -39,7 +41,7 @@ class TransferOwnershipServiceTests {
         when(membershipRepository.save(any(ProjectMembership.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        service.transfer(projectId, targetId);
+        service.transfer(projectId, targetId, UUID.randomUUID());
 
         assertThat(target.getRole()).isEqualTo(ProjectMembershipRole.OWNER);
         assertThat(owner.getRole()).isEqualTo(ProjectMembershipRole.ADMIN);
@@ -54,7 +56,7 @@ class TransferOwnershipServiceTests {
         UUID targetId = UUID.randomUUID();
         when(membershipRepository.findByProjectIdAndId(projectId, targetId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.transfer(projectId, targetId))
+        assertThatThrownBy(() -> service.transfer(projectId, targetId, UUID.randomUUID()))
                 .isInstanceOf(MembershipNotFoundException.class);
         verify(membershipRepository, never()).save(any(ProjectMembership.class));
     }
@@ -66,7 +68,7 @@ class TransferOwnershipServiceTests {
         ProjectMembership target = new ProjectMembership(projectId, targetId, ProjectMembershipRole.OWNER);
         when(membershipRepository.findByProjectIdAndId(projectId, targetId)).thenReturn(Optional.of(target));
 
-        assertThatThrownBy(() -> service.transfer(projectId, targetId))
+        assertThatThrownBy(() -> service.transfer(projectId, targetId, UUID.randomUUID()))
                 .isInstanceOf(MembershipAlreadyOwnerException.class);
         verify(membershipRepository, never()).save(any(ProjectMembership.class));
     }
@@ -79,7 +81,7 @@ class TransferOwnershipServiceTests {
         target.suspend();
         when(membershipRepository.findByProjectIdAndId(projectId, targetId)).thenReturn(Optional.of(target));
 
-        assertThatThrownBy(() -> service.transfer(projectId, targetId))
+        assertThatThrownBy(() -> service.transfer(projectId, targetId, UUID.randomUUID()))
                 .isInstanceOf(MembershipNotActiveException.class);
         verify(membershipRepository, never()).save(any(ProjectMembership.class));
     }
