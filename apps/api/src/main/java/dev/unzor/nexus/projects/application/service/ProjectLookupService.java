@@ -26,4 +26,13 @@ public class ProjectLookupService {
                 .orElseThrow(() -> new ProjectNotFoundException(projectId.toString()));
     }
 
+    /**
+     * Slug del proyecto (lanza 404 si no existe). Expone solo el primitivo para
+     * que otros módulos no dependan de la entidad {@link Project} (Modulith).
+     */
+    @Transactional(readOnly = true)
+    public String requireSlug(UUID projectId) {
+        return requireById(projectId).getSlug();
+    }
+
 }
