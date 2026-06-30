@@ -10,7 +10,6 @@ import dev.unzor.nexus.apikeys.security.ApiKeyHasher;
 import dev.unzor.nexus.apikeys.security.InstanceTokenService;
 import dev.unzor.nexus.projects.application.service.ProjectLookupService;
 import dev.unzor.nexus.shared.audit.AuditEvent;
-import dev.unzor.nexus.shared.audit.AuditOutcome;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -159,6 +158,6 @@ public class ProjectApiKeysService {
     private void audit(String action, UUID projectId, UUID keyId, UUID actorId, Map<String, Object> metadata) {
         eventPublisher.publishEvent(AuditEvent.byAccount(
                 projectId, action, "api_key", keyId == null ? null : keyId.toString(),
-                AuditOutcome.SUCCESS, actorId, metadata));
+                actorId, metadata));
     }
 }

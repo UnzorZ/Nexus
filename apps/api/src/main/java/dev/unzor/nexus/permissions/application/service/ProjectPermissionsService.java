@@ -7,7 +7,6 @@ import dev.unzor.nexus.permissions.domain.exception.PermissionNotFoundException;
 import dev.unzor.nexus.permissions.persistence.repository.ProjectPermissionRepository;
 import dev.unzor.nexus.projects.application.service.ProjectLookupService;
 import dev.unzor.nexus.shared.audit.AuditEvent;
-import dev.unzor.nexus.shared.audit.AuditOutcome;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -66,7 +65,7 @@ public class ProjectPermissionsService {
                     new ProjectPermission(projectId, key, label, description));
             eventPublisher.publishEvent(AuditEvent.byAccount(
                     projectId, "permission.created", "permission", Objects.toString(saved.getId(), null),
-                    AuditOutcome.SUCCESS, actorAccountId, Map.of("key", key)));
+                    actorAccountId, Map.of("key", key)));
             return PermissionDetails.from(saved);
         } catch (DataIntegrityViolationException exception) {
             if (isKeyUniqueViolation(exception)) {
@@ -103,7 +102,7 @@ public class ProjectPermissionsService {
         PermissionDetails details = PermissionDetails.from(permissionRepository.save(permission));
         eventPublisher.publishEvent(AuditEvent.byAccount(
                 projectId, "permission.updated", "permission", permissionId.toString(),
-                AuditOutcome.SUCCESS, actorAccountId, Map.of("key", permission.getKey())));
+                actorAccountId, Map.of("key", permission.getKey())));
         return details;
     }
 
@@ -114,7 +113,7 @@ public class ProjectPermissionsService {
         permissionRepository.delete(permission);
         eventPublisher.publishEvent(AuditEvent.byAccount(
                 projectId, "permission.deleted", "permission", permissionId.toString(),
-                AuditOutcome.SUCCESS, actorAccountId, Map.of("key", permission.getKey())));
+                actorAccountId, Map.of("key", permission.getKey())));
         // Las concesiones rol→permiso referencian la clave (no el id), así que
         // sobreviven: borrar un permiso del catálogo no rompe los roles.
     }

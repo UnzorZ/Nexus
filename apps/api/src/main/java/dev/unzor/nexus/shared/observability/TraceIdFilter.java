@@ -5,6 +5,10 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.net.Inet4Address;
+import java.net.Inet6Address;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.UUID;
 import org.slf4j.MDC;
 import org.springframework.core.Ordered;
@@ -74,7 +78,9 @@ class TraceIdFilter extends OncePerRequestFilter {
 
     /**
      * IP del cliente: primer hop no vacío de {@code X-Forwarded-For} (típico tras
-     * un proxy/túnel), o {@code getRemoteAddr} en directo.
+     * un proxy/túnel), o {@code getRemoteAddr} en directo. Se normaliza a IPv4:
+     * extrae la IPv4 de direcciones IPv6-mapeadas ({@code ::ffff:1.2.3.4}) y
+     * convierte el loopback IPv6 ({@code ::1}) a {@code 127.0.0.1}.
      */
     private String resolveClientIp(HttpServletRequest request) {
         String forwarded = request.getHeader(FORWARDED_FOR_HEADER);
@@ -82,11 +88,43 @@ class TraceIdFilter extends OncePerRequestFilter {
             for (String hop : forwarded.split(",")) {
                 String trimmed = hop.trim();
                 if (!trimmed.isEmpty()) {
-                    return trimmed;
+                    return toIpv4(trimmed);
                 }
             }
         }
-        return request.getRemoteAddr();
+        return toIpv4(request.getRemoteAddr());
+    }
+
+    private static String toIpv4(String ip) {
+        if (ip == null || ip.isBlank()) {
+            return ip;
+        }
+        try {
+            InetAddress addr = InetAddress.getByName(ip);
+            if (addr.isLoopbackAddress()) {
+                return "127.0.0.1";
+            }
+            if (addr instanceof Inet4Address) {
+                return addr.getHostAddress();
+            }
+            if (addr instanceof Inet6Address v6) {
+                byte[] b = v6.getAddress();
+                boolean mapped = b.length == 16;
+                for (int i = 0; i < 10 && mapped; i++) {
+                    if (b[i] != 0) {
+                        mapped = false;
+                    }
+                }
+                // IPv4-mapped IPv6 (::ffff:a.b.c.d): 80 bits a 0 + 16 a 1.
+                if (mapped && b[10] == (byte) 0xff && b[11] == (byte) 0xff) {
+                    return (b[12] & 0xff) + "." + (b[13] & 0xff) + "."
+                            + (b[14] & 0xff) + "." + (b[15] & 0xff);
+                }
+            }
+        } catch (UnknownHostException ignored) {
+            // IP no parseable: se devuelve tal cual.
+        }
+        return ip;
     }
 
     private String resolveUserAgent(HttpServletRequest request) {

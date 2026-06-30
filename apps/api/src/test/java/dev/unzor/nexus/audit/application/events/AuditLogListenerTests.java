@@ -3,7 +3,7 @@ package dev.unzor.nexus.audit.application.events;
 import dev.unzor.nexus.audit.domain.entity.AuditLogEntry;
 import dev.unzor.nexus.audit.persistence.repository.AuditLogRepository;
 import dev.unzor.nexus.shared.audit.AuditEvent;
-import dev.unzor.nexus.shared.audit.AuditOutcome;
+import dev.unzor.nexus.shared.audit.Severity;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -41,7 +41,7 @@ class AuditLogListenerTests {
 
         AuditEvent event = AuditEvent.byAccount(
                 projectId, "api_key.created", "api_key", "key-1",
-                AuditOutcome.SUCCESS, actor, Map.of("name", "CI"));
+                actor, Map.of("name", "CI"));
 
         listener.onAuditEvent(event);
 
@@ -52,7 +52,7 @@ class AuditLogListenerTests {
         assertThat(saved.getAction()).isEqualTo("api_key.created");
         assertThat(saved.getResourceType()).isEqualTo("api_key");
         assertThat(saved.getResourceId()).isEqualTo("key-1");
-        assertThat(saved.getOutcome()).isEqualTo(AuditOutcome.SUCCESS);
+        assertThat(saved.getSeverity()).isEqualTo(Severity.INFO);
         assertThat(saved.getActorType()).isEqualTo("NEXUS_ACCOUNT");
         assertThat(saved.getActorId()).isEqualTo(actor.toString());
         assertThat(saved.getIp()).isEqualTo("203.0.113.9");
@@ -66,11 +66,11 @@ class AuditLogListenerTests {
     @Test
     void anonymousFactoryCarriesNoActorAndPersists() {
         AuditEvent event = AuditEvent.anonymous(
-                null, "api_key.auth_invalid", "api_key", null, AuditOutcome.FAILURE, "no_match");
+                null, "api_key.auth_invalid", "api_key", null, "no_match");
 
         assertThat(event.actorType()).isEqualTo("ANONYMOUS");
         assertThat(event.actorId()).isNull();
-        assertThat(event.outcome()).isEqualTo(AuditOutcome.FAILURE);
+        assertThat(event.severity()).isEqualTo(Severity.WARNING);
         assertThat(event.metadata()).containsEntry("reason", "no_match");
 
         listener.onAuditEvent(event);

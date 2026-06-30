@@ -6,7 +6,6 @@ import dev.unzor.nexus.modules.domain.enums.NexusModule;
 import dev.unzor.nexus.modules.persistence.repository.ProjectModuleRepository;
 import dev.unzor.nexus.projects.application.service.ProjectLookupService;
 import dev.unzor.nexus.shared.audit.AuditEvent;
-import dev.unzor.nexus.shared.audit.AuditOutcome;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -90,7 +89,7 @@ public class ProjectModuleService {
         }
         eventPublisher.publishEvent(AuditEvent.byAccount(
                 projectId, enabled ? "module.enabled" : "module.disabled", "module", module.key(),
-                AuditOutcome.SUCCESS, actorAccountId, Map.of("module", module.key())));
+                actorAccountId, Map.of("module", module.key())));
         return status;
     }
 
