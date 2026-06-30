@@ -9,7 +9,12 @@ import {
   type ColumnDef,
   type SortingState,
 } from "@tanstack/react-table";
-import { ArrowDownIcon, ArrowUpIcon, ChevronsUpDownIcon } from "lucide-react";
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  ChevronsUpDownIcon,
+  Filter,
+} from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -24,6 +29,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Table,
   TableBody,
@@ -54,12 +60,12 @@ import {
   outcomeMeta,
 } from "@/features/audit/display";
 import { useProjectAudit } from "@/features/audit/queries";
+import { colorFor, initials } from "@/lib/account";
 import { toMessage } from "@/lib/api/errors";
 import { useProject } from "../useProject";
 
 type RangeKey = "all" | "24h" | "7d" | "30d";
 
-/** Rango → milisegundos hacia atrás desde ahora (para el `since` del servidor). */
 const RANGE_MS: Record<RangeKey, number> = {
   all: 0,
   "24h": 86_400_000,
@@ -67,37 +73,49 @@ const RANGE_MS: Record<RangeKey, number> = {
   "30d": 2_592_000_000,
 };
 
-/** Módulo = namespace de la acción (p. ej. "member.invited" → "member"). */
+/** Etiquetas legibles por tipo de actor (extensible: cuando llegue OAuth, sus
+ * tipos aparecerán automáticamente en el filtro al generarse eventos). */
+const ACTOR_LABELS: Record<string, string> = {
+  NEXUS_ACCOUNT: "Nexus account",
+  ANONYMOUS: "Anonymous",
+};
+
 function moduleOf(action: string): string {
   const i = action.indexOf(".");
   return i > 0 ? action.slice(0, i) : action;
 }
 
-/** Definición de columnas (estable a nivel de módulo) con tamaños para el resize.
- * El filtrado se hace aguas arriba (`filtered`); TanStack aporta columnas, filas,
- * ordenamiento por cabecera y resize de columnas. */
+/** Tipo mostrado para el actor: Admin/Normal para cuentas Nexus, etiqueta para
+ * el resto (anónimo, OAuth futuro…). */
+function actorKindLabel(event: AuditEvent): string {
+  if (event.actorType === "NEXUS_ACCOUNT") {
+    return event.actorAdmin ? "Admin" : "Normal";
+  }
+  return ACTOR_LABELS[event.actorType] ?? event.actorType;
+}
+
 const columns: ColumnDef<AuditEvent>[] = [
   {
     id: "actor",
     header: "Actor",
     enableSorting: false,
-    size: 200,
-    minSize: 130,
+    size: 210,
+    minSize: 140,
     cell: ({ row }) => <ActorCell event={row.original} />,
   },
   {
     accessorKey: "action",
     header: "Action",
-    size: 150,
-    minSize: 90,
+    size: 160,
+    minSize: 100,
     cell: ({ row }) => <MonoChip>{row.original.action}</MonoChip>,
   },
   {
     id: "resource",
     header: "Resource",
     enableSorting: false,
-    size: 180,
-    minSize: 110,
+    size: 190,
+    minSize: 120,
     cell: ({ row }) => (
       <span className="block truncate text-xs text-muted-foreground">
         {row.original.resourceType ?? "—"}:
@@ -191,7 +209,6 @@ export default function ProjectAuditPage() {
   const name = project?.name ?? "...";
   const loadingState = projectLoading || (Boolean(project) && loading);
 
-  /** Módulos (namespaces de acción) presentes en el lote cargado, para el filtro. */
   const modules = useMemo(() => {
     if (!events) return [];
     const set = new Set<string>();
@@ -200,6 +217,12 @@ export default function ProjectAuditPage() {
       if (m) set.add(m);
     }
     return [...set].sort();
+  }, [events]);
+
+  /** Tipos de actor presentes en el lote (para el filtro dinámico). */
+  const actorTypes = useMemo(() => {
+    if (!events) return [];
+    return [...new Set(events.map((e) => e.actorType))].sort();
   }, [events]);
 
   const filtered = useMemo(() => {
@@ -236,6 +259,13 @@ export default function ProjectAuditPage() {
 
   const selected = events?.find((e) => e.id === selectedId) ?? null;
   const failures = filtered.filter((e) => e.outcome === "FAILURE").length;
+
+  /** Aplica un filtro rápido desde el modal (trace / usuario / tipo de evento)
+   * rellenando la búsqueda y cerrando el modal. */
+  function applyFilter(value: string) {
+    setQuery(value);
+    setSelectedId(null);
+  }
 
   if (loadingState) {
     return <AuditLoading />;
@@ -346,8 +376,11 @@ export default function ProjectAuditPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All actors</SelectItem>
-                <SelectItem value="NEXUS_ACCOUNT">Nexus account</SelectItem>
-                <SelectItem value="ANONYMOUS">Anonymous</SelectItem>
+                {actorTypes.map((t) => (
+                  <SelectItem key={t} value={t}>
+                    {ACTOR_LABELS[t] ?? t}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Select
@@ -487,10 +520,14 @@ export default function ProjectAuditPage() {
           if (!open) setSelectedId(null);
         }}
       >
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader className="gap-2">
-            <DialogTitle className="flex items-center gap-2">
+            <DialogTitle className="flex flex-wrap items-center gap-2">
               <MonoChip>{selected?.action}</MonoChip>
+              <FilterButton
+                label="Filter by type"
+                onClick={() => selected && applyFilter(selected.action)}
+              />
               {selected ? (
                 <StatusBadge tone={outcomeMeta[selected.outcome].tone} dot>
                   {outcomeMeta[selected.outcome].label}
@@ -502,64 +539,84 @@ export default function ProjectAuditPage() {
             </DialogDescription>
           </DialogHeader>
 
-          {selected ? <AuditDetail event={selected} /> : null}
+          {selected ? (
+            <AuditDetail event={selected} onFilter={applyFilter} />
+          ) : null}
         </DialogContent>
       </Dialog>
     </Stagger>
   );
 }
 
-function AuditDetail({ event }: { event: AuditEvent }) {
+function AuditDetail({
+  event,
+  onFilter,
+}: {
+  event: AuditEvent;
+  onFilter: (value: string) => void;
+}) {
   const actor = actorMetaFor(event.actorType);
-  const hasAccount =
-    event.actorDisplayName != null || event.actorEmail != null;
+  const name = event.actorDisplayName ?? event.actorEmail;
+  const seed = event.actorEmail ?? event.actorId ?? event.actorType;
   return (
     <div className="flex flex-col gap-4">
       {/* Actor / usuario */}
       <div className="rounded-lg border p-3">
-        <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          Actor
-        </p>
-        <div className="flex items-center gap-2.5">
-          <div
-            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${actor.chipBg}`}
-          >
-            <actor.Icon size={15} className={actor.chipColor} />
-          </div>
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Actor
+          </p>
+          {name ? (
+            <FilterButton
+              label="Filter by user"
+              onClick={() =>
+                onFilter(event.actorEmail ?? event.actorDisplayName ?? "")
+              }
+            />
+          ) : null}
+        </div>
+        <div className="mt-2 flex items-center gap-2.5">
+          <Avatar className="size-9">
+            <AvatarFallback
+              className={`size-9 text-xs font-semibold text-white ${colorFor(seed)}`}
+            >
+              {name ? (
+                initials(name)
+              ) : (
+                <actor.Icon size={16} className={actor.chipColor} />
+              )}
+            </AvatarFallback>
+          </Avatar>
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-foreground">
-              {event.actorDisplayName ??
-                event.actorEmail ??
-                (event.actorId ? shortId(event.actorId) : "—")}
+              {name ?? "—"}
             </p>
             <p className="truncate text-xs text-muted-foreground">
-              {event.actorEmail ?? actor.label}
+              {actorKindLabel(event)}
+              {event.actorEmail ? ` · ${event.actorEmail}` : ""}
             </p>
           </div>
         </div>
-        {hasAccount || event.actorId ? (
-          <dl className="mt-3 grid grid-cols-1 gap-y-1 text-xs">
-            {hasAccount ? (
-              <div className="flex justify-between gap-3">
-                <dt className="text-muted-foreground">Account ID</dt>
-                <dd className="break-all font-mono text-foreground">
-                  {event.actorId ?? "—"}
-                </dd>
-              </div>
-            ) : null}
-            <div className="flex justify-between gap-3">
-              <dt className="text-muted-foreground">Type</dt>
-              <dd className="text-foreground">{event.actorType}</dd>
-            </div>
-          </dl>
-        ) : null}
       </div>
 
       {/* Detalle del evento */}
       <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
         <Detail label="IP address" value={event.ip ?? "—"} mono />
-        <Detail label="Trace ID" value={event.traceId ?? "—"} mono />
-        <Detail label="Resource" value={`${event.resourceType ?? "—"}:${event.resourceId ?? "—"}`} />
+        <div className="flex flex-col gap-0.5">
+          <dt className="text-muted-foreground">Trace ID</dt>
+          <dd className="flex items-center gap-1.5">
+            <span className="break-all font-mono text-foreground">
+              {event.traceId ?? "—"}
+            </span>
+            {event.traceId ? (
+              <FilterButton onClick={() => onFilter(event.traceId ?? "")} />
+            ) : null}
+          </dd>
+        </div>
+        <Detail
+          label="Resource"
+          value={`${event.resourceType ?? "—"}:${event.resourceId ?? "—"}`}
+        />
         <Detail label="Time" value={formatRelativeTime(event.occurredAt)} />
       </dl>
 
@@ -576,44 +633,119 @@ function AuditDetail({ event }: { event: AuditEvent }) {
         <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
           Metadata
         </p>
-        <pre className="overflow-x-auto rounded-md bg-muted p-3 font-mono text-[11px] leading-relaxed text-muted-foreground">
-          {event.metadata ? JSON.stringify(event.metadata, null, 2) : "—"}
-        </pre>
-        <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-          Payloads are kept small on purpose — never full keys, passwords or
-          tokens.
-        </p>
+        <MetadataList data={event.metadata} />
       </div>
     </div>
+  );
+}
+
+/** Metadata como lista clave→valor formateada (no JSON crudo). */
+function MetadataList({ data }: { data: Record<string, unknown> | null }) {
+  const entries = data ? Object.entries(data) : [];
+  if (entries.length === 0) {
+    return <p className="text-xs text-muted-foreground">—</p>;
+  }
+  return (
+    <dl className="divide-y overflow-hidden rounded-md border">
+      {entries.map(([k, v]) => (
+        <div
+          key={k}
+          className="flex items-start justify-between gap-3 px-3 py-2 text-xs"
+        >
+          <dt className="shrink-0 font-medium text-muted-foreground">{k}</dt>
+          <dd className="min-w-0 text-right">
+            <MetadataValue value={v} />
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function MetadataValue({ value }: { value: unknown }) {
+  if (value == null) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+  if (typeof value === "boolean") {
+    return (
+      <StatusBadge tone={value ? "emerald" : "slate"}>
+        {String(value)}
+      </StatusBadge>
+    );
+  }
+  if (Array.isArray(value)) {
+    return (
+      <span className="flex flex-wrap justify-end gap-1">
+        {value.map((x, i) => (
+          <MonoChip key={i}>{String(x)}</MonoChip>
+        ))}
+      </span>
+    );
+  }
+  if (typeof value === "object") {
+    return (
+      <span className="break-all font-mono text-[11px] text-muted-foreground">
+        {JSON.stringify(value)}
+      </span>
+    );
+  }
+  const s = String(value);
+  const isUuidLike = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    s,
+  );
+  return isUuidLike ? (
+    <span className="break-all font-mono text-[11px] text-foreground">{s}</span>
+  ) : (
+    <span className="break-words text-foreground">{s}</span>
   );
 }
 
 function ActorCell({ event }: { event: AuditEvent }) {
   const actor = actorMetaFor(event.actorType);
   const name = event.actorDisplayName ?? event.actorEmail;
-  const primary =
-    name ?? (event.actorId ? shortId(event.actorId) : "—");
+  const seed = event.actorEmail ?? event.actorId ?? event.actorType;
   return (
     <div className="flex items-center gap-2">
-      <div
-        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${actor.chipBg}`}
-      >
-        <actor.Icon size={13} className={actor.chipColor} />
-      </div>
+      <Avatar className="size-6">
+        <AvatarFallback
+          className={`size-6 text-[10px] font-semibold text-white ${colorFor(seed)}`}
+        >
+          {name ? (
+            initials(name)
+          ) : (
+            <actor.Icon size={12} className={actor.chipColor} />
+          )}
+        </AvatarFallback>
+      </Avatar>
       <div className="flex min-w-0 flex-col">
-        <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          {actor.label}
-        </span>
         <span className="max-w-[180px] truncate text-xs text-foreground">
-          {primary}
+          {name ?? (event.actorId ? shortId(event.actorId) : actor.label)}
         </span>
-        {event.actorEmail && event.actorDisplayName ? (
-          <span className="max-w-[180px] truncate text-[10px] text-muted-foreground">
-            {event.actorEmail}
-          </span>
-        ) : null}
+        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+          {actorKindLabel(event)}
+        </span>
       </div>
     </div>
+  );
+}
+
+function FilterButton({
+  onClick,
+  label,
+}: {
+  onClick: () => void;
+  label?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={label ?? "Filter by this"}
+      className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+    >
+      <Filter size={11} />
+      {label ? <span>{label}</span> : null}
+    </button>
   );
 }
 
