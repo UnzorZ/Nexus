@@ -2,11 +2,14 @@ package dev.unzor.nexus.registry.api.controller;
 
 import dev.unzor.nexus.apikeys.api.RequiredScope;
 import dev.unzor.nexus.apikeys.security.InstanceTokenService;
+import dev.unzor.nexus.apikeys.security.RawApiKeyRequiredException;
 import dev.unzor.nexus.apikeys.security.ResolvedApiKey;
+import dev.unzor.nexus.apikeys.security.ResolvedCredential;
 import dev.unzor.nexus.registry.api.dto.HeartbeatReceipt;
 import dev.unzor.nexus.registry.api.requests.HeartbeatRequest;
 import dev.unzor.nexus.registry.application.service.RegistryHeartbeatService;
 import jakarta.validation.Valid;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -39,10 +42,20 @@ class RegistryHeartbeatController {
      * Handshake del SDK (ADR-0012): presenta la API key larga con scope
      * {@code registry:heartbeat} y recibe un instance token efímero (TTL por
      * defecto 1h) que puede usar en latidos posteriores en vez de la key cruda.
+     * <p>
+     * Debe bootstraparse con la key cruda, no con un token previo: si no, un
+     * cliente con un token podría renovarlo indefinidamente sin volver a
+     * presentar la key, eludiendo su rotación/revocación. Se rechaza con
+     * {@link RawApiKeyRequiredException} (401 {@code raw_api_key_required}) si la
+     * request llegó autenticada por instance token.
      */
     @PostMapping("/register")
     @RequiredScope("registry:heartbeat")
-    Map<String, Object> register(@AuthenticationPrincipal ResolvedApiKey apiKey) {
+    Map<String, Object> register(@AuthenticationPrincipal ResolvedApiKey apiKey,
+                                 Authentication authentication) {
+        if (!ResolvedCredential.API_KEY.equals(authentication.getDetails())) {
+            throw new RawApiKeyRequiredException();
+        }
         InstanceTokenService.Issued issued = instanceTokenService.mint(apiKey);
         return Map.of(
                 "token", issued.token(),

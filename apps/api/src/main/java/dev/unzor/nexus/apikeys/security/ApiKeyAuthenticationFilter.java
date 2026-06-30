@@ -74,7 +74,7 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
                         null, null, "no_match");
                 return;
             }
-            authenticate(resolved.get());
+            authenticate(resolved.get(), ResolvedCredential.INSTANCE_TOKEN);
             filterChain.doFilter(request, response);
             return;
         }
@@ -88,7 +88,7 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
         }
         try {
             ResolvedApiKey resolved = resolver.resolve(rawKey);
-            authenticate(resolved);
+            authenticate(resolved, ResolvedCredential.API_KEY);
         } catch (ApiKeyInvalidException exception) {
             reject(response, HttpStatus.UNAUTHORIZED, "invalid_api_key", "Invalid API key",
                     "The API key is invalid.", "api_key.auth_invalid", null, null, "no_match");
@@ -107,9 +107,11 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private void authenticate(ResolvedApiKey resolved) {
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(resolved, null, List.of()));
+    private void authenticate(ResolvedApiKey resolved, ResolvedCredential credential) {
+        UsernamePasswordAuthenticationToken auth =
+                new UsernamePasswordAuthenticationToken(resolved, null, List.of());
+        auth.setDetails(credential);
+        SecurityContextHolder.getContext().setAuthentication(auth);
     }
 
     private void reject(

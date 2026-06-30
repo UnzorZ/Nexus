@@ -1,5 +1,6 @@
 package dev.unzor.nexus.registry.api.controller;
 
+import dev.unzor.nexus.apikeys.security.RawApiKeyRequiredException;
 import dev.unzor.nexus.projects.domain.exception.ProjectAccessDeniedException;
 import dev.unzor.nexus.projects.domain.exception.ProjectNotFoundException;
 import org.springframework.http.HttpStatus;
@@ -20,6 +21,15 @@ import java.util.stream.Collectors;
  */
 @RestControllerAdvice(basePackageClasses = ProjectRegistryController.class)
 class RegistryExceptionHandler {
+
+    @ExceptionHandler(RawApiKeyRequiredException.class)
+    ResponseEntity<ProblemDetail> handleRawKeyRequired(RawApiKeyRequiredException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.UNAUTHORIZED, exception.getMessage());
+        problem.setTitle("Raw API key required");
+        problem.setProperty("code", "raw_api_key_required");
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(problem);
+    }
 
     @ExceptionHandler(ProjectAccessDeniedException.class)
     ResponseEntity<ProblemDetail> handleAccessDenied(ProjectAccessDeniedException exception) {

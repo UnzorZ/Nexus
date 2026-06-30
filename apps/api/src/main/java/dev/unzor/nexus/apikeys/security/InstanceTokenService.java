@@ -1,5 +1,7 @@
 package dev.unzor.nexus.apikeys.security;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
@@ -7,8 +9,12 @@ import tools.jackson.databind.ObjectMapper;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 
 /**
  * Emite y resuelve instance tokens opacos (ADR-0012) respaldados en Redis (el
@@ -22,10 +28,14 @@ import java.util.Optional;
 @Component
 public class InstanceTokenService {
 
+    private static final Logger log = LoggerFactory.getLogger(InstanceTokenService.class);
+
     /** TTL por defecto de un instance token. */
     public static final Duration DEFAULT_TTL = Duration.ofHours(1);
 
     private static final String KEY_PREFIX = "nexus:apikeys:itok:";
+    /** Índice inverso keyId → tokens, para revocarlos al deshabilitar/rotar/borrar la key. */
+    private static final String BY_KEY_PREFIX = KEY_PREFIX + "bykey:";
     private static final int TOKEN_BYTES = 32;
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -44,10 +54,40 @@ public class InstanceTokenService {
                 key.projectId(), key.keyId(), key.keyPrefix(), key.scopes(), Instant.now().plus(ttl));
         try {
             redis.opsForValue().set(KEY_PREFIX + token, MAPPER.writeValueAsString(payload), ttl);
+            // Indexa el token bajo su key para poder revocarlo al mutar la key (P2).
+            String index = byKey(key.keyId());
+            redis.opsForSet().add(index, token);
+            redis.expire(index, ttl);
         } catch (Exception e) {
             throw new IllegalStateException("No se pudo emitir el instance token", e);
         }
         return new Issued(token, ttl.toSeconds());
+    }
+
+    /**
+     * Revoca (borra de Redis) todos los instance tokens emitidos bajo una key —
+     * inmediato, sin esperar al TTL. Lo llama el ciclo de vida de la API key
+     * (deshabilitar/rotar/borrar en {@code ProjectApiKeysService}) para que la
+     * revocación de una key se propague a sus tokens (P2), cumpliendo la promesa
+     * de ADR-0012. Best-effort: si Redis falla, los tokens caen solos al expirar
+     * su TTL, y el cierre de la key no se ve afectado.
+     */
+    public void revokeFor(UUID keyId) {
+        String index = byKey(keyId);
+        try {
+            Set<String> tokens = redis.opsForSet().members(index);
+            if (tokens != null && !tokens.isEmpty()) {
+                List<String> tokenKeys = new ArrayList<>(tokens.size());
+                for (String token : tokens) {
+                    tokenKeys.add(KEY_PREFIX + token);
+                }
+                redis.delete(tokenKeys);
+            }
+            redis.delete(index);
+        } catch (Exception e) {
+            log.warn("No se pudieron revocar los instance tokens de la key {} (caerán solos al TTL): {}",
+                    keyId, e.toString());
+        }
     }
 
     /**
@@ -79,6 +119,10 @@ public class InstanceTokenService {
         byte[] bytes = new byte[TOKEN_BYTES];
         random.nextBytes(bytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    private static String byKey(UUID keyId) {
+        return BY_KEY_PREFIX + keyId;
     }
 
     /** Resultado de emitir un token: el valor opaco y los segundos hasta expirar. */
