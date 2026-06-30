@@ -9,7 +9,12 @@ import { Stagger } from "@/components/dashboard/anim";
 import { ModuleShell } from "@/components/dashboard/modules/ModuleShell";
 import { MODULE_CONFIGS } from "@/components/dashboard/modules/configs";
 import { getModule } from "@/components/dashboard/modules/catalog";
-import { useProjectModules } from "@/features/modules/useProjectModules";
+import {
+  MODULE_MESSAGES,
+  useProjectModules,
+  useSetModuleEnabled,
+} from "@/features/modules/queries";
+import { toMessage } from "@/lib/api/errors";
 import { useProject } from "../../useProject";
 
 export default function ProjectModuleDetailPage({
@@ -19,15 +24,14 @@ export default function ProjectModuleDetailPage({
 }) {
   const { projectId, moduleKey } = use(params);
   const { project } = useProject();
-  const {
-    modules,
-    loading,
-    error,
-    setEnabled,
-    toggleError,
-    isToggling,
-    refresh,
-  } = useProjectModules(projectId);
+  const modulesQ = useProjectModules(projectId);
+  const { setEnabled, isToggling, error: toggleErr } =
+    useSetModuleEnabled(projectId);
+  const modules = modulesQ.data ?? null;
+  const loading = modulesQ.isLoading;
+  const error = modulesQ.error ? toMessage(modulesQ.error) : null;
+  const toggleError = toggleErr ? toMessage(toggleErr, MODULE_MESSAGES) : null;
+  const refresh = () => modulesQ.refetch();
 
   const mod = getModule(moduleKey);
   const name = project?.name ?? "...";

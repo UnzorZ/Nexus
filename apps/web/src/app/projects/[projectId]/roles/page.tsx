@@ -43,8 +43,15 @@ import {
   Panel,
   StatusBadge,
 } from "@/components/dashboard/shared";
-import { useProjectRoles } from "@/features/roles/useProjectRoles";
+import {
+  useCreateRole,
+  useDeleteRole,
+  useProjectRoles,
+  useSetRolePermissions,
+  useUpdateRole,
+} from "@/features/roles/queries";
 import { isValidPermissionKey, type Role } from "@/features/roles/api";
+import { toFieldErrors, toMessage } from "@/lib/api/errors";
 import { useProject } from "../useProject";
 
 function RolesLoading() {
@@ -74,24 +81,57 @@ function sameSet(a: string[], b: string[]): boolean {
   return a.every((k) => sb.has(k));
 }
 
+/** Mensajes de error específicos de roles para toMessage (espejo del classify anterior). */
+const ROLES_MESSAGES = {
+  permission: "You don't have permission to manage roles for this project.",
+  forbidden: "Your session expired. Reload the page and try again.",
+  notFound: "This role no longer exists.",
+  codes: {
+    // 400 validation_error: el banner genérico; los detalles van inline por campo.
+    validation_error: "Revisa los campos marcados.",
+  },
+};
+
 export default function ProjectRolesPage() {
   const { project, loading: projectLoading, error: projectError } = useProject();
-  const {
-    roles,
-    loading,
-    error,
-    actionError,
-    fieldErrors,
-    busy,
-    create,
-    update,
-    remove,
-    setPermissions,
-    refresh,
-  } = useProjectRoles(project?.id ?? "");
+  const projectId = project?.id ?? "";
+
+  const rolesQ = useProjectRoles(projectId);
+  const createM = useCreateRole(projectId);
+  const updateM = useUpdateRole(projectId);
+  const removeM = useDeleteRole(projectId);
+  const setPermsM = useSetRolePermissions(projectId);
+
+  const roles = rolesQ.data ?? null;
+  const loading = rolesQ.isLoading;
+  const rolesError = rolesQ.error ? toMessage(rolesQ.error) : null;
+  const refresh = () => rolesQ.refetch();
 
   const canManage = project?.canManage ?? false;
   const name = project?.name ?? "...";
+
+  // El banner unificado de acción cubre create/update/setPermissions/remove:
+  // el primer error pendiente gana; los detalles por campo van inline.
+  const fieldErrorSource =
+    createM.error ?? updateM.error ?? setPermsM.error ?? null;
+  const fieldErrors = toFieldErrors(fieldErrorSource);
+  const actionErr =
+    createM.error ?? updateM.error ?? setPermsM.error ?? removeM.error;
+  const actionError = actionErr
+    ? toMessage(actionErr, ROLES_MESSAGES)
+    : null;
+  const busy =
+    createM.isPending ||
+    updateM.isPending ||
+    removeM.isPending ||
+    setPermsM.isPending;
+
+  function resetActionErrors() {
+    createM.reset();
+    updateM.reset();
+    removeM.reset();
+    setPermsM.reset();
+  }
 
   // Create-role dialog
   const [createOpen, setCreateOpen] = useState(false);
@@ -113,11 +153,14 @@ export default function ProjectRolesPage() {
 
   useEffect(() => {
     if (editing) {
+      // Sync del formulario al abrir el diálogo de edición (patrón del repo).
+      /* eslint-disable react-hooks/set-state-in-effect */
       setEditLabel(editing.label);
       setEditDescription(editing.description ?? "");
       setKeys(editing.permissionKeys);
       setNewKey("");
       setKeyError(null);
+      /* eslint-enable react-hooks/set-state-in-effect */
     }
   }, [editing]);
 
@@ -149,10 +192,13 @@ export default function ProjectRolesPage() {
         : null,
     };
     if (!body.key || !body.label) return;
-    const ok = await create(body);
-    if (ok) {
+    resetActionErrors();
+    try {
+      await createM.mutateAsync(body);
       setCreateForm({ key: "", label: "", description: "" });
       setCreateOpen(false);
+    } catch {
+      /* el error se muestra vía createM.error */
     }
   }
 
@@ -166,22 +212,25 @@ export default function ProjectRolesPage() {
       label !== editing.label || description !== (editing.description ?? null);
     const keysChanged = !sameSet(keys, editing.permissionKeys);
 
-    if (detailsChanged) {
-      const ok = await update(editing.id, { label, description });
-      if (!ok) return;
+    resetActionErrors();
+    try {
+      if (detailsChanged) {
+        await updateM.mutateAsync({ roleId: editing.id, body: { label, description } });
+      }
+      if (keysChanged) {
+        await setPermsM.mutateAsync({ roleId: editing.id, permissionKeys: keys });
+      }
+      setEditing(null);
+    } catch {
+      /* el error se muestra vía updateM.error / setPermsM.error */
     }
-    if (keysChanged) {
-      const ok = await setPermissions(editing.id, keys);
-      if (!ok) return;
-    }
-    setEditing(null);
   }
 
   if (loadingState) {
     return <RolesLoading />;
   }
 
-  if (projectError || error) {
+  if (projectError || rolesError) {
     return (
       <Stagger root className="mx-auto flex w-full max-w-7xl flex-1 flex-col">
         <PageHeader
@@ -194,7 +243,7 @@ export default function ProjectRolesPage() {
           <Panel>
             <EmptyState
               title="Could not load roles"
-              description={projectError ?? error ?? "Unknown error"}
+              description={projectError ?? rolesError ?? "Unknown error"}
               action={
                 <Button variant="outline" onClick={() => refresh()}>
                   Retry
@@ -522,8 +571,12 @@ export default function ProjectRolesPage() {
               variant="destructive"
               disabled={busy}
               onClick={async () => {
-                if (removeTarget) {
-                  await remove(removeTarget.id);
+                if (!removeTarget) return;
+                resetActionErrors();
+                try {
+                  await removeM.mutateAsync(removeTarget.id);
+                } catch {
+                  /* el error se muestra vía removeM.error */
                 }
                 setRemoveTarget(null);
               }}

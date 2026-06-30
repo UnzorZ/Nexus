@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Crown, LogOut } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -49,7 +49,7 @@ import {
   Panel,
   StatusBadge,
 } from "@/components/dashboard/shared";
-import { fetchCurrentAccount } from "@/features/session/api";
+import { useCurrentAccount } from "@/features/session/queries";
 import {
   colorFor,
   formatLastActive,
@@ -57,7 +57,14 @@ import {
   roleMeta,
   statusMeta,
 } from "@/features/members/display";
-import { useProjectMembers } from "@/features/members/useProjectMembers";
+import {
+  useInviteMember,
+  useProjectMembers,
+  useRemoveMember,
+  useTransferOwnership,
+  useUpdateMemberRole,
+} from "@/features/members/queries";
+import { toFieldErrors, toMessage } from "@/lib/api/errors";
 import type { Member, MemberRole } from "@/features/members/api";
 import { useProject } from "../useProject";
 
@@ -85,24 +92,32 @@ function MembersLoading() {
 const INVITABLE_ROLES: MemberRole[] = ["ADMIN", "MEMBER"];
 const CHANGEABLE_ROLES: MemberRole[] = ["ADMIN", "MEMBER"];
 
-export default function ProjectMembersPage() {
-  const { project, loading: projectLoading, error: projectError, refresh: refreshProject } = useProject();
-  const {
-    members,
-    loading: membersLoading,
-    error: membersError,
-    actionError,
-    inviteError,
-    inviteFieldErrors,
-    busy,
-    invite,
-    changeRole,
-    remove,
-    transfer,
-    refresh,
-  } = useProjectMembers(project?.id ?? "");
+/** Mensajes de error específicos de miembros para toMessage. */
+const MEMBER_MESSAGES = {
+  permission: "You don't have permission to manage members.",
+  notFound: "This member no longer exists.",
+  codes: {
+    last_owner: "The project must keep at least one active owner.",
+    already_owner: "That member is already the owner.",
+  },
+};
 
-  const [currentAccountId, setCurrentAccountId] = useState<string | null>(null);
+export default function ProjectMembersPage() {
+  const { project, loading: projectLoading, error: projectError } = useProject();
+  const projectId = project?.id ?? "";
+
+  const membersQ = useProjectMembers(projectId);
+  const inviteM = useInviteMember(projectId);
+  const roleM = useUpdateMemberRole(projectId);
+  const removeM = useRemoveMember(projectId);
+  const transferM = useTransferOwnership(projectId);
+  const { data: account } = useCurrentAccount();
+
+  const members = membersQ.data ?? null;
+  const membersLoading = membersQ.isLoading;
+  const membersError = membersQ.error ? toMessage(membersQ.error) : null;
+  const refresh = () => membersQ.refetch();
+
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<MemberRole>("MEMBER");
@@ -110,44 +125,74 @@ export default function ProjectMembersPage() {
   const [transferTarget, setTransferTarget] = useState<Member | null>(null);
   const [confirmTransfer, setConfirmTransfer] = useState("");
 
-  useEffect(() => {
-    let active = true;
-    fetchCurrentAccount()
-      .then((acc) => {
-        if (active) setCurrentAccountId(acc?.id ?? null);
-      })
-      .catch(() => {
-        if (active) setCurrentAccountId(null);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
+  const currentAccountId = account?.id ?? null;
+  const busy =
+    inviteM.isPending ||
+    roleM.isPending ||
+    removeM.isPending ||
+    transferM.isPending;
+  const inviteFieldErrors = toFieldErrors(inviteM.error);
+  const inviteError =
+    inviteM.error && Object.keys(inviteFieldErrors).length === 0
+      ? toMessage(inviteM.error, MEMBER_MESSAGES)
+      : null;
+  const actionErr = roleM.error ?? removeM.error ?? transferM.error;
+  const actionError = actionErr ? toMessage(actionErr, MEMBER_MESSAGES) : null;
 
   const loading = projectLoading || (Boolean(project) && membersLoading);
   const name = project?.name ?? "...";
   const canManage = project?.canManage ?? false;
   const canDelete = project?.canDelete ?? false;
 
+  function resetActionErrors() {
+    roleM.reset();
+    removeM.reset();
+    transferM.reset();
+  }
+
   async function onInvite() {
     if (!inviteEmail.trim()) return;
-    const ok = await invite({ email: inviteEmail.trim(), role: inviteRole });
-    if (ok) {
+    try {
+      await inviteM.mutateAsync({ email: inviteEmail.trim(), role: inviteRole });
       setInviteEmail("");
       setInviteRole("MEMBER");
       setInviteOpen(false);
+    } catch {
+      /* el error se muestra vía inviteM.error */
     }
+  }
+
+  async function changeRole(memberId: string, role: MemberRole) {
+    resetActionErrors();
+    try {
+      await roleM.mutateAsync({ memberId, role });
+    } catch {
+      /* actionError */
+    }
+  }
+
+  async function onRemove() {
+    if (!removeTarget) return;
+    resetActionErrors();
+    try {
+      await removeM.mutateAsync(removeTarget.id);
+    } catch {
+      /* actionError */
+    }
+    setRemoveTarget(null);
   }
 
   async function onTransfer() {
     if (!transferTarget) return;
-    const ok = await transfer(transferTarget.id);
+    resetActionErrors();
     setTransferTarget(null);
     setConfirmTransfer("");
-    if (ok) {
-      // El usuario actual deja de ser owner: refresca el proyecto para que
-      // canManage/canDelete se recalculen.
-      refreshProject({ silent: true });
+    try {
+      // transferM.onSuccess invalida la ficha del proyecto (canManage/canDelete
+      // se recalculan solos al dejar de ser owner) y la lista de miembros.
+      await transferM.mutateAsync(transferTarget.id);
+    } catch {
+      /* actionError */
     }
   }
 
@@ -465,12 +510,7 @@ export default function ProjectMembersPage() {
             <Button
               variant="destructive"
               disabled={busy}
-              onClick={async () => {
-                if (removeTarget) {
-                  await remove(removeTarget.id);
-                }
-                setRemoveTarget(null);
-              }}
+              onClick={onRemove}
             >
               Remove member
             </Button>
