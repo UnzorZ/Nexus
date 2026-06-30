@@ -8,7 +8,6 @@ import dev.unzor.nexus.projects.domain.exception.MembershipNotActiveException;
 import dev.unzor.nexus.projects.domain.exception.MembershipNotFoundException;
 import dev.unzor.nexus.projects.persistence.repository.ProjectMembershipRepository;
 import dev.unzor.nexus.shared.audit.AuditEvent;
-import dev.unzor.nexus.shared.audit.AuditOutcome;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -71,6 +70,6 @@ public class TransferOwnershipService {
         transferMeta.put("to", targetMembershipId);
         eventPublisher.publishEvent(AuditEvent.byAccount(
                 projectId, "member.ownership_transferred", "member", targetMembershipId.toString(),
-                AuditOutcome.SUCCESS, actorAccountId, transferMeta));
+                actorAccountId, transferMeta));
     }
 }

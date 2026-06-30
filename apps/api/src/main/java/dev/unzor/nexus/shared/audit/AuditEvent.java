@@ -12,10 +12,11 @@ import java.util.UUID;
  * el módulo {@code audit} lo consume y lo persiste en {@code audit_log}. Nunca
  * lleva secretos ni hashes.
  * <p>
- * Es inmutable y autodescriptivo: actor, recurso afectado, resultado, contexto
+ * Es inmutable y autodescriptivo: actor, recurso afectado, severidad, contexto
  * de la petición ({@code ip}, {@code userAgent}, {@code traceId} leídos de MDC
  * por la factoría) y metadata libre. Las factorías {@link #byAccount} y
- * {@link #anonymous} centralizan la lectura de MDC para que los puntos de
+ * {@link #anonymous} centralizan la lectura de MDC y DERIVAN la severidad del
+ * {@code action} ({@link Severity#forAction(String)}) para que los puntos de
  * emisión queden en una sola línea.
  */
 public record AuditEvent(
@@ -23,7 +24,7 @@ public record AuditEvent(
         String action,
         String resourceType,
         String resourceId,
-        AuditOutcome outcome,
+        Severity severity,
         String actorType,
         String actorId,
         String ip,
@@ -38,7 +39,6 @@ public record AuditEvent(
             String action,
             String resourceType,
             String resourceId,
-            AuditOutcome outcome,
             UUID actorAccountId,
             Map<String, Object> metadata
     ) {
@@ -47,7 +47,7 @@ public record AuditEvent(
                 action,
                 resourceType,
                 resourceId,
-                outcome,
+                Severity.forAction(action),
                 "NEXUS_ACCOUNT",
                 actorAccountId == null ? null : actorAccountId.toString(),
                 MDC.get("ip"),
@@ -62,7 +62,6 @@ public record AuditEvent(
             String action,
             String resourceType,
             String resourceId,
-            AuditOutcome outcome,
             String reason
     ) {
         return new AuditEvent(
@@ -70,7 +69,7 @@ public record AuditEvent(
                 action,
                 resourceType,
                 resourceId,
-                outcome,
+                Severity.forAction(action),
                 "ANONYMOUS",
                 null,
                 MDC.get("ip"),

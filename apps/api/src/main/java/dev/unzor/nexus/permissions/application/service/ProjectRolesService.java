@@ -9,7 +9,6 @@ import dev.unzor.nexus.permissions.persistence.repository.ProjectRolePermissionR
 import dev.unzor.nexus.permissions.persistence.repository.ProjectRoleRepository;
 import dev.unzor.nexus.projects.application.service.ProjectLookupService;
 import dev.unzor.nexus.shared.audit.AuditEvent;
-import dev.unzor.nexus.shared.audit.AuditOutcome;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -80,7 +79,7 @@ public class ProjectRolesService {
                     new ProjectRole(projectId, key, label, description));
             eventPublisher.publishEvent(AuditEvent.byAccount(
                     projectId, "role.created", "role", Objects.toString(saved.getId(), null),
-                    AuditOutcome.SUCCESS, actorAccountId, Map.of("key", key)));
+                    actorAccountId, Map.of("key", key)));
             return RoleDetails.from(saved, List.of());
         } catch (DataIntegrityViolationException exception) {
             if (isKeyUniqueViolation(exception)) {
@@ -116,7 +115,7 @@ public class ProjectRolesService {
         roleRepository.save(role);
         eventPublisher.publishEvent(AuditEvent.byAccount(
                 projectId, "role.updated", "role", roleId.toString(),
-                AuditOutcome.SUCCESS, actorAccountId, Map.of("key", role.getKey())));
+                actorAccountId, Map.of("key", role.getKey())));
         return RoleDetails.from(role, keysForRole(roleId));
     }
 
@@ -127,7 +126,7 @@ public class ProjectRolesService {
         roleRepository.delete(role);
         eventPublisher.publishEvent(AuditEvent.byAccount(
                 projectId, "role.deleted", "role", roleId.toString(),
-                AuditOutcome.SUCCESS, actorAccountId, Map.of("key", role.getKey())));
+                actorAccountId, Map.of("key", role.getKey())));
         // project_role_permissions se elimina vía el ON DELETE CASCADE del FK.
     }
 
@@ -148,7 +147,7 @@ public class ProjectRolesService {
         }
         eventPublisher.publishEvent(AuditEvent.byAccount(
                 projectId, "role.permissions_set", "role", roleId.toString(),
-                AuditOutcome.SUCCESS, actorAccountId, Map.of("count", unique.size())));
+                actorAccountId, Map.of("count", unique.size())));
         return RoleDetails.from(role, unique);
     }
 

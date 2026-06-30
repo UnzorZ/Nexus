@@ -4,7 +4,6 @@ import dev.unzor.nexus.apikeys.domain.exception.ApiKeyDisabledException;
 import dev.unzor.nexus.apikeys.domain.exception.ApiKeyExpiredException;
 import dev.unzor.nexus.apikeys.domain.exception.ApiKeyInvalidException;
 import dev.unzor.nexus.shared.audit.AuditEvent;
-import dev.unzor.nexus.shared.audit.AuditOutcome;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -127,7 +126,7 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
     ) {
         eventPublisher.publishEvent(AuditEvent.anonymous(
                 projectId, auditAction, "api_key", keyId == null ? null : keyId.toString(),
-                AuditOutcome.FAILURE, reason));
+                reason));
         problemWriter.write(response, status, code, title, detail);
     }
 }
