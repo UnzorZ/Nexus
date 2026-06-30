@@ -42,7 +42,10 @@ out/
 ### Playwright MCP ###
 .playwright-mcp/
 
-### Local env overrides (machine-specific, e.g. rotating zrok tunnel URLs; never commit) ###
+### Local env overrides + artifacts (machine-specific; never commit) ###
 /.env
 /apps/web/.env.local
 /apps/web/.env*.local
+/apps/web/tmp/
+/docs/plans/
+/nexus-logo.png
