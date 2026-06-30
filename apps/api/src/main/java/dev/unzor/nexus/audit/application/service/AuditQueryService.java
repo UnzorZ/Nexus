@@ -64,7 +64,8 @@ public class AuditQueryService {
                     return AuditEventView.from(
                             entry,
                             account != null ? account.displayName() : null,
-                            account != null ? account.email() : null);
+                            account != null ? account.email() : null,
+                            account != null ? account.instanceAdmin() : null);
                 })
                 .toList();
     }

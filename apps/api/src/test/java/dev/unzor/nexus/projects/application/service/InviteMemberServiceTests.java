@@ -34,7 +34,7 @@ class InviteMemberServiceTests {
     void inviteCreatesActiveMembershipWhenAccountHasNone() {
         UUID projectId = UUID.randomUUID();
         UUID accountId = UUID.randomUUID();
-        AccountSummary account = new AccountSummary(accountId, "new@example.com", "New", false, null);
+        AccountSummary account = new AccountSummary(accountId, "new@example.com", "New", false, false, null);
         when(accountDirectory.findByEmail("new@example.com")).thenReturn(Optional.of(account));
         when(membershipRepository.findByProjectIdAndNexusAccountId(projectId, accountId))
                 .thenReturn(Optional.empty());
@@ -54,7 +54,7 @@ class InviteMemberServiceTests {
     void inviteReactivatesAndReRolesAnExistingRevokedMembership() {
         UUID projectId = UUID.randomUUID();
         UUID accountId = UUID.randomUUID();
-        AccountSummary account = new AccountSummary(accountId, "again@example.com", "Again", false, null);
+        AccountSummary account = new AccountSummary(accountId, "again@example.com", "Again", false, false, null);
         ProjectMembership existing = new ProjectMembership(projectId, accountId, ProjectMembershipRole.MEMBER);
         existing.revoke();
         when(accountDirectory.findByEmail("again@example.com")).thenReturn(Optional.of(account));
