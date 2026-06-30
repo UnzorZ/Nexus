@@ -1,13 +1,14 @@
 import { apiClient } from "@/lib/api/client";
 import { apiRoutes } from "@/lib/api/routes";
 
-/** Resultado de un evento auditado (server-side, enum name como string). */
-export type AuditOutcome = "SUCCESS" | "FAILURE";
+/** Severidad de un evento (server-side, enum name como string). */
+export type Severity = "INFO" | "WARNING" | "MODERATE" | "CRITICAL";
 
 /**
- * Vista de un evento de auditoría para el panel (ADR-0004). El `outcome` es el
- * nombre del enum; el `actorType` es libre (hoy `NEXUS_ACCOUNT` / `ANONYMOUS`).
- * La metadata nunca lleva secretos. `projectId` es nullable (rechazos anónimos).
+ * Vista de un evento de auditoría para el panel (ADR-0004). La `severity` es el
+ * nombre del enum; el `actorType` es libre (hoy `NEXUS_ACCOUNT` / `ANONYMOUS`,
+ * y en el futuro cuentas OAuth). La metadata nunca lleva secretos. `projectId`
+ * es nullable (rechazos anónimos).
  */
 export type AuditEvent = {
   id: string;
@@ -15,7 +16,7 @@ export type AuditEvent = {
   action: string;
   resourceType: string | null;
   resourceId: string | null;
-  outcome: AuditOutcome;
+  severity: Severity;
   actorType: string;
   actorId: string | null;
   actorDisplayName: string | null;
@@ -31,16 +32,31 @@ export type AuditEvent = {
 export type AuditQuery = {
   /** Acota a eventos desde este instante ISO (lo usa el filtro de rango). */
   since?: string;
+  /** Página (0-based) y tamaño para la paginación backend. */
+  page?: number;
+  size?: number;
 };
 
-/** Listado de eventos de auditoría de un proyecto (panel, solo lectura). */
+/** Página de auditoría devuelta por el backend (forma estable). */
+export type AuditPage = {
+  items: AuditEvent[];
+  page: number;
+  size: number;
+  totalPages: number;
+  totalElements: number;
+  last: boolean;
+};
+
+/** Página de eventos de auditoría de un proyecto (panel, solo lectura). */
 export async function fetchProjectAudit(
   projectId: string,
   query: AuditQuery = {},
-): Promise<AuditEvent[]> {
+): Promise<AuditPage> {
   const url = new URL(apiRoutes.panel.projects.audit.root(projectId));
   if (query.since) url.searchParams.set("since", query.since);
-  return apiClient.get<AuditEvent[]>(url.toString(), {
+  if (query.page != null) url.searchParams.set("page", String(query.page));
+  if (query.size != null) url.searchParams.set("size", String(query.size));
+  return apiClient.get<AuditPage>(url.toString(), {
     redirect: "manual",
     errorMessage: "No se pudo cargar el log de auditoría.",
   });

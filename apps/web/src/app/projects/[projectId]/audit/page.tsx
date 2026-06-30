@@ -53,11 +53,11 @@ import {
   StatTile,
   StatusBadge,
 } from "@/components/dashboard/shared";
-import type { AuditEvent, AuditOutcome } from "@/features/audit/api";
+import type { AuditEvent, Severity } from "@/features/audit/api";
 import {
   actorMetaFor,
   formatRelativeTime,
-  outcomeMeta,
+  severityMeta,
 } from "@/features/audit/display";
 import { useProjectAudit } from "@/features/audit/queries";
 import { colorFor, initials } from "@/lib/account";
@@ -73,20 +73,18 @@ const RANGE_MS: Record<RangeKey, number> = {
   "30d": 2_592_000_000,
 };
 
-/** Etiquetas legibles por tipo de actor (extensible: cuando llegue OAuth, sus
- * tipos aparecerán automáticamente en el filtro al generarse eventos). */
 const ACTOR_LABELS: Record<string, string> = {
   NEXUS_ACCOUNT: "Nexus account",
   ANONYMOUS: "Anonymous",
 };
+
+const SEVERITIES: Severity[] = ["INFO", "WARNING", "MODERATE", "CRITICAL"];
 
 function moduleOf(action: string): string {
   const i = action.indexOf(".");
   return i > 0 ? action.slice(0, i) : action;
 }
 
-/** Tipo mostrado para el actor: Admin/Normal para cuentas Nexus, etiqueta para
- * el resto (anónimo, OAuth futuro…). */
 function actorKindLabel(event: AuditEvent): string {
   if (event.actorType === "NEXUS_ACCOUNT") {
     return event.actorAdmin ? "Admin" : "Normal";
@@ -124,12 +122,12 @@ const columns: ColumnDef<AuditEvent>[] = [
     ),
   },
   {
-    accessorKey: "outcome",
-    header: "Outcome",
-    size: 120,
-    minSize: 90,
+    accessorKey: "severity",
+    header: "Severity",
+    size: 130,
+    minSize: 100,
     cell: ({ row }) => {
-      const meta = outcomeMeta[row.original.outcome];
+      const meta = severityMeta[row.original.severity];
       return (
         <StatusBadge tone={meta.tone} dot>
           {meta.label}
@@ -188,23 +186,22 @@ export default function ProjectAuditPage() {
   const [query, setQuery] = useState("");
   const [actorFilter, setActorFilter] = useState<string>("all");
   const [moduleFilter, setModuleFilter] = useState<string>("all");
-  const [outcomeFilter, setOutcomeFilter] = useState<AuditOutcome | "all">(
-    "all",
-  );
+  const [severityFilter, setSeverityFilter] = useState<Severity | "all">("all");
   const [range, setRange] = useState<RangeKey>("all");
   const [sorting, setSorting] = useState<SortingState>([
     { id: "occurredAt", desc: true },
   ]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const {
-    data: events,
-    isLoading: loading,
-    error: auditError,
-    refetch,
-  } = useProjectAudit(project?.id ?? "", RANGE_MS[range]);
-  const error = auditError ? toMessage(auditError) : null;
-  const refresh = () => refetch();
+  const audit = useProjectAudit(project?.id ?? "", RANGE_MS[range]);
+  const events = useMemo(
+    () => audit.data?.pages.flatMap((p) => p.items) ?? null,
+    [audit.data],
+  );
+  const totalElements = audit.data?.pages[0]?.totalElements ?? 0;
+  const loading = audit.isLoading;
+  const error = audit.error ? toMessage(audit.error) : null;
+  const refresh = () => audit.refetch();
 
   const name = project?.name ?? "...";
   const loadingState = projectLoading || (Boolean(project) && loading);
@@ -219,7 +216,6 @@ export default function ProjectAuditPage() {
     return [...set].sort();
   }, [events]);
 
-  /** Tipos de actor presentes en el lote (para el filtro dinámico). */
   const actorTypes = useMemo(() => {
     if (!events) return [];
     return [...new Set(events.map((e) => e.actorType))].sort();
@@ -232,7 +228,8 @@ export default function ProjectAuditPage() {
       if (actorFilter !== "all" && e.actorType !== actorFilter) return false;
       if (moduleFilter !== "all" && moduleOf(e.action) !== moduleFilter)
         return false;
-      if (outcomeFilter !== "all" && e.outcome !== outcomeFilter) return false;
+      if (severityFilter !== "all" && e.severity !== severityFilter)
+        return false;
       if (!q) return true;
       return (
         e.action.toLowerCase().includes(q) ||
@@ -244,7 +241,7 @@ export default function ProjectAuditPage() {
         (e.actorEmail ?? "").toLowerCase().includes(q)
       );
     });
-  }, [events, query, actorFilter, moduleFilter, outcomeFilter]);
+  }, [events, query, actorFilter, moduleFilter, severityFilter]);
 
   const table = useReactTable({
     data: filtered,
@@ -258,10 +255,8 @@ export default function ProjectAuditPage() {
   });
 
   const selected = events?.find((e) => e.id === selectedId) ?? null;
-  const failures = filtered.filter((e) => e.outcome === "FAILURE").length;
+  const notable = filtered.filter((e) => e.severity !== "INFO").length;
 
-  /** Aplica un filtro rápido desde el modal (trace / usuario / tipo de evento)
-   * rellenando la búsqueda y cerrando el modal. */
   function applyFilter(value: string) {
     setQuery(value);
     setSelectedId(null);
@@ -332,15 +327,21 @@ export default function ProjectAuditPage() {
               iconColor={tint.amber.text}
               label="Events"
               value={filtered.length}
-              hint={range === "all" ? "Recent" : `Last ${range}`}
+              hint={
+                audit.hasNextPage
+                  ? `${totalElements} total (loaded ${events.length})`
+                  : range === "all"
+                    ? "Recent"
+                    : `Last ${range}`
+              }
             />
             <StatTile
               Icon={TriangleAlertIcon}
               iconBg={tint.red.bg}
               iconColor={tint.red.text}
-              label="Failures"
-              value={failures}
-              hint="Denied / failed"
+              label="Notable"
+              value={notable}
+              hint="Warning or higher"
             />
           </div>
 
@@ -384,16 +385,19 @@ export default function ProjectAuditPage() {
               </SelectContent>
             </Select>
             <Select
-              value={outcomeFilter}
-              onValueChange={(v) => setOutcomeFilter(v as AuditOutcome | "all")}
+              value={severityFilter}
+              onValueChange={(v) => setSeverityFilter(v as Severity | "all")}
             >
               <SelectTrigger size="sm" className="w-36">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All outcomes</SelectItem>
-                <SelectItem value="SUCCESS">Success</SelectItem>
-                <SelectItem value="FAILURE">Failure</SelectItem>
+                <SelectItem value="all">All severities</SelectItem>
+                {SEVERITIES.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {severityMeta[s].label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Select value={range} onValueChange={(v) => setRange(v as RangeKey)}>
@@ -474,8 +478,8 @@ export default function ProjectAuditPage() {
                               onMouseDown={header.getResizeHandler()}
                               onTouchStart={header.getResizeHandler()}
                               onClick={(e) => e.stopPropagation()}
-                              className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize touch-none select-none bg-transparent transition-colors hover:bg-border ${
-                                resizing ? "bg-primary" : ""
+                              className={`absolute right-0 top-0 h-full cursor-col-resize touch-none select-none bg-border/60 transition-all hover:bg-primary hover:w-2 ${
+                                resizing ? "w-2 bg-primary" : "w-0.5"
                               }`}
                             />
                           ) : null}
@@ -508,9 +512,24 @@ export default function ProjectAuditPage() {
               </TableBody>
             </Table>
           )}
-          <p className="mt-2 text-[11px] text-muted-foreground">
-            Drag a column header edge to resize · click a row for details.
-          </p>
+
+          <div className="mt-3 flex items-center justify-between gap-3 text-[11px] text-muted-foreground">
+            <span>
+              Drag a column header edge to resize · click a row for details.
+            </span>
+            {audit.hasNextPage ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={audit.isFetchingNextPage}
+                onClick={() => audit.fetchNextPage()}
+              >
+                {audit.isFetchingNextPage ? "Loading…" : "Load more"}
+              </Button>
+            ) : (
+              <span>{events.length} loaded</span>
+            )}
+          </div>
         </Panel>
       </Stagger>
 
@@ -520,7 +539,7 @@ export default function ProjectAuditPage() {
           if (!open) setSelectedId(null);
         }}
       >
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader className="gap-2">
             <DialogTitle className="flex flex-wrap items-center gap-2">
               <MonoChip>{selected?.action}</MonoChip>
@@ -529,8 +548,8 @@ export default function ProjectAuditPage() {
                 onClick={() => selected && applyFilter(selected.action)}
               />
               {selected ? (
-                <StatusBadge tone={outcomeMeta[selected.outcome].tone} dot>
-                  {outcomeMeta[selected.outcome].label}
+                <StatusBadge tone={severityMeta[selected.severity].tone} dot>
+                  {severityMeta[selected.severity].label}
                 </StatusBadge>
               ) : null}
             </DialogTitle>
@@ -559,8 +578,7 @@ function AuditDetail({
   const name = event.actorDisplayName ?? event.actorEmail;
   const seed = event.actorEmail ?? event.actorId ?? event.actorType;
   return (
-    <div className="flex flex-col gap-4">
-      {/* Actor / usuario */}
+    <div className="flex min-h-[320px] flex-col gap-4">
       <div className="rounded-lg border p-3">
         <div className="flex items-center justify-between">
           <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -599,7 +617,6 @@ function AuditDetail({
         </div>
       </div>
 
-      {/* Detalle del evento */}
       <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
         <Detail label="IP address" value={event.ip ?? "—"} mono />
         <div className="flex flex-col gap-0.5">
@@ -639,7 +656,6 @@ function AuditDetail({
   );
 }
 
-/** Metadata como lista clave→valor formateada (no JSON crudo). */
 function MetadataList({ data }: { data: Record<string, unknown> | null }) {
   const entries = data ? Object.entries(data) : [];
   if (entries.length === 0) {
