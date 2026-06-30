@@ -9,8 +9,9 @@ import java.util.UUID;
 /**
  * Vista de una instancia para el listado del panel. {@code status} es el valor
  * auto-reportado por la instancia; {@code liveness} es la ONLINE/STALE/OFFLINE
- * derivada de {@code lastSeenAt} y el timeout. Nunca expone el contenido íntegro
- * del metadata salvo lo que el panel decida mostrar.
+ * derivada de {@code lastSeenAt} y el timeout. {@code apiKeyPrefix} es el prefijo
+ * no sensible de la key que reportó ({@code nxs_<slug>_<partial>}); el secreto y
+ * el hash nunca se exponen.
  */
 public record HeartbeatInstanceView(
         UUID id,
@@ -20,7 +21,7 @@ public record HeartbeatInstanceView(
         String status,
         HeartbeatLiveness liveness,
         Instant lastSeenAt,
-        UUID apiKeyId,
+        String apiKeyPrefix,
         Instant createdAt
 ) {
 
@@ -33,7 +34,7 @@ public record HeartbeatInstanceView(
                 beat.getStatus(),
                 liveness,
                 beat.getLastSeenAt(),
-                beat.getApiKeyId(),
+                beat.getApiKeyPrefix(),
                 beat.getCreatedAt()
         );
     }

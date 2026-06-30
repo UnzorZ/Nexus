@@ -9,6 +9,7 @@ CREATE TABLE project_heartbeats (
     id UUID PRIMARY KEY,
     project_id UUID NOT NULL REFERENCES projects (id),
     api_key_id UUID NOT NULL,
+    api_key_prefix VARCHAR(64) NOT NULL,
     instance_id VARCHAR(128) NOT NULL,
     app_name VARCHAR(255) NOT NULL,
     app_version VARCHAR(128),

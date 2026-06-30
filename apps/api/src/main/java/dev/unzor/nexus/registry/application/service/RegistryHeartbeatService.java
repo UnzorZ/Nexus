@@ -34,15 +34,16 @@ public class RegistryHeartbeatService {
     }
 
     @Transactional
-    public HeartbeatReceipt record(UUID projectId, UUID apiKeyId, HeartbeatRequest request, Instant now) {
+    public HeartbeatReceipt record(UUID projectId, UUID apiKeyId, String apiKeyPrefix,
+                                   HeartbeatRequest request, Instant now) {
         ProjectHeartbeat beat = repository.findByProjectIdAndInstanceId(projectId, request.instanceId())
                 .map(existing -> {
-                    existing.touch(apiKeyId, request.appName(), request.appVersion(), request.status(),
+                    existing.touch(apiKeyId, apiKeyPrefix, request.appName(), request.appVersion(), request.status(),
                             request.metadata(), now);
                     return existing;
                 })
                 .orElseGet(() -> new ProjectHeartbeat(
-                        projectId, apiKeyId, request.instanceId(),
+                        projectId, apiKeyId, apiKeyPrefix, request.instanceId(),
                         request.appName(), request.appVersion(), request.status(),
                         request.metadata(), now));
         repository.save(beat);

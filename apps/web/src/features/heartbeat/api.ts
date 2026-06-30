@@ -14,7 +14,8 @@ export type HeartbeatInstance = {
   status: string;
   liveness: HeartbeatLiveness;
   lastSeenAt: string;
-  apiKeyId: string;
+  /** Non-secret key prefix (nxs_<slug>_<partial>) that reported this instance. */
+  apiKeyPrefix: string;
   createdAt: string;
 };
 

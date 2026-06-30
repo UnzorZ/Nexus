@@ -33,7 +33,7 @@ class RegistryHeartbeatServiceTests {
         when(repository.findByProjectIdAndInstanceId(projectId, "demo-api-01")).thenReturn(Optional.empty());
         when(repository.save(any(ProjectHeartbeat.class))).thenAnswer(i -> i.getArgument(0));
 
-        var receipt = service.record(projectId, apiKeyId,
+        var receipt = service.record(projectId, apiKeyId, "nxs_demo_partial12",
                 new HeartbeatRequest("demo-api-01", "demo-api", "1.0.0", "up", Map.of("javaVersion", "21")), now);
 
         assertThat(receipt.projectId()).isEqualTo(projectId);
@@ -48,11 +48,11 @@ class RegistryHeartbeatServiceTests {
         UUID apiKeyId = UUID.randomUUID();
         Instant now = Instant.parse("2026-06-30T12:00:00Z");
         ProjectHeartbeat existing = new ProjectHeartbeat(
-                projectId, apiKeyId, "demo-api-01", "demo-api", "0.9.0", "up", null, now.minus(60, ChronoUnit.SECONDS));
+                projectId, apiKeyId, "nxs_demo_oldprefix", "demo-api-01", "demo-api", "0.9.0", "up", null, now.minus(60, ChronoUnit.SECONDS));
         when(repository.findByProjectIdAndInstanceId(projectId, "demo-api-01")).thenReturn(Optional.of(existing));
         when(repository.save(any(ProjectHeartbeat.class))).thenAnswer(i -> i.getArgument(0));
 
-        service.record(projectId, apiKeyId,
+        service.record(projectId, apiKeyId, "nxs_demo_partial12",
                 new HeartbeatRequest("demo-api-01", "demo-api", "1.0.0", "up", null), now);
 
         assertThat(existing.getLastSeenAt()).isEqualTo(now);
