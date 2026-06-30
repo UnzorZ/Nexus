@@ -30,7 +30,7 @@ identity/
 │   ├── configuration/
 │   │   └── SecurityConfig            # Configuración central de seguridad y OAuth2
 │   ├── events/                       # (vacío) Manejadores de eventos de dominio
-│   ├── observability/                # (vacío) Métricas y trazabilidad
+│   ├── observability/                # Estado/readiness de claves JWK
 │   └── service/
 │       └── IdentityHelloService      # Servicio de estado del módulo
 │
@@ -142,7 +142,8 @@ Definida en [`ProjectSecurityConfiguration`](../../apps/api/src/main/java/dev/un
 | `OAuth2AuthorizationService` | Autorizaciones OAuth | `JdbcOAuth2AuthorizationService` |
 | `OAuth2AuthorizationConsentService` | Consentimientos | `JdbcOAuth2AuthorizationConsentService` |
 | `OidcRegisteredClientBootstrap` | Cliente técnico idempotente | Bootstrap, no consumido por el panel |
-| `jwkSource` | Firma JWT del Authorization Server | Par RSA en memoria por arranque (pendiente persistir) |
+| `jwkSource` | Firma JWT del Authorization Server | Clave RSA cargada desde keystore PKCS12 configurable |
+| `JwkSigningKeyHealthIndicator` | Readiness de la clave de firma | `UP` con keystore configurado; `DOWN` si se usa fallback efímero |
 
 El cliente bootstrap se configura con `nexus.oauth.bootstrap.*`. El secreto se
 almacena como `{bcrypt}…`. En cada arranque se reconcilian secreto, métodos de
@@ -170,12 +171,25 @@ el mismo `registered-client-id`, el arranque falla con un mensaje explícito.
 
 ### Firma de tokens (JWK)
 
-- Algoritmo: **RSA 2048-bit**.
-- Se genera un par de claves en cada arranque (en memoria).
-- El key ID es un UUID aleatorio.
-- Los tokens JWT se firman y verifican con este par de claves.
+- Algoritmo: **RSA**.
+- La clave activa se carga desde un keystore **PKCS12** configurado con
+  `nexus.oauth.jwk.*`.
+- El entorno local usa por defecto el keystore de desarrollo
+  `classpath:keystore/dev-jwk.p12`, suficiente para desarrollo y tests.
+- Producción debe configurar su propio keystore mediante las variables
+  `NEXUS_OAUTH_JWK_*`; reutilizar el keystore de desarrollo en producción es
+  inseguro.
+- El `kid` es estable y determinista, derivado de la clave pública.
+- El `JWKSet` expone una sola clave activa. La rotación sin solapamiento está
+  aceptada por ADR-0011: los access tokens en vuelo firmados con la clave anterior
+  dejan de validar hasta que el cliente use su refresh token persistido.
+- Solo si `nexus.oauth.jwk.keystore-location` se configura explícitamente vacío,
+  Nexus genera una clave efímera en memoria, registra una advertencia y marca la
+  readiness `jwkSigningKey` como `DOWN`.
 
-> **Nota:** Al reiniciar la aplicación, las claves RSA cambian y los tokens anteriores dejan de ser válidos. La implementación final debe persistir las claves.
+La motivación, límites de rotación y runbook de producción están documentados en
+[`ADR-0011`](../adr/0011-persistent-jwt-signing-keys.md) y
+[`JWT signing keys`](../deployment/jwt-signing-keys.md).
 
 ---
 
@@ -253,6 +267,11 @@ nexus.oauth.bootstrap.client-id=oidc-client
 nexus.oauth.bootstrap.client-secret=${NEXUS_OAUTH_BOOTSTRAP_CLIENT_SECRET:changeme-local-dev}
 nexus.oauth.bootstrap.redirect-uri=${NEXUS_OAUTH_BOOTSTRAP_REDIRECT_URI:http://127.0.0.1:8080/oauth2/bootstrap/callback}
 nexus.oauth.bootstrap.post-logout-redirect-uri=${nexus.frontend-base-url}/
+
+nexus.oauth.jwk.keystore-location=${NEXUS_OAUTH_JWK_KEYSTORE_LOCATION:classpath:keystore/dev-jwk.p12}
+nexus.oauth.jwk.keystore-password=${NEXUS_OAUTH_JWK_KEYSTORE_PASSWORD:devpassword}
+nexus.oauth.jwk.key-alias=${NEXUS_OAUTH_JWK_KEY_ALIAS:nexus-dev-key}
+nexus.oauth.jwk.key-password=${NEXUS_OAUTH_JWK_KEY_PASSWORD:devpassword}
 ```
 
 ### Variables de entorno
@@ -261,6 +280,10 @@ nexus.oauth.bootstrap.post-logout-redirect-uri=${nexus.frontend-base-url}/
 |----------|---------|-------------|
 | `NEXUS_FRONTEND_BASE_URL` | `http://localhost:3000` | URL base del panel Next.js (redirect post-login, validación `continue`) |
 | `NEXUS_OAUTH_BOOTSTRAP_CLIENT_SECRET` | `changeme-local-dev` | Secreto del cliente bootstrap (se persiste como `{bcrypt}…`) |
+| `NEXUS_OAUTH_JWK_KEYSTORE_LOCATION` | `classpath:keystore/dev-jwk.p12` | Ubicación del keystore PKCS12 de firma JWT |
+| `NEXUS_OAUTH_JWK_KEYSTORE_PASSWORD` | `devpassword` | Password del keystore de desarrollo; producción debe sobrescribirlo |
+| `NEXUS_OAUTH_JWK_KEY_ALIAS` | `nexus-dev-key` | Alias de la clave activa |
+| `NEXUS_OAUTH_JWK_KEY_PASSWORD` | `devpassword` | Password de la clave activa; producción debe sobrescribirlo |
 
 ---
 
@@ -287,7 +310,7 @@ testImplementation 'org.springframework.boot:spring-boot-starter-security-oauth2
 
 - [x] Authorization Server OAuth2/OIDC funcional.
 - [x] Flujo Authorization Code + Refresh Token.
-- [x] Firma de tokens JWT con RSA 2048.
+- [x] Firma JWT con keystore PKCS12 persistente y `kid` estable.
 - [x] Persistencia JDBC de clientes, autorizaciones y consentimientos OAuth2.
 - [x] Cliente bootstrap técnico idempotente (`nexus.oauth.bootstrap.*`).
 - [x] Panel Nexus con `NexusAccount`, sesión HTTP, CSRF y `/panel/login`.
@@ -299,7 +322,6 @@ testImplementation 'org.springframework.boot:spring-boot-starter-security-oauth2
 - [ ] `ProjectUserUserDetailsService` con `projectId` obligatorio.
 - [ ] Discovery/JWKS/claves de firma por proyecto.
 - [ ] Login funcional de `ProjectUser` en `/p/{slug}/login`.
-- [ ] Persistencia de claves JWK del Authorization Server.
 - [ ] Integración con `permissions` y eventos de dominio de auth.
 
 ---
