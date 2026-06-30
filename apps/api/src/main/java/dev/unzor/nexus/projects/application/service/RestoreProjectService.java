@@ -5,7 +5,6 @@ import dev.unzor.nexus.projects.domain.enums.ProjectStatus;
 import dev.unzor.nexus.projects.domain.exception.ProjectNotFoundException;
 import dev.unzor.nexus.projects.persistence.repository.ProjectRepository;
 import dev.unzor.nexus.shared.audit.AuditEvent;
-import dev.unzor.nexus.shared.audit.AuditOutcome;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,6 +43,6 @@ public class RestoreProjectService {
         projectRepository.save(project);
         eventPublisher.publishEvent(AuditEvent.byAccount(
                 projectId, "project.restored", "project", projectId.toString(),
-                AuditOutcome.SUCCESS, actorAccountId, null));
+                actorAccountId, null));
     }
 }

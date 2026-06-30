@@ -10,7 +10,6 @@ import dev.unzor.nexus.projects.domain.exception.LastOwnerProtectionException;
 import dev.unzor.nexus.projects.domain.exception.MembershipNotFoundException;
 import dev.unzor.nexus.projects.persistence.repository.ProjectMembershipRepository;
 import dev.unzor.nexus.shared.audit.AuditEvent;
-import dev.unzor.nexus.shared.audit.AuditOutcome;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -60,7 +59,7 @@ public class ChangeMemberRoleService {
         ProjectMembership saved = membershipRepository.save(membership);
         eventPublisher.publishEvent(AuditEvent.byAccount(
                 projectId, "member.role_changed", "member", Objects.toString(saved.getId(), null),
-                AuditOutcome.SUCCESS, actorAccountId, Map.of("role", newRole.name())));
+                actorAccountId, Map.of("role", newRole.name())));
         AccountSummary account = accountDirectory.findById(saved.getNexusAccountId())
                 .orElseThrow(() -> new IllegalStateException(
                         "Account " + saved.getNexusAccountId() + " missing for membership " + saved.getId()));

@@ -1,6 +1,6 @@
 package dev.unzor.nexus.audit.api.controller;
 
-import dev.unzor.nexus.audit.api.dto.AuditEventView;
+import dev.unzor.nexus.audit.api.dto.AuditPage;
 import dev.unzor.nexus.audit.application.service.AuditQueryService;
 import dev.unzor.nexus.projects.application.service.ProjectAccessService;
 import dev.unzor.nexus.shared.security.AuthenticatedAccount;
@@ -13,14 +13,14 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 
 /**
  * Listado del log de auditoría de un proyecto para el panel (ADR-0004). Solo
  * lectura. Requiere {@code requireAccess}: cualquier miembro del proyecto (o un
- * instance admin) puede verlo. Acota por {@code since} y {@code limit}; el
- * filtrado fino va en el cliente.
+ * instance admin) puede verlo. Acota por {@code since} y PAGINA con
+ * {@code page}/{@code size} (50 por página, máx. 100); el filtrado fino va en el
+ * cliente sobre la página cargada.
  */
 @RestController
 @RequestMapping("/api/panel/v1/projects/{projectId}/audit")
@@ -35,15 +35,16 @@ class ProjectAuditController {
     }
 
     @GetMapping
-    List<AuditEventView> list(
+    AuditPage list(
             @PathVariable UUID projectId,
             @RequestParam(name = "since", required = false) Instant since,
-            @RequestParam(name = "limit", defaultValue = "200") int limit,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "50") int size,
             @AuthenticationPrincipal AuthenticatedAccount principal,
             Authentication authentication
     ) {
         projectAccessService.requireAccess(projectId, principal.accountId(), isInstanceAdmin(authentication));
-        return service.listForProject(projectId, since, limit);
+        return AuditPage.from(service.listForProject(projectId, since, page, size));
     }
 
     private static boolean isInstanceAdmin(Authentication authentication) {
