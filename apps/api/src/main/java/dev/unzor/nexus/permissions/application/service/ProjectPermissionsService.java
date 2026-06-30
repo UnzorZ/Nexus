@@ -6,12 +6,17 @@ import dev.unzor.nexus.permissions.domain.exception.PermissionAlreadyExistsExcep
 import dev.unzor.nexus.permissions.domain.exception.PermissionNotFoundException;
 import dev.unzor.nexus.permissions.persistence.repository.ProjectPermissionRepository;
 import dev.unzor.nexus.projects.application.service.ProjectLookupService;
+import dev.unzor.nexus.shared.audit.AuditEvent;
+import dev.unzor.nexus.shared.audit.AuditOutcome;
 import org.hibernate.exception.ConstraintViolationException;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -25,13 +30,16 @@ public class ProjectPermissionsService {
 
     private final ProjectPermissionRepository permissionRepository;
     private final ProjectLookupService projectLookupService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public ProjectPermissionsService(
             ProjectPermissionRepository permissionRepository,
-            ProjectLookupService projectLookupService
+            ProjectLookupService projectLookupService,
+            ApplicationEventPublisher eventPublisher
     ) {
         this.permissionRepository = permissionRepository;
         this.projectLookupService = projectLookupService;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional(readOnly = true)
@@ -43,7 +51,8 @@ public class ProjectPermissionsService {
     }
 
     @Transactional
-    public PermissionDetails create(UUID projectId, String key, String label, String description) {
+    public PermissionDetails create(UUID projectId, String key, String label, String description,
+                                    UUID actorAccountId) {
         projectLookupService.requireById(projectId);
         if (permissionRepository.existsByProjectIdAndKey(projectId, key)) {
             throw new PermissionAlreadyExistsException(
@@ -55,6 +64,9 @@ public class ProjectPermissionsService {
             // aquí y se traduzca a 409, no como 500 al hacer commit.
             ProjectPermission saved = permissionRepository.saveAndFlush(
                     new ProjectPermission(projectId, key, label, description));
+            eventPublisher.publishEvent(AuditEvent.byAccount(
+                    projectId, "permission.created", "permission", Objects.toString(saved.getId(), null),
+                    AuditOutcome.SUCCESS, actorAccountId, Map.of("key", key)));
             return PermissionDetails.from(saved);
         } catch (DataIntegrityViolationException exception) {
             if (isKeyUniqueViolation(exception)) {
@@ -83,18 +95,26 @@ public class ProjectPermissionsService {
     }
 
     @Transactional
-    public PermissionDetails update(UUID projectId, UUID permissionId, String label, String description) {
+    public PermissionDetails update(UUID projectId, UUID permissionId, String label, String description,
+                                    UUID actorAccountId) {
         projectLookupService.requireById(projectId);
         ProjectPermission permission = requirePermission(projectId, permissionId);
         permission.relabel(label, description);
-        return PermissionDetails.from(permissionRepository.save(permission));
+        PermissionDetails details = PermissionDetails.from(permissionRepository.save(permission));
+        eventPublisher.publishEvent(AuditEvent.byAccount(
+                projectId, "permission.updated", "permission", permissionId.toString(),
+                AuditOutcome.SUCCESS, actorAccountId, Map.of("key", permission.getKey())));
+        return details;
     }
 
     @Transactional
-    public void delete(UUID projectId, UUID permissionId) {
+    public void delete(UUID projectId, UUID permissionId, UUID actorAccountId) {
         projectLookupService.requireById(projectId);
         ProjectPermission permission = requirePermission(projectId, permissionId);
         permissionRepository.delete(permission);
+        eventPublisher.publishEvent(AuditEvent.byAccount(
+                projectId, "permission.deleted", "permission", permissionId.toString(),
+                AuditOutcome.SUCCESS, actorAccountId, Map.of("key", permission.getKey())));
         // Las concesiones rol→permiso referencian la clave (no el id), así que
         // sobreviven: borrar un permiso del catálogo no rompe los roles.
     }

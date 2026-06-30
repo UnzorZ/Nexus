@@ -7,6 +7,7 @@ import dev.unzor.nexus.permissions.domain.exception.PermissionNotFoundException;
 import dev.unzor.nexus.permissions.persistence.repository.ProjectPermissionRepository;
 import dev.unzor.nexus.projects.application.service.ProjectLookupService;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.List;
 import java.util.Optional;
@@ -25,7 +26,8 @@ class ProjectPermissionsServiceTests {
     private final ProjectPermissionRepository permissionRepository = mock(ProjectPermissionRepository.class);
     private final ProjectLookupService projectLookupService = mock(ProjectLookupService.class);
     private final ProjectPermissionsService service =
-            new ProjectPermissionsService(permissionRepository, projectLookupService);
+            new ProjectPermissionsService(permissionRepository, projectLookupService,
+                    mock(ApplicationEventPublisher.class));
 
     @Test
     void listReturnsPermissionsForProject() {
@@ -46,7 +48,7 @@ class ProjectPermissionsServiceTests {
         when(permissionRepository.existsByProjectIdAndKey(projectId, "orders.cancel")).thenReturn(false);
         when(permissionRepository.saveAndFlush(any(ProjectPermission.class))).thenAnswer(i -> i.getArgument(0));
 
-        PermissionDetails result = service.create(projectId, "orders.cancel", "Cancel", "desc");
+        PermissionDetails result = service.create(projectId, "orders.cancel", "Cancel", "desc", UUID.randomUUID());
 
         assertThat(result.key()).isEqualTo("orders.cancel");
         verify(permissionRepository).saveAndFlush(any(ProjectPermission.class));
@@ -61,7 +63,7 @@ class ProjectPermissionsServiceTests {
         when(permissionRepository.saveAndFlush(any(ProjectPermission.class)))
                 .thenThrow(new org.springframework.dao.DataIntegrityViolationException("unique", violation));
 
-        assertThatThrownBy(() -> service.create(projectId, "orders.cancel", "Cancel", null))
+        assertThatThrownBy(() -> service.create(projectId, "orders.cancel", "Cancel", null, UUID.randomUUID()))
                 .isInstanceOf(PermissionAlreadyExistsException.class);
     }
 
@@ -70,7 +72,7 @@ class ProjectPermissionsServiceTests {
         UUID projectId = UUID.randomUUID();
         when(permissionRepository.existsByProjectIdAndKey(projectId, "orders.cancel")).thenReturn(true);
 
-        assertThatThrownBy(() -> service.create(projectId, "orders.cancel", "Cancel", "desc"))
+        assertThatThrownBy(() -> service.create(projectId, "orders.cancel", "Cancel", "desc", UUID.randomUUID()))
                 .isInstanceOf(PermissionAlreadyExistsException.class);
         verify(permissionRepository, never()).save(any(ProjectPermission.class));
     }
@@ -83,7 +85,7 @@ class ProjectPermissionsServiceTests {
         when(permissionRepository.findByProjectIdAndId(projectId, permissionId)).thenReturn(Optional.of(permission));
         when(permissionRepository.save(any(ProjectPermission.class))).thenAnswer(i -> i.getArgument(0));
 
-        PermissionDetails result = service.update(projectId, permissionId, "Cancel order", "new");
+        PermissionDetails result = service.update(projectId, permissionId, "Cancel order", "new", UUID.randomUUID());
 
         assertThat(result.label()).isEqualTo("Cancel order");
         assertThat(result.description()).isEqualTo("new");
@@ -96,7 +98,7 @@ class ProjectPermissionsServiceTests {
         UUID permissionId = UUID.randomUUID();
         when(permissionRepository.findByProjectIdAndId(projectId, permissionId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.update(projectId, permissionId, "x", null))
+        assertThatThrownBy(() -> service.update(projectId, permissionId, "x", null, UUID.randomUUID()))
                 .isInstanceOf(PermissionNotFoundException.class);
     }
 
@@ -107,7 +109,7 @@ class ProjectPermissionsServiceTests {
         ProjectPermission permission = withId(new ProjectPermission(projectId, "orders.cancel", "Cancel", null), permissionId);
         when(permissionRepository.findByProjectIdAndId(projectId, permissionId)).thenReturn(Optional.of(permission));
 
-        service.delete(projectId, permissionId);
+        service.delete(projectId, permissionId, UUID.randomUUID());
 
         verify(permissionRepository).delete(permission);
     }

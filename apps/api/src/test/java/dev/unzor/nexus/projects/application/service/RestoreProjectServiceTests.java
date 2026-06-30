@@ -5,6 +5,7 @@ import dev.unzor.nexus.projects.domain.enums.ProjectStatus;
 import dev.unzor.nexus.projects.domain.exception.ProjectNotFoundException;
 import dev.unzor.nexus.projects.persistence.repository.ProjectRepository;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -20,7 +21,8 @@ import static org.mockito.Mockito.when;
 class RestoreProjectServiceTests {
 
     private final ProjectRepository projectRepository = mock(ProjectRepository.class);
-    private final RestoreProjectService service = new RestoreProjectService(projectRepository);
+    private final RestoreProjectService service =
+            new RestoreProjectService(projectRepository, mock(ApplicationEventPublisher.class));
 
     @Test
     void restoresArchivedProject() {
@@ -31,7 +33,7 @@ class RestoreProjectServiceTests {
         when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
         when(projectRepository.save(any(Project.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        service.restore(projectId);
+        service.restore(projectId, UUID.randomUUID());
 
         assertThat(project.getStatus()).isEqualTo(ProjectStatus.ACTIVE);
         verify(projectRepository).save(project);
@@ -44,7 +46,7 @@ class RestoreProjectServiceTests {
 
         when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
 
-        service.restore(projectId);
+        service.restore(projectId, UUID.randomUUID());
 
         // An active project needs no write — and a suspended project must not be
         // reactivated by "restore" (that's a different operation).
@@ -60,7 +62,7 @@ class RestoreProjectServiceTests {
 
         when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
 
-        service.restore(projectId);
+        service.restore(projectId, UUID.randomUUID());
 
         assertThat(project.getStatus()).isEqualTo(ProjectStatus.SUSPENDED);
         verify(projectRepository, never()).save(any(Project.class));
@@ -71,7 +73,7 @@ class RestoreProjectServiceTests {
         UUID projectId = UUID.randomUUID();
         when(projectRepository.findById(projectId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.restore(projectId))
+        assertThatThrownBy(() -> service.restore(projectId, UUID.randomUUID()))
                 .isInstanceOf(ProjectNotFoundException.class);
     }
 }

@@ -1,14 +1,14 @@
 package dev.unzor.nexus.apikeys.security;
 
-import dev.unzor.nexus.apikeys.application.events.ApiKeyAuditEvent;
 import dev.unzor.nexus.apikeys.domain.exception.ApiKeyDisabledException;
 import dev.unzor.nexus.apikeys.domain.exception.ApiKeyExpiredException;
 import dev.unzor.nexus.apikeys.domain.exception.ApiKeyInvalidException;
+import dev.unzor.nexus.shared.audit.AuditEvent;
+import dev.unzor.nexus.shared.audit.AuditOutcome;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.slf4j.MDC;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -17,7 +17,6 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -34,7 +33,8 @@ import java.util.UUID;
  * </ul>
  * Si alguna es válida, fija el {@code SecurityContext} (principal
  * {@link ResolvedApiKey}). Si no llega ninguna, o es inválida, escribe el error
- * §11 y emite un {@link ApiKeyAuditEvent} de rechazo (ADR-0004).
+ * §11 y emite un {@link AuditEvent} de rechazo (ADR-0004) que el módulo
+ * {@code audit} persiste.
  */
 public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
 
@@ -125,8 +125,9 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
             UUID keyId,
             String reason
     ) {
-        eventPublisher.publishEvent(new ApiKeyAuditEvent(
-                auditAction, projectId, keyId, "ANONYMOUS", null, reason, Map.of(), MDC.get("traceId")));
+        eventPublisher.publishEvent(AuditEvent.anonymous(
+                projectId, auditAction, "api_key", keyId == null ? null : keyId.toString(),
+                AuditOutcome.FAILURE, reason));
         problemWriter.write(response, status, code, title, detail);
     }
 }

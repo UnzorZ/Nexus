@@ -57,7 +57,7 @@ class ProjectModulesControllerTests {
         var authentication = new UsernamePasswordAuthenticationToken(
                 principal, null, List.of(new SimpleGrantedAuthority("ROLE_USER")));
 
-        when(projectModuleService.setEnabled(projectId, NexusModule.IDENTITY, true))
+        when(projectModuleService.setEnabled(projectId, NexusModule.IDENTITY, true, accountId))
                 .thenReturn(new dev.unzor.nexus.modules.api.dto.ProjectModuleStatus("identity", true, true));
 
         controller.setEnabled(
@@ -69,6 +69,6 @@ class ProjectModulesControllerTests {
         );
 
         verify(projectAccessService).requireManage(projectId, accountId, false);
-        verify(projectModuleService).setEnabled(projectId, NexusModule.IDENTITY, true);
+        verify(projectModuleService).setEnabled(projectId, NexusModule.IDENTITY, true, accountId);
     }
 }

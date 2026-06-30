@@ -65,7 +65,7 @@ class ProjectPermissionsControllerTests {
         UUID projectId = UUID.randomUUID();
         UUID accountId = UUID.randomUUID();
         AuthenticatedAccount principal = () -> accountId;
-        when(permissionsService.create(projectId, "orders.cancel", "Cancel", null))
+        when(permissionsService.create(projectId, "orders.cancel", "Cancel", null, accountId))
                 .thenReturn(new PermissionDetails(UUID.randomUUID(), "orders.cancel", "Cancel", null, PermissionSource.WEB));
 
         controller.create(
@@ -76,7 +76,7 @@ class ProjectPermissionsControllerTests {
         );
 
         verify(projectAccessService).requireManage(projectId, accountId, false);
-        verify(permissionsService).create(projectId, "orders.cancel", "Cancel", null);
+        verify(permissionsService).create(projectId, "orders.cancel", "Cancel", null, accountId);
     }
 
     @Test
@@ -95,7 +95,7 @@ class ProjectPermissionsControllerTests {
         );
 
         verify(projectAccessService).requireManage(projectId, accountId, false);
-        verify(permissionsService).update(projectId, permissionId, "Cancel", "desc");
+        verify(permissionsService).update(projectId, permissionId, "Cancel", "desc", accountId);
     }
 
     @Test
@@ -108,7 +108,7 @@ class ProjectPermissionsControllerTests {
         controller.delete(projectId, permissionId, principal, authentication(principal));
 
         verify(projectAccessService).requireManage(projectId, accountId, false);
-        verify(permissionsService).delete(projectId, permissionId);
+        verify(permissionsService).delete(projectId, permissionId, accountId);
     }
 
     private static UsernamePasswordAuthenticationToken authentication(AuthenticatedAccount principal) {

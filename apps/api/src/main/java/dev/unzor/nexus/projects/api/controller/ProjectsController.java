@@ -126,7 +126,7 @@ class ProjectsController {
         // requireDelete already enforces an ACTIVE OWNER membership; no need for
         // a separate requireAccess query (see updateProject).
         projectAccessService.requireDelete(projectId, principal.accountId(), isInstanceAdmin);
-        archiveProjectService.archive(projectId);
+        archiveProjectService.archive(projectId, principal.accountId());
     }
 
     @PostMapping("/{projectId}/restore")
@@ -140,7 +140,7 @@ class ProjectsController {
         // privilege (see archiveProject). requireDelete already enforces an ACTIVE
         // OWNER membership, so no separate requireAccess query is needed.
         projectAccessService.requireDelete(projectId, principal.accountId(), isInstanceAdmin);
-        restoreProjectService.restore(projectId);
+        restoreProjectService.restore(projectId, principal.accountId());
         return getProjectService.getById(projectId, principal.accountId(), isInstanceAdmin);
     }
 

@@ -4,6 +4,9 @@ import dev.unzor.nexus.projects.domain.entity.Project;
 import dev.unzor.nexus.projects.domain.enums.ProjectStatus;
 import dev.unzor.nexus.projects.domain.exception.ProjectNotFoundException;
 import dev.unzor.nexus.projects.persistence.repository.ProjectRepository;
+import dev.unzor.nexus.shared.audit.AuditEvent;
+import dev.unzor.nexus.shared.audit.AuditOutcome;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,13 +19,15 @@ import java.util.UUID;
 public class ArchiveProjectService {
 
     private final ProjectRepository projectRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public ArchiveProjectService(ProjectRepository projectRepository) {
+    public ArchiveProjectService(ProjectRepository projectRepository, ApplicationEventPublisher eventPublisher) {
         this.projectRepository = projectRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
-    public void archive(UUID projectId) {
+    public void archive(UUID projectId, UUID actorAccountId) {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new ProjectNotFoundException(projectId.toString()));
         // Idempotent: an already-archived project has nothing to do (and avoids a
@@ -32,5 +37,8 @@ public class ArchiveProjectService {
         }
         project.archive();
         projectRepository.save(project);
+        eventPublisher.publishEvent(AuditEvent.byAccount(
+                projectId, "project.archived", "project", projectId.toString(),
+                AuditOutcome.SUCCESS, actorAccountId, null));
     }
 }

@@ -78,7 +78,7 @@ class ProjectMembersControllerTests {
         UUID accountId = UUID.randomUUID();
         AuthenticatedAccount principal = () -> accountId;
         var authentication = authentication(principal);
-        when(inviteService.invite(projectId, "x@example.com", ProjectMembershipRole.MEMBER))
+        when(inviteService.invite(projectId, "x@example.com", ProjectMembershipRole.MEMBER, accountId))
                 .thenReturn(details());
 
         controller.invite(
@@ -89,7 +89,7 @@ class ProjectMembersControllerTests {
         );
 
         verify(projectAccessService).requireManage(projectId, accountId, false);
-        verify(inviteService).invite(projectId, "x@example.com", ProjectMembershipRole.MEMBER);
+        verify(inviteService).invite(projectId, "x@example.com", ProjectMembershipRole.MEMBER, accountId);
     }
 
     @Test
@@ -99,7 +99,7 @@ class ProjectMembersControllerTests {
         UUID accountId = UUID.randomUUID();
         AuthenticatedAccount principal = () -> accountId;
         var authentication = authentication(principal);
-        when(changeRoleService.changeRole(projectId, membershipId, ProjectMembershipRole.ADMIN))
+        when(changeRoleService.changeRole(projectId, membershipId, ProjectMembershipRole.ADMIN, accountId))
                 .thenReturn(details());
 
         controller.changeRole(
@@ -111,7 +111,7 @@ class ProjectMembersControllerTests {
         );
 
         verify(projectAccessService).requireManage(projectId, accountId, false);
-        verify(changeRoleService).changeRole(projectId, membershipId, ProjectMembershipRole.ADMIN);
+        verify(changeRoleService).changeRole(projectId, membershipId, ProjectMembershipRole.ADMIN, accountId);
     }
 
     @Test
@@ -125,7 +125,7 @@ class ProjectMembersControllerTests {
         controller.remove(projectId, membershipId, principal, authentication);
 
         verify(projectAccessService).requireManage(projectId, accountId, false);
-        verify(removeService).remove(projectId, membershipId);
+        verify(removeService).remove(projectId, membershipId, accountId);
     }
 
     @Test
@@ -139,7 +139,7 @@ class ProjectMembersControllerTests {
         controller.transferOwnership(projectId, memberId, principal, authentication);
 
         verify(projectAccessService).requireDelete(projectId, accountId, false);
-        verify(transferOwnershipService).transfer(projectId, memberId);
+        verify(transferOwnershipService).transfer(projectId, memberId, accountId);
     }
 
     @Test

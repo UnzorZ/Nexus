@@ -77,7 +77,7 @@ class ProjectMembersController {
         // requireManage ya exige una membresía activa OWNER/ADMIN; no hace falta una
         // consulta requireAccess aparte (mismo patrón que updateProject).
         projectAccessService.requireManage(projectId, principal.accountId(), isInstanceAdmin);
-        return inviteMemberService.invite(projectId, request.email(), request.role());
+        return inviteMemberService.invite(projectId, request.email(), request.role(), principal.accountId());
     }
 
     @PatchMapping("/{memberId}")
@@ -90,7 +90,7 @@ class ProjectMembersController {
     ) {
         boolean isInstanceAdmin = isInstanceAdmin(authentication);
         projectAccessService.requireManage(projectId, principal.accountId(), isInstanceAdmin);
-        return changeMemberRoleService.changeRole(projectId, memberId, request.role());
+        return changeMemberRoleService.changeRole(projectId, memberId, request.role(), principal.accountId());
     }
 
     @DeleteMapping("/{memberId}")
@@ -103,7 +103,7 @@ class ProjectMembersController {
     ) {
         boolean isInstanceAdmin = isInstanceAdmin(authentication);
         projectAccessService.requireManage(projectId, principal.accountId(), isInstanceAdmin);
-        removeMemberService.remove(projectId, memberId);
+        removeMemberService.remove(projectId, memberId, principal.accountId());
     }
 
     @PostMapping("/{memberId}/transfer-ownership")
@@ -117,7 +117,7 @@ class ProjectMembersController {
         boolean isInstanceAdmin = isInstanceAdmin(authentication);
         // Transferir la propiedad es una acción de nivel OWNER: requireDelete.
         projectAccessService.requireDelete(projectId, principal.accountId(), isInstanceAdmin);
-        transferOwnershipService.transfer(projectId, memberId);
+        transferOwnershipService.transfer(projectId, memberId, principal.accountId());
     }
 
     private static boolean isInstanceAdmin(Authentication authentication) {
