@@ -104,6 +104,10 @@ export const apiRoutes = {
           apiUrl(
             `/api/panel/v1/projects/${encodeURIComponent(projectId)}/heartbeats`,
           ),
+        settings: (projectId: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/heartbeats/settings`,
+          ),
       },
       audit: {
         root: (projectId: string) =>
@@ -136,6 +140,10 @@ export const apiRoutes = {
           apiUrl(
             `/api/panel/v1/projects/${encodeURIComponent(projectId)}/documents/templates/${encodeURIComponent(templateId)}`,
           ),
+        render: (projectId: string, templateId: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/documents/templates/${encodeURIComponent(templateId)}/render`,
+          ),
         rendersRoot: (projectId: string) =>
           apiUrl(
             `/api/panel/v1/projects/${encodeURIComponent(projectId)}/documents/renders`,
@@ -150,6 +158,22 @@ export const apiRoutes = {
           apiUrl(
             `/api/panel/v1/projects/${encodeURIComponent(projectId)}/notify/templates/${encodeURIComponent(templateId)}`,
           ),
+        preview: (projectId: string, templateId: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/notify/templates/${encodeURIComponent(templateId)}/preview`,
+          ),
+        smtp: (projectId: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/notify/smtp`,
+          ),
+        variables: (projectId: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/notify/variables`,
+          ),
+        test: (projectId: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/notify/test`,
+          ),
         notificationsRoot: (projectId: string) =>
           apiUrl(
             `/api/panel/v1/projects/${encodeURIComponent(projectId)}/notify/notifications`,
@@ -163,6 +187,18 @@ export const apiRoutes = {
         secretByKey: (projectId: string, key: string) =>
           apiUrl(
             `/api/panel/v1/projects/${encodeURIComponent(projectId)}/vault/secrets/${encodeURIComponent(key)}`,
+          ),
+        secretValue: (projectId: string, key: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/vault/secrets/${encodeURIComponent(key)}/value`,
+          ),
+        encryption: (projectId: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/vault/encryption`,
+          ),
+        masterKey: (projectId: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/vault/master-key`,
           ),
       },
     },
