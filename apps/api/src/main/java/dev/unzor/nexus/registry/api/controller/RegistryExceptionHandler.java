@@ -3,6 +3,7 @@ package dev.unzor.nexus.registry.api.controller;
 import dev.unzor.nexus.apikeys.security.RawApiKeyRequiredException;
 import dev.unzor.nexus.projects.domain.exception.ProjectAccessDeniedException;
 import dev.unzor.nexus.projects.domain.exception.ProjectNotFoundException;
+import dev.unzor.nexus.registry.domain.exception.InvalidRegistrySettingsException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -55,6 +56,14 @@ class RegistryExceptionHandler {
                 .collect(Collectors.joining("; "));
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, detail);
         problem.setTitle("Validation failed");
+        problem.setProperty("code", "validation_error");
+        return ResponseEntity.badRequest().body(problem);
+    }
+
+    @ExceptionHandler(InvalidRegistrySettingsException.class)
+    ResponseEntity<ProblemDetail> handleInvalidSettings(InvalidRegistrySettingsException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
+        problem.setTitle("Invalid liveness thresholds");
         problem.setProperty("code", "validation_error");
         return ResponseEntity.badRequest().body(problem);
     }
