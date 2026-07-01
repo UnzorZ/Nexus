@@ -1,8 +1,9 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { fetchHeartbeats } from "./api";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { fetchHeartbeats, fetchRegistrySettings, saveRegistrySettings } from "./api";
 import { queryKeys } from "@/lib/api/queryKeys";
+import { withCsrf } from "@/lib/api/csrf";
 
 /** Refresco en vivo del panel (es de solo lectura, así que es seguro). */
 const POLL_INTERVAL_MS = 10_000;
@@ -20,5 +21,30 @@ export function useProjectHeartbeats(projectId: string) {
     enabled: !!projectId,
     refetchInterval: POLL_INTERVAL_MS,
     queryFn: () => fetchHeartbeats(projectId),
+  });
+}
+
+/** Umbrales de liveness del proyecto (override o defaults globales). */
+export function useProjectRegistrySettings(projectId: string) {
+  return useQuery({
+    queryKey: queryKeys.projects.registrySettings(projectId),
+    enabled: !!projectId,
+    queryFn: () => fetchRegistrySettings(projectId),
+  });
+}
+
+export function useSaveRegistrySettings(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: {
+      intervalSeconds: number;
+      staleAfterSeconds: number;
+      timeoutSeconds: number;
+    }) => withCsrf((token) => saveRegistrySettings(projectId, vars, token)),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.projects.registrySettings(projectId) });
+      // La liveness mostrada depende de los umbrales → refresca el listado.
+      qc.invalidateQueries({ queryKey: queryKeys.projects.heartbeats(projectId) });
+    },
   });
 }

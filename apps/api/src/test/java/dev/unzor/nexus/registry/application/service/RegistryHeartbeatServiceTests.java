@@ -1,11 +1,14 @@
 package dev.unzor.nexus.registry.application.service;
 
+import dev.unzor.nexus.projects.application.service.ProjectLookupService;
 import dev.unzor.nexus.registry.api.requests.HeartbeatRequest;
 import dev.unzor.nexus.registry.application.configuration.HeartbeatProperties;
 import dev.unzor.nexus.registry.domain.entity.ProjectHeartbeat;
 import dev.unzor.nexus.registry.domain.enums.HeartbeatLiveness;
 import dev.unzor.nexus.registry.persistence.repository.ProjectHeartbeatRepository;
+import dev.unzor.nexus.registry.persistence.repository.ProjectRegistrySettingsRepository;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -22,8 +25,11 @@ import static org.mockito.Mockito.when;
 class RegistryHeartbeatServiceTests {
 
     private final ProjectHeartbeatRepository repository = mock(ProjectHeartbeatRepository.class);
+    private final ProjectRegistrySettingsRepository settingsRepository = mock(ProjectRegistrySettingsRepository.class);
+    private final ProjectLookupService projectLookupService = mock(ProjectLookupService.class);
     private final HeartbeatProperties properties = new HeartbeatProperties();
-    private final RegistryHeartbeatService service = new RegistryHeartbeatService(repository, properties);
+    private final RegistryHeartbeatService service = new RegistryHeartbeatService(
+            repository, settingsRepository, projectLookupService, properties, mock(ApplicationEventPublisher.class));
 
     @Test
     void recordCreatesNewInstanceWhenAbsent() {
@@ -31,6 +37,7 @@ class RegistryHeartbeatServiceTests {
         UUID apiKeyId = UUID.randomUUID();
         Instant now = Instant.parse("2026-06-30T12:00:00Z");
         when(repository.findByProjectIdAndInstanceId(projectId, "demo-api-01")).thenReturn(Optional.empty());
+        when(settingsRepository.findByProjectId(projectId)).thenReturn(Optional.empty());
         when(repository.save(any(ProjectHeartbeat.class))).thenAnswer(i -> i.getArgument(0));
 
         var receipt = service.record(projectId, apiKeyId, "nxs_demo_partial12",
@@ -50,6 +57,7 @@ class RegistryHeartbeatServiceTests {
         ProjectHeartbeat existing = new ProjectHeartbeat(
                 projectId, apiKeyId, "nxs_demo_oldprefix", "demo-api-01", "demo-api", "0.9.0", "up", null, now.minus(60, ChronoUnit.SECONDS));
         when(repository.findByProjectIdAndInstanceId(projectId, "demo-api-01")).thenReturn(Optional.of(existing));
+        when(settingsRepository.findByProjectId(projectId)).thenReturn(Optional.empty());
         when(repository.save(any(ProjectHeartbeat.class))).thenAnswer(i -> i.getArgument(0));
 
         service.record(projectId, apiKeyId, "nxs_demo_partial12",
@@ -63,11 +71,18 @@ class RegistryHeartbeatServiceTests {
     @Test
     void livenessDerivedFromLastSeenAndThresholds() {
         Instant now = Instant.parse("2026-06-30T12:00:00Z");
+        // interval=30, staleAfter=60, timeout=90
+        RegistryHeartbeatService.LivenessThresholds thresholds =
+                new RegistryHeartbeatService.LivenessThresholds(30, 60, 90);
         // within beat interval (<=30s) -> ONLINE
-        assertThat(service.livenessOf(now.minus(10, ChronoUnit.SECONDS), now)).isEqualTo(HeartbeatLiveness.ONLINE);
-        // grace window (30s < .. <= 90s) -> STALE
-        assertThat(service.livenessOf(now.minus(60, ChronoUnit.SECONDS), now)).isEqualTo(HeartbeatLiveness.STALE);
-        // past timeout (>90s) -> OFFLINE
-        assertThat(service.livenessOf(now.minus(120, ChronoUnit.SECONDS), now)).isEqualTo(HeartbeatLiveness.OFFLINE);
+        assertThat(service.livenessOf(now.minus(10, ChronoUnit.SECONDS), now, thresholds)).isEqualTo(HeartbeatLiveness.ONLINE);
+        // entered stale window (30s < .. ) -> STALE
+        assertThat(service.livenessOf(now.minus(60, ChronoUnit.SECONDS), now, thresholds)).isEqualTo(HeartbeatLiveness.STALE);
+        // stale extends THROUGH timeout boundary (past staleAfter=60 but <= timeout=90) -> STALE
+        assertThat(service.livenessOf(now.minus(75, ChronoUnit.SECONDS), now, thresholds)).isEqualTo(HeartbeatLiveness.STALE);
+        assertThat(service.livenessOf(now.minus(90, ChronoUnit.SECONDS), now, thresholds)).isEqualTo(HeartbeatLiveness.STALE);
+        // past timeout -> OFFLINE (timeout, not staleAfter, is the OFFLINE boundary)
+        assertThat(service.livenessOf(now.minus(95, ChronoUnit.SECONDS), now, thresholds)).isEqualTo(HeartbeatLiveness.OFFLINE);
+        assertThat(service.livenessOf(now.minus(120, ChronoUnit.SECONDS), now, thresholds)).isEqualTo(HeartbeatLiveness.OFFLINE);
     }
 }
