@@ -37,6 +37,10 @@ export const queryKeys = {
       ["projects", projectId, "documents"] as const,
     documentRenders: (projectId: string) =>
       ["projects", projectId, "documents", "renders"] as const,
+    notifyTemplates: (projectId: string) =>
+      ["projects", projectId, "notify", "templates"] as const,
+    notifications: (projectId: string) =>
+      ["projects", projectId, "notify", "notifications"] as const,
   },
 
   sessions: () => ["sessions"] as const,
