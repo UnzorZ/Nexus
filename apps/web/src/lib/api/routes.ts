@@ -141,6 +141,20 @@ export const apiRoutes = {
             `/api/panel/v1/projects/${encodeURIComponent(projectId)}/documents/renders`,
           ),
       },
+      notify: {
+        templatesRoot: (projectId: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/notify/templates`,
+          ),
+        templateById: (projectId: string, templateId: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/notify/templates/${encodeURIComponent(templateId)}`,
+          ),
+        notificationsRoot: (projectId: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/notify/notifications`,
+          ),
+      },
     },
   },
 } as const;
