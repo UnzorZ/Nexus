@@ -200,6 +200,33 @@ class ModuleGateIntegrationTests {
     }
 
     @Test
+    void unauthorizedCallerDoesNotLearnModuleState() throws Exception {
+        String ownerEmail = unique("gate-leak-owner");
+        String outsiderEmail = unique("gate-leak-outsider");
+        registerAccount(ownerEmail);
+        registerAccount(outsiderEmail);
+        LoginSession owner = login(ownerEmail);
+        LoginSession outsider = login(outsiderEmail);
+        String projectId = createProject(owner, randomSlug("gate"));
+
+        setModule(projectId, NexusModule.PERMISSIONS, false);
+
+        // El outsider (no miembro) no ve module_disabled: recibe el permission_denied
+        // habitual, idéntico a lo que obtendría con el módulo encendido → no filtra
+        // el estado del módulo ni confirma que el projectId existe.
+        mockMvc.perform(get("/api/panel/v1/projects/{projectId}/permissions", projectId)
+                        .cookie(outsider.sessionCookie()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("permission_denied"));
+
+        // El propietario (autorizado) sí ve el estado real.
+        mockMvc.perform(get("/api/panel/v1/projects/{projectId}/permissions", projectId)
+                        .cookie(owner.sessionCookie()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("module_disabled"));
+    }
+
+    @Test
     void modulesManagementStaysReachableNoLockout() throws Exception {
         String ownerEmail = unique("gate-lockout");
         registerAccount(ownerEmail);
