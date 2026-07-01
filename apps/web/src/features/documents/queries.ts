@@ -6,6 +6,7 @@ import {
   deleteDocumentTemplate,
   fetchDocumentRenders,
   fetchDocumentTemplates,
+  renderDocumentTemplate,
   updateDocumentTemplate,
 } from "./api";
 import { queryKeys } from "@/lib/api/queryKeys";
@@ -66,5 +67,20 @@ export function useProjectDocumentRenders(projectId: string) {
     queryKey: queryKeys.projects.documentRenders(projectId),
     enabled: !!projectId,
     queryFn: () => fetchDocumentRenders(projectId),
+  });
+}
+
+/** Renderiza una plantilla desde el panel; invalida el historial de renders. */
+export function useRenderDocumentTemplate(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { templateId: string; variables: Record<string, string> }) =>
+      withCsrf((token) =>
+        renderDocumentTemplate(projectId, vars.templateId, vars.variables, token),
+      ),
+    onSuccess: () =>
+      qc.invalidateQueries({
+        queryKey: queryKeys.projects.documentRenders(projectId),
+      }),
   });
 }

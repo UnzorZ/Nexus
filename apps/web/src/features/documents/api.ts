@@ -93,3 +93,28 @@ export async function fetchDocumentRenders(
     },
   );
 }
+
+export type DocumentRenderResult = {
+  renderId: string;
+  output: string;
+  contentType: string;
+  renderedAt: string;
+};
+
+/** Renderiza una plantilla desde el panel con variables {$var} (no envía nada). */
+export async function renderDocumentTemplate(
+  projectId: string,
+  templateId: string,
+  variables: Record<string, string>,
+  csrfToken: string,
+): Promise<DocumentRenderResult> {
+  return apiClient.post<DocumentRenderResult>(
+    apiRoutes.panel.projects.documents.render(projectId, templateId),
+    { variables },
+    {
+      headers: { [CSRF_HEADER_NAME]: csrfToken },
+      redirect: "manual",
+      errorMessage: "No se pudo renderizar la plantilla.",
+    },
+  );
+}
