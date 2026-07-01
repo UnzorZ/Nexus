@@ -155,6 +155,16 @@ export const apiRoutes = {
             `/api/panel/v1/projects/${encodeURIComponent(projectId)}/notify/notifications`,
           ),
       },
+      vault: {
+        secretsRoot: (projectId: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/vault/secrets`,
+          ),
+        secretByKey: (projectId: string, key: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/vault/secrets/${encodeURIComponent(key)}`,
+          ),
+      },
     },
   },
 } as const;
