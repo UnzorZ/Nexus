@@ -67,6 +67,21 @@ public class ProjectModuleService {
     }
 
     /**
+     * Consulta de runtime para el module gate: ¿está el módulo habilitado para el
+     * proyecto? Una fila ausente hereda el valor por defecto del catálogo.
+     *
+     * <p>A diferencia de {@link #listForProject}, no verifica la existencia del
+     * proyecto (el controlador ya devolverá 404 para uno inexistente); el gate
+     * sólo necesita saber el estado del módulo, en una sola lectura.</p>
+     */
+    @Transactional(readOnly = true)
+    public boolean isEnabled(UUID projectId, NexusModule module) {
+        return projectModuleRepository.findByProjectIdAndModule(projectId, module)
+                .map(ProjectModule::isEnabled)
+                .orElseGet(module::enabledByDefault);
+    }
+
+    /**
      * Persiste el estado de un módulo (upsert).
      *
      * <p>Verifica primero la existencia del proyecto (consistencia con

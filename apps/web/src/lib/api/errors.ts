@@ -3,6 +3,8 @@ import { NexusApiError } from "@/lib/api/client";
 export type ErrorMessages = {
   /** 403 `permission_denied` (requireManage/requireDelete falló). */
   permission?: string;
+  /** 403 `module_disabled` (el proyecto tiene este módulo apagado). */
+  moduleDisabled?: string;
   /** 403 genérico (sesión caducada / CSRF). */
   forbidden?: string;
   /** 404 no encontrado. */
@@ -12,6 +14,8 @@ export type ErrorMessages = {
 };
 
 const DEFAULT_PERMISSION = "You don't have permission to do that.";
+const DEFAULT_MODULE_DISABLED =
+  "This module is disabled for this project. Re-enable it from Modules.";
 const DEFAULT_FORBIDDEN = "Your session expired. Reload the page and try again.";
 const DEFAULT_NOT_FOUND = "This resource no longer exists.";
 
@@ -57,6 +61,9 @@ export function toMessage(err: unknown, messages: ErrorMessages = {}): string {
   }
   if (err.status === 403 && err.code === "permission_denied") {
     return messages.permission ?? DEFAULT_PERMISSION;
+  }
+  if (err.status === 403 && err.code === "module_disabled") {
+    return messages.moduleDisabled ?? DEFAULT_MODULE_DISABLED;
   }
   if (err.status === 403) {
     return messages.forbidden ?? DEFAULT_FORBIDDEN;

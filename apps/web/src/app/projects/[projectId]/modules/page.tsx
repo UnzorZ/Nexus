@@ -113,7 +113,7 @@ export default function ProjectModulesPage() {
       <PageHeader
         crumbs={["Projects", name, "Modules"]}
         title="Modules"
-        description={`Enable or disable Nexus capabilities for ${name}. Disabled modules are saved, but request-level enforcement isn't active yet.`}
+        description={`Enable or disable Nexus capabilities for ${name}. Disabled modules reject their API requests with a 403.`}
         projectId={project.id}
         badge={
           <StatusBadge tone="emerald" dot pulse>
@@ -140,9 +140,8 @@ export default function ProjectModulesPage() {
             <strong>
               {project.status.charAt(0) + project.status.slice(1).toLowerCase()}
             </strong>
-            . You can still change modules and your changes are saved, but they
-            aren&apos;t enforced yet — disabling a module won&apos;t reject
-            requests until module gating is enabled.
+            . Module changes are saved and enforced on the project&apos;s API
+            requests.
           </span>
         </div>
       ) : null}
