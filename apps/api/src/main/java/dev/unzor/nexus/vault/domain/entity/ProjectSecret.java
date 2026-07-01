@@ -46,6 +46,9 @@ public class ProjectSecret {
     @Column(nullable = false)
     private String nonce;
 
+    @Column(nullable = false, length = 24)
+    private String cipher;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -55,16 +58,18 @@ public class ProjectSecret {
     @Column(name = "last_rotated_at")
     private Instant lastRotatedAt;
 
-    public ProjectSecret(UUID projectId, String key, String ciphertext, String nonce) {
+    public ProjectSecret(UUID projectId, String key, String ciphertext, String nonce, String cipher) {
         this.projectId = Objects.requireNonNull(projectId);
         this.key = Objects.requireNonNull(key);
         this.ciphertext = Objects.requireNonNull(ciphertext);
         this.nonce = Objects.requireNonNull(nonce);
+        this.cipher = Objects.requireNonNull(cipher);
     }
 
-    public void rotate(String ciphertext, String nonce) {
+    public void rotate(String ciphertext, String nonce, String cipher) {
         this.ciphertext = Objects.requireNonNull(ciphertext);
         this.nonce = Objects.requireNonNull(nonce);
+        this.cipher = Objects.requireNonNull(cipher);
         this.lastRotatedAt = Instant.now();
     }
 

@@ -2,6 +2,7 @@ package dev.unzor.nexus.vault.api.controller;
 
 import dev.unzor.nexus.projects.domain.exception.ProjectAccessDeniedException;
 import dev.unzor.nexus.projects.domain.exception.ProjectNotFoundException;
+import dev.unzor.nexus.vault.domain.exception.InvalidCipherException;
 import dev.unzor.nexus.vault.domain.exception.VaultSecretAlreadyExistsException;
 import dev.unzor.nexus.vault.domain.exception.VaultSecretNotFoundException;
 import org.springframework.http.HttpStatus;
@@ -28,6 +29,14 @@ class VaultExceptionHandler {
         problem.setTitle("Conflict");
         problem.setProperty("code", "conflict");
         return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler(InvalidCipherException.class)
+    ResponseEntity<ProblemDetail> handleInvalidCipher(InvalidCipherException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
+        problem.setTitle("Invalid cipher");
+        problem.setProperty("code", "invalid_cipher");
+        return ResponseEntity.badRequest().body(problem);
     }
 
     @ExceptionHandler(ProjectAccessDeniedException.class)

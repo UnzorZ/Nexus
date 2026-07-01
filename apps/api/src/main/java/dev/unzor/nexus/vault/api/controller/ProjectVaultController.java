@@ -3,8 +3,10 @@ package dev.unzor.nexus.vault.api.controller;
 import dev.unzor.nexus.projects.application.service.ProjectAccessService;
 import dev.unzor.nexus.shared.security.AuthenticatedAccount;
 import dev.unzor.nexus.vault.api.dto.SecretSummary;
+import dev.unzor.nexus.vault.api.dto.SecretValue;
 import dev.unzor.nexus.vault.api.requests.WriteSecretRequest;
 import dev.unzor.nexus.vault.application.service.ProjectVaultService;
+import dev.unzor.nexus.vault.domain.enums.VaultCipher;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -61,7 +63,8 @@ class ProjectVaultController {
     ) {
         boolean isInstanceAdmin = isInstanceAdmin(authentication);
         projectAccessService.requireManage(projectId, principal.accountId(), isInstanceAdmin);
-        return vaultService.createSecret(projectId, key, request.value(), principal.accountId());
+        return vaultService.createSecret(projectId, key, request.value(),
+                VaultCipher.fromKey(request.cipher()), principal.accountId());
     }
 
     @PatchMapping("/{key}")
@@ -74,7 +77,21 @@ class ProjectVaultController {
     ) {
         boolean isInstanceAdmin = isInstanceAdmin(authentication);
         projectAccessService.requireManage(projectId, principal.accountId(), isInstanceAdmin);
-        return vaultService.rotateSecret(projectId, key, request.value(), principal.accountId());
+        return vaultService.rotateSecret(projectId, key, request.value(),
+                VaultCipher.fromKey(request.cipher()), principal.accountId());
+    }
+
+    /** Revela el valor descifrado de un secreto desde el panel (Manage, auditado). */
+    @GetMapping("/{key}/value")
+    SecretValue revealValue(
+            @PathVariable UUID projectId,
+            @PathVariable String key,
+            @AuthenticationPrincipal AuthenticatedAccount principal,
+            Authentication authentication
+    ) {
+        boolean isInstanceAdmin = isInstanceAdmin(authentication);
+        projectAccessService.requireManage(projectId, principal.accountId(), isInstanceAdmin);
+        return vaultService.revealSecretValue(projectId, key, principal.accountId());
     }
 
     @DeleteMapping("/{key}")
