@@ -9,6 +9,7 @@ import java.util.UUID;
 public record SecretSummary(
         UUID id,
         String key,
+        String cipher,
         Instant createdAt,
         Instant updatedAt,
         Instant lastRotatedAt
@@ -17,6 +18,7 @@ public record SecretSummary(
         return new SecretSummary(
                 secret.getId(),
                 secret.getKey(),
+                secret.getCipher(),
                 secret.getCreatedAt(),
                 secret.getUpdatedAt(),
                 secret.getLastRotatedAt()
