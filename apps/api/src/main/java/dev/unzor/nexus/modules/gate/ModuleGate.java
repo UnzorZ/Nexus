@@ -49,13 +49,15 @@ public class ModuleGate {
             "audit", NexusModule.AUDIT,
             "heartbeats", NexusModule.REGISTRY,
             "config", NexusModule.CONFIG,
-            "metrics", NexusModule.METRICS);
+            "metrics", NexusModule.METRICS,
+            "documents", NexusModule.DOCUMENTS);
 
     /** Prefijo del runtime → módulo. No listado (p. ej. /whoami) = no gateado. */
     private static final Map<String, NexusModule> RUNTIME_PREFIXES = Map.of(
             "/api/v1/registry", NexusModule.REGISTRY,
             "/api/v1/config", NexusModule.CONFIG,
-            "/api/v1/metrics", NexusModule.METRICS);
+            "/api/v1/metrics", NexusModule.METRICS,
+            "/api/v1/documents", NexusModule.DOCUMENTS);
 
     /** Petición que el gate debe evaluar: proyecto + módulo a comprobar. */
     public record GatedRequest(UUID projectId, NexusModule module) {
