@@ -12,6 +12,7 @@ export type NotificationTemplate = {
   channel: NotificationChannel;
   subject: string;
   bodyTemplate: string;
+  variables: Record<string, string>;
   createdAt: string;
   updatedAt: string;
 };
@@ -27,7 +28,12 @@ export type Notification = {
   createdAt: string;
 };
 
-type TemplateBody = { name: string; subject: string; bodyTemplate: string };
+type TemplateBody = {
+  name: string;
+  subject: string;
+  bodyTemplate: string;
+  variables: Record<string, string>;
+};
 
 export async function fetchNotifyTemplates(
   projectId: string,
@@ -97,3 +103,117 @@ export async function fetchNotifications(
     },
   );
 }
+
+export type SmtpSettings = {
+  projectId: string;
+  host: string | null;
+  port: number;
+  username: string | null;
+  from: string | null;
+  passwordConfigured: boolean;
+  updatedAt: string | null;
+};
+
+export async function fetchSmtpSettings(
+  projectId: string,
+): Promise<SmtpSettings> {
+  return apiClient.get<SmtpSettings>(
+    apiRoutes.panel.projects.notify.smtp(projectId),
+    { redirect: "manual", errorMessage: "No se pudo cargar la configuración SMTP." },
+  );
+}
+
+export async function saveSmtpSettings(
+  projectId: string,
+  body: {
+    host: string;
+    port: number;
+    username: string;
+    from: string;
+    password: string;
+  },
+  csrfToken: string,
+): Promise<SmtpSettings> {
+  return apiClient.put<SmtpSettings>(
+    apiRoutes.panel.projects.notify.smtp(projectId),
+    body,
+    {
+      headers: { [CSRF_HEADER_NAME]: csrfToken },
+      redirect: "manual",
+      errorMessage: "No se pudo guardar la configuración SMTP.",
+    },
+  );
+}
+
+export type RenderedTemplate = { subject: string; body: string };
+
+export async function previewNotifyTemplate(
+  projectId: string,
+  templateId: string,
+  variables: Record<string, string>,
+  csrfToken: string,
+): Promise<RenderedTemplate> {
+  return apiClient.post<RenderedTemplate>(
+    apiRoutes.panel.projects.notify.preview(projectId, templateId),
+    { variables },
+    {
+      headers: { [CSRF_HEADER_NAME]: csrfToken },
+      redirect: "manual",
+      errorMessage: "No se pudo previsualizar la plantilla.",
+    },
+  );
+}
+
+export type GlobalNotifyVariables = {
+  projectId: string;
+  variables: Record<string, string>;
+  updatedAt: string | null;
+};
+
+export async function fetchNotifyVariables(
+  projectId: string,
+): Promise<GlobalNotifyVariables> {
+  return apiClient.get<GlobalNotifyVariables>(
+    apiRoutes.panel.projects.notify.variables(projectId),
+    { redirect: "manual", errorMessage: "No se pudieron cargar las variables." },
+  );
+}
+
+export async function saveNotifyVariables(
+  projectId: string,
+  variables: Record<string, string>,
+  csrfToken: string,
+): Promise<GlobalNotifyVariables> {
+  return apiClient.put<GlobalNotifyVariables>(
+    apiRoutes.panel.projects.notify.variables(projectId),
+    { variables },
+    {
+      headers: { [CSRF_HEADER_NAME]: csrfToken },
+      redirect: "manual",
+      errorMessage: "No se pudieron guardar las variables.",
+    },
+  );
+}
+
+export async function sendTestNotification(
+  projectId: string,
+  body: {
+    to: string;
+    templateName?: string;
+    subject?: string;
+    body?: string;
+    variables?: Record<string, string>;
+  },
+  csrfToken: string,
+): Promise<Notification> {
+  return apiClient.post<Notification>(
+    apiRoutes.panel.projects.notify.test(projectId),
+    body,
+    {
+      headers: { [CSRF_HEADER_NAME]: csrfToken },
+      redirect: "manual",
+      errorMessage: "No se pudo enviar el email de prueba.",
+    },
+  );
+}
+
