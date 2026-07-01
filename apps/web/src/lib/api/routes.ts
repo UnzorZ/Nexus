@@ -111,6 +111,16 @@ export const apiRoutes = {
             `/api/panel/v1/projects/${encodeURIComponent(projectId)}/audit`,
           ),
       },
+      config: {
+        root: (projectId: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/config`,
+          ),
+        byKey: (projectId: string, key: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/config/${encodeURIComponent(key)}`,
+          ),
+      },
     },
   },
 } as const;

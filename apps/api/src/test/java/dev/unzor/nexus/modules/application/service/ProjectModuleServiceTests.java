@@ -16,6 +16,7 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.AbstractPlatformTransactionManager;
 import org.springframework.transaction.support.DefaultTransactionStatus;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -46,8 +47,15 @@ class ProjectModuleServiceTests {
         List<ProjectModuleStatus> result = service.listForProject(projectId);
 
         assertThat(result).hasSize(11);
+        // Los habilitados por defecto deben reflejar exactamente el catálogo
+        // (NexusModule.enabledByDefault); se deriva del enum para no acoplar el
+        // test a la lista literal y que crezca con cada módulo nuevo.
         assertThat(result.stream().filter(ProjectModuleStatus::enabled).map(ProjectModuleStatus::key))
-                .containsExactlyInAnyOrder("identity", "permissions", "registry", "audit");
+                .containsExactlyInAnyOrderElementsOf(
+                        Arrays.stream(NexusModule.values())
+                                .filter(NexusModule::enabledByDefault)
+                                .map(NexusModule::key)
+                                .toList());
         assertThat(result.stream().filter(m -> m.key().equals("identity")))
                 .singleElement()
                 .satisfies(m -> {
