@@ -1,92 +1,174 @@
 "use client";
 
-import { useState } from "react";
-import { Activity, Gauge, Users } from "lucide-react";
 import { GaugeIcon } from "@/components/ui/gauge";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  MonoChip,
-  Panel,
-  StatTile,
-  StatusBadge,
-} from "@/components/dashboard/shared";
-import { tint } from "@/components/dashboard/anim";
+  Area,
+  AreaChart,
+  CartesianGrid,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
+import { Stagger } from "@/components/dashboard/anim";
+import { EmptyState, Panel, StatusBadge } from "@/components/dashboard/shared";
+import { useProjectMetrics } from "@/features/metrics/queries";
+import type { MetricSeries } from "@/features/metrics/api";
+import { toMessage } from "@/lib/api/errors";
+import { useProject } from "@/app/projects/[projectId]/useProject";
 
-// Mock hourly volumes (last 24h) — deterministic, no randomness.
-const bars = [38, 52, 44, 61, 55, 72, 68, 80, 74, 90, 84, 96, 88, 79, 83, 71, 66, 58, 63, 49, 52, 41, 47, 38];
+function formatRelative(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const sec = Math.round(diffMs / 1000);
+  if (sec < 60) return `${sec}s ago`;
+  const min = Math.round(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  return `${Math.round(hr / 24)}d ago`;
+}
 
-const topEndpoints = [
-  { id: "e-1", method: "GET", path: "/orders", calls: "18.4k" },
-  { id: "e-2", method: "POST", path: "/orders", calls: "9.1k" },
-  { id: "e-3", method: "GET", path: "/products", calls: "7.7k" },
-  { id: "e-4", method: "POST", path: "/permissions/check", calls: "6.2k" },
-];
+function formatValue(value: number): string {
+  return Number.isInteger(value) ? value.toString() : value.toFixed(2);
+}
+
+function chartData(series: MetricSeries) {
+  // points arrive newest-first from the API; reverse for chronological left→right.
+  return [...series.points]
+    .map((p) => ({ t: formatRelative(p.recordedAt), value: p.value }))
+    .reverse();
+}
+
+function MetricSeriesCard({ series }: { series: MetricSeries }) {
+  const data = chartData(series);
+  const gradientId = `metric-grad-${series.name.replace(/[^a-z0-9]/gi, "")}`;
+  return (
+    <Panel>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-col gap-1">
+          <code className="truncate font-mono text-sm font-semibold text-foreground">
+            {series.name}
+          </code>
+          <div className="flex items-center gap-2">
+            <StatusBadge tone="emerald" dot>
+              {formatValue(series.lastValue)}
+            </StatusBadge>
+            <span className="text-xs text-muted-foreground">
+              last {formatRelative(series.lastRecordedAt)} · {series.pointCount}{" "}
+              pts
+            </span>
+          </div>
+        </div>
+      </div>
+      <div className="mt-4">
+        {data.length > 1 ? (
+          <ChartContainer className="h-[140px] w-full">
+            <AreaChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
+              <defs>
+                <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--chart-2)" stopOpacity={0.35} />
+                  <stop offset="100%" stopColor="var(--chart-2)" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid
+                vertical={false}
+                strokeDasharray="3 3"
+                className="stroke-muted/60"
+              />
+              <XAxis dataKey="t" hide />
+              <YAxis
+                hide
+                domain={["auto", "auto"]}
+                allowDecimals
+              />
+              <Tooltip
+                cursor={{ stroke: "var(--chart-2)", strokeWidth: 1 }}
+                content={
+                  <ChartTooltipContent
+                    valueFormatter={(v) => formatValue(Number(v))}
+                  />
+                }
+              />
+              <Area
+                type="monotone"
+                dataKey="value"
+                stroke="var(--chart-2)"
+                strokeWidth={2}
+                fill={`url(#${gradientId})`}
+                dot={false}
+                isAnimationActive={false}
+              />
+            </AreaChart>
+          </ChartContainer>
+        ) : (
+          <div className="flex h-[140px] items-center justify-center text-xs text-muted-foreground">
+            Needs at least 2 points to chart
+          </div>
+        )}
+      </div>
+    </Panel>
+  );
+}
 
 export function MetricsModule() {
-  const [range, setRange] = useState("24h");
+  const { project, loading: projectLoading, error: projectError } = useProject();
+  const projectId = project?.id ?? "";
+
+  const metricsQ = useProjectMetrics(projectId);
+  const series = metricsQ.data ?? null;
+  const loading = metricsQ.isLoading;
+  const error = metricsQ.error ? toMessage(metricsQ.error) : null;
+  const refresh = () => metricsQ.refetch();
+
+  const loadingState = projectLoading || (Boolean(project) && loading);
+
+  if (loadingState) {
+    return (
+      <Panel title="Metrics">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-40 w-full rounded-lg" />
+          ))}
+        </div>
+      </Panel>
+    );
+  }
+
+  if (projectError || error) {
+    return (
+      <Panel>
+        <EmptyState
+          title="Could not load metrics"
+          description={projectError ?? error ?? "Unknown error"}
+          action={
+            <Button variant="outline" onClick={() => refresh()}>
+              Retry
+            </Button>
+          }
+        />
+      </Panel>
+    );
+  }
+
+  if (!project || !series) {
+    return null;
+  }
 
   return (
-    <>
-      <Panel title="Metrics" description="Project-scoped usage and instrumentation.">
-        <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
-          <StatTile Icon={Activity} iconBg={tint.cyan.bg} iconColor={tint.cyan.text} label="API calls (24h)" value="84.2k" hint="Project API" />
-          <StatTile Icon={Users} iconBg={tint.indigo.bg} iconColor={tint.indigo.text} label="Active users" value="1 204" hint="Last 24h" />
-          <StatTile Icon={Gauge} iconBg={tint.emerald.bg} iconColor={tint.emerald.text} label="Heartbeats" value="4" hint="Reporting" />
-          <StatTile Icon={GaugeIcon} iconBg={tint.red.bg} iconColor={tint.red.text} label="Error rate" value="0.3%" hint="5xx · 24h" />
-        </div>
-      </Panel>
-
-      <Panel
-        title="API call volume"
-        description="Requests per hour handled for this project."
-        action={
-          <Select value={range} onValueChange={setRange}>
-            <SelectTrigger size="sm" className="w-28">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="24h">Last 24h</SelectItem>
-              <SelectItem value="7d">Last 7 days</SelectItem>
-              <SelectItem value="30d">Last 30 days</SelectItem>
-            </SelectContent>
-          </Select>
-        }
-      >
-        <div className="flex h-32 items-end gap-1">
-          {bars.map((h, i) => (
-            <div
-              key={i}
-              className="flex-1 rounded-sm bg-primary/70 transition-colors hover:bg-primary"
-              style={{ height: `${h}%` }}
-              title={`${h}`}
-            />
-          ))}
-        </div>
-        <div className="mt-2 flex justify-between text-[11px] text-muted-foreground">
-          <span>24h ago</span>
-          <span>now</span>
-        </div>
-      </Panel>
-
-      <Panel title="Top endpoints" description="Most-called project endpoints.">
-        <ul className="flex flex-col gap-1">
-          {topEndpoints.map((e) => (
-            <li key={e.id} className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-muted/60">
-              <div className="flex items-center gap-2">
-                <StatusBadge tone={e.method === "GET" ? "blue" : "emerald"}>{e.method}</StatusBadge>
-                <MonoChip>{e.path}</MonoChip>
-              </div>
-              <span className="font-mono text-xs text-muted-foreground">{e.calls}</span>
-            </li>
-          ))}
-        </ul>
-      </Panel>
-    </>
+    <Stagger className="grid flex-1 grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+      {series.length === 0 ? (
+        <Panel className="col-span-full">
+          <EmptyState
+            Icon={GaugeIcon}
+            title="No metrics reported yet"
+            description="Apps report points with POST /api/v1/metrics/record (scope metrics:write). Series appear here once data arrives."
+          />
+        </Panel>
+      ) : (
+        series.map((s) => <MetricSeriesCard key={s.name} series={s} />)
+      )}
+    </Stagger>
   );
 }
