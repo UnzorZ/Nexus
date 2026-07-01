@@ -31,6 +31,8 @@ export const queryKeys = {
       ["projects", projectId, "audit", rangeMs] as const,
     config: (projectId: string) =>
       ["projects", projectId, "config"] as const,
+    metrics: (projectId: string) =>
+      ["projects", projectId, "metrics"] as const,
   },
 
   sessions: () => ["sessions"] as const,
