@@ -66,6 +66,21 @@ public class ProjectAccessService {
     }
 
     /**
+     * Indica si la cuenta tiene acceso al proyecto (membresía activa o admin de
+     * instancia). Forma no lanzadora de {@link #requireAccess}, para usar sin
+     * propagar excepciones — p. ej. el module gate la consulta antes de filtrar el
+     * estado del módulo, de modo que un usuario sin acceso reciba el
+     * {@code permission_denied} habitual en vez de revelar {@code module_disabled}.
+     */
+    public boolean canAccess(UUID projectId, UUID accountId, boolean isInstanceAdmin) {
+        if (isInstanceAdmin) {
+            return true;
+        }
+        return membershipRepository.existsByProjectIdAndNexusAccountIdAndStatus(
+                projectId, accountId, ProjectMembershipStatus.ACTIVE);
+    }
+
+    /**
      * Indica si la cuenta puede editar metadatos del proyecto.
      */
     public boolean canManage(UUID projectId, UUID accountId, boolean isInstanceAdmin) {
