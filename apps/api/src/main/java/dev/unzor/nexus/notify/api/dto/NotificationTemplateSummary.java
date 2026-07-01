@@ -4,6 +4,7 @@ import dev.unzor.nexus.notify.domain.entity.NotificationTemplate;
 import dev.unzor.nexus.notify.domain.enums.NotificationChannel;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 
 public record NotificationTemplateSummary(
@@ -12,6 +13,7 @@ public record NotificationTemplateSummary(
         NotificationChannel channel,
         String subject,
         String bodyTemplate,
+        Map<String, String> variables,
         Instant createdAt,
         Instant updatedAt
 ) {
@@ -22,6 +24,7 @@ public record NotificationTemplateSummary(
                 template.getChannel(),
                 template.getSubject(),
                 template.getBodyTemplate(),
+                template.getVariables(),
                 template.getCreatedAt(),
                 template.getUpdatedAt()
         );

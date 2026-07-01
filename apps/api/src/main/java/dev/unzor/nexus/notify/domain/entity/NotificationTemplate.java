@@ -1,7 +1,9 @@
 package dev.unzor.nexus.notify.domain.entity;
 
+import dev.unzor.nexus.notify.domain.NotifyVariablesConverter;
 import dev.unzor.nexus.notify.domain.enums.NotificationChannel;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -17,6 +19,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -52,6 +55,11 @@ public class NotificationTemplate {
     @Column(name = "body_template", nullable = false)
     private String bodyTemplate;
 
+    /** Variables declaradas (nombre -> valor por defecto) usadas en el cuerpo. */
+    @Convert(converter = NotifyVariablesConverter.class)
+    @Column(columnDefinition = "TEXT")
+    private Map<String, String> variables;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -59,18 +67,20 @@ public class NotificationTemplate {
     private Instant updatedAt;
 
     public NotificationTemplate(UUID projectId, String name, NotificationChannel channel,
-                                 String subject, String bodyTemplate) {
+                                 String subject, String bodyTemplate, Map<String, String> variables) {
         this.projectId = Objects.requireNonNull(projectId);
         this.name = Objects.requireNonNull(name);
         this.channel = Objects.requireNonNull(channel);
         this.subject = Objects.requireNonNull(subject);
         this.bodyTemplate = Objects.requireNonNull(bodyTemplate);
+        this.variables = variables == null ? Map.of() : variables;
     }
 
-    public void rewrite(String name, String subject, String bodyTemplate) {
+    public void rewrite(String name, String subject, String bodyTemplate, Map<String, String> variables) {
         this.name = Objects.requireNonNull(name);
         this.subject = Objects.requireNonNull(subject);
         this.bodyTemplate = Objects.requireNonNull(bodyTemplate);
+        this.variables = variables == null ? Map.of() : variables;
     }
 
     @PrePersist
