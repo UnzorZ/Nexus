@@ -26,8 +26,17 @@ export type AnimIconHandle = {
  */
 export function animHandlers(ref: { current: AnimIconHandle | null }) {
   return {
-    onMouseEnter: () => ref.current?.startAnimation(),
-    onMouseLeave: () => ref.current?.stopAnimation(),
+    // Defensive: some icon refs may forward a DOM node instead of the
+    // AnimIconHandle imperative API. Guard so one mis-wired ref can't throw
+    // "startAnimation is not a function" on hover.
+    onMouseEnter: () => {
+      const h = ref.current;
+      if (h && typeof h.startAnimation === "function") h.startAnimation();
+    },
+    onMouseLeave: () => {
+      const h = ref.current;
+      if (h && typeof h.stopAnimation === "function") h.stopAnimation();
+    },
   };
 }
 
