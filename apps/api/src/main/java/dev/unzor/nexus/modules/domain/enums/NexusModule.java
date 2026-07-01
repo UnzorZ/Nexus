@@ -23,7 +23,7 @@ public enum NexusModule {
     METRICS("metrics");
 
     private static final EnumSet<NexusModule> DEFAULT_ENABLED =
-            EnumSet.of(IDENTITY, PERMISSIONS, REGISTRY, AUDIT, CONFIG);
+            EnumSet.of(IDENTITY, PERMISSIONS, REGISTRY, AUDIT, CONFIG, METRICS);
 
     private final String key;
 
