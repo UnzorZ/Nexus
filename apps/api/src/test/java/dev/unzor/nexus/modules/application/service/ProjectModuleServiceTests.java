@@ -62,7 +62,8 @@ class ProjectModuleServiceTests {
                     assertThat(m.enabled()).isTrue();
                     assertThat(m.enabledByDefault()).isTrue();
                 });
-        assertThat(result.stream().filter(m -> m.key().equals("vault")))
+        // STORAGE sigue sin estar habilitado por defecto (módulo diferido).
+        assertThat(result.stream().filter(m -> m.key().equals("storage")))
                 .singleElement()
                 .satisfies(m -> {
                     assertThat(m.enabled()).isFalse();

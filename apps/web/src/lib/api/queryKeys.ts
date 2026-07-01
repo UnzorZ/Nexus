@@ -41,6 +41,8 @@ export const queryKeys = {
       ["projects", projectId, "notify", "templates"] as const,
     notifications: (projectId: string) =>
       ["projects", projectId, "notify", "notifications"] as const,
+    vaultSecrets: (projectId: string) =>
+      ["projects", projectId, "vault", "secrets"] as const,
   },
 
   sessions: () => ["sessions"] as const,
