@@ -32,7 +32,9 @@ import java.util.regex.Pattern;
 @Service
 public class ProjectDocumentsService {
 
-    private static final Pattern VARIABLE = Pattern.compile("\\{\\{\\s*(\\w+)\\s*\\}\\}");
+    // Primary trigger is {$var}; {{var}} is kept as a backwards-compatible fallback.
+    private static final Pattern VARIABLE_DOLLAR = Pattern.compile("\\{\\$\\s*(\\w+)\\s*\\}");
+    private static final Pattern VARIABLE_MUSTACHE = Pattern.compile("\\{\\{\\s*(\\w+)\\s*\\}\\}");
     private static final Set<String> NAME_UNIQUE_CONSTRAINTS = Set.of("uk_document_templates_project_name");
 
     private final DocumentTemplateRepository templateRepository;
@@ -88,12 +90,30 @@ public class ProjectDocumentsService {
                                                   String contentType, String templateBody, UUID actorAccountId) {
         projectLookupService.requireById(projectId);
         DocumentTemplate template = requireTemplate(projectId, templateId);
+        // Rechaza renombrar a un nombre ya usado por OTRO template del proyecto
+        // (mantener el nombre actual sí está permitido). Doble validación: pre-check
+        // + flush, para que una violación de constraint por concurrencia se traduzca
+        // a 409 en vez de un 500 genérico al hacer commit (mismo patrón que create).
+        templateRepository.findByProjectIdAndName(projectId, name)
+                .filter(existing -> !templateId.equals(existing.getId()))
+                .ifPresent(existing -> {
+                    throw new DocumentTemplateAlreadyExistsException(
+                            "A template named '" + name + "' already exists in this project.");
+                });
         template.rewrite(name, contentType, templateBody);
-        DocumentTemplateSummary summary = DocumentTemplateSummary.from(templateRepository.save(template));
-        eventPublisher.publishEvent(AuditEvent.byAccount(
-                projectId, "documents.template.updated", "document_template", templateId.toString(),
-                actorAccountId, Map.of("name", name)));
-        return summary;
+        try {
+            DocumentTemplate saved = templateRepository.saveAndFlush(template);
+            eventPublisher.publishEvent(AuditEvent.byAccount(
+                    projectId, "documents.template.updated", "document_template", templateId.toString(),
+                    actorAccountId, Map.of("name", name)));
+            return DocumentTemplateSummary.from(saved);
+        } catch (DataIntegrityViolationException exception) {
+            if (isNameUniqueViolation(exception)) {
+                throw new DocumentTemplateAlreadyExistsException(
+                        "A template named '" + name + "' already exists in this project.");
+            }
+            throw exception;
+        }
     }
 
     @Transactional
@@ -128,15 +148,42 @@ public class ProjectDocumentsService {
         return new DocumentRenderResult(saved.getId(), output, template.getContentType(), saved.getCreatedAt());
     }
 
+    /**
+     * Render del panel (por ID de plantilla). A diferencia del render del
+     * runtime, éste sí audita porque el actor es una cuenta del panel.
+     */
+    @Transactional
+    public DocumentRenderResult renderById(UUID projectId, UUID templateId,
+                                           Map<String, String> variables, UUID actorAccountId) {
+        projectLookupService.requireById(projectId);
+        DocumentTemplate template = requireTemplate(projectId, templateId);
+        String output = renderBody(template.getTemplateBody(), variables);
+        DocumentRender saved = renderRepository.save(
+                new DocumentRender(projectId, template.getId(), template.getName(), variables, output));
+        eventPublisher.publishEvent(AuditEvent.byAccount(
+                projectId, "documents.rendered", "document_template", templateId.toString(),
+                actorAccountId, Map.of("name", template.getName())));
+        return new DocumentRenderResult(saved.getId(), output, template.getContentType(), saved.getCreatedAt());
+    }
+
     private DocumentTemplate requireTemplate(UUID projectId, UUID templateId) {
         return templateRepository.findByProjectIdAndId(projectId, templateId)
                 .orElseThrow(() -> new DocumentTemplateNotFoundException(
                         "Template " + templateId + " not found in project " + projectId + "."));
     }
 
-    /** Sustituye {@code {{var}}} por su valor; las variables ausentes quedan vacías. */
+    /**
+     * Sustituye los triggers {@code {$var}} (y el legacy {@code {{var}}}) por su
+     * valor; las variables ausentes quedan vacías. Se aplica primero el formato
+     * con dólar para que anide correctamente con el de llaves.
+     */
     static String renderBody(String body, Map<String, String> variables) {
-        Matcher matcher = VARIABLE.matcher(body);
+        String afterDollar = replaceAll(body, VARIABLE_DOLLAR, variables);
+        return replaceAll(afterDollar, VARIABLE_MUSTACHE, variables);
+    }
+
+    private static String replaceAll(String body, Pattern pattern, Map<String, String> variables) {
+        Matcher matcher = pattern.matcher(body);
         StringBuilder result = new StringBuilder();
         while (matcher.find()) {
             String key = matcher.group(1);

@@ -1,8 +1,10 @@
 package dev.unzor.nexus.documents.api.controller;
 
+import dev.unzor.nexus.documents.api.dto.DocumentRenderResult;
 import dev.unzor.nexus.documents.api.dto.DocumentRenderSummary;
 import dev.unzor.nexus.documents.api.dto.DocumentTemplateSummary;
 import dev.unzor.nexus.documents.api.requests.DocumentTemplateRequest;
+import dev.unzor.nexus.documents.api.requests.RenderTemplateRequest;
 import dev.unzor.nexus.documents.application.service.ProjectDocumentsService;
 import dev.unzor.nexus.projects.application.service.ProjectAccessService;
 import dev.unzor.nexus.shared.security.AuthenticatedAccount;
@@ -100,6 +102,19 @@ class ProjectDocumentsController {
         boolean isInstanceAdmin = isInstanceAdmin(authentication);
         projectAccessService.requireAccess(projectId, principal.accountId(), isInstanceAdmin);
         return documentsService.listRenders(projectId);
+    }
+
+    @PostMapping("/templates/{templateId}/render")
+    DocumentRenderResult renderTemplate(
+            @PathVariable UUID projectId,
+            @PathVariable UUID templateId,
+            @Valid @RequestBody RenderTemplateRequest request,
+            @AuthenticationPrincipal AuthenticatedAccount principal,
+            Authentication authentication
+    ) {
+        boolean isInstanceAdmin = isInstanceAdmin(authentication);
+        projectAccessService.requireManage(projectId, principal.accountId(), isInstanceAdmin);
+        return documentsService.renderById(projectId, templateId, request.variables(), principal.accountId());
     }
 
     private static boolean isInstanceAdmin(Authentication authentication) {
