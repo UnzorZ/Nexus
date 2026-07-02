@@ -83,42 +83,40 @@ public class RegistryHeartbeatService {
         return settingsRepository.findByProjectId(projectId)
                 .map(RegistrySettings::from)
                 .orElseGet(() -> RegistrySettings.defaults(projectId,
-                        properties.getIntervalSeconds(), properties.getStaleAfterSeconds(), properties.getTimeoutSeconds()));
+                        properties.getIntervalSeconds(), properties.getTimeoutSeconds()));
     }
 
     @Transactional
-    public RegistrySettings saveSettings(UUID projectId, int intervalSeconds, int staleAfterSeconds,
-                                         int timeoutSeconds, UUID actorAccountId) {
+    public RegistrySettings saveSettings(UUID projectId, int intervalSeconds, int timeoutSeconds,
+                                         UUID actorAccountId) {
         projectLookupService.requireById(projectId);
-        if (intervalSeconds < 1 || staleAfterSeconds < intervalSeconds || timeoutSeconds < staleAfterSeconds) {
+        if (intervalSeconds < 1 || timeoutSeconds < intervalSeconds) {
             throw new InvalidRegistrySettingsException(
-                    "Require 1 <= interval <= staleAfter <= timeout.");
+                    "Require 1 <= interval <= timeout.");
         }
         ProjectRegistrySettings settings = settingsRepository.findByProjectId(projectId)
-                .orElse(new ProjectRegistrySettings(projectId, intervalSeconds, staleAfterSeconds, timeoutSeconds));
-        settings.update(intervalSeconds, staleAfterSeconds, timeoutSeconds);
+                .orElse(new ProjectRegistrySettings(projectId, intervalSeconds, timeoutSeconds));
+        settings.update(intervalSeconds, timeoutSeconds);
         ProjectRegistrySettings saved = settingsRepository.save(settings);
         eventPublisher.publishEvent(AuditEvent.byAccount(
                 projectId, "registry.settings.updated", "registry_settings",
                 projectId.toString(), actorAccountId,
-                Map.of("interval", intervalSeconds, "staleAfter", staleAfterSeconds, "timeout", timeoutSeconds)));
+                Map.of("interval", intervalSeconds, "timeout", timeoutSeconds)));
         return RegistrySettings.from(saved);
     }
 
     /** Umbrales efectivos: override del proyecto o defaults globales. */
     private LivenessThresholds resolveThresholds(UUID projectId) {
         return settingsRepository.findByProjectId(projectId)
-                .map(s -> new LivenessThresholds(s.getIntervalSeconds(), s.getStaleAfterSeconds(), s.getTimeoutSeconds()))
+                .map(s -> new LivenessThresholds(s.getIntervalSeconds(), s.getTimeoutSeconds()))
                 .orElseGet(() -> new LivenessThresholds(
-                        properties.getIntervalSeconds(), properties.getStaleAfterSeconds(), properties.getTimeoutSeconds()));
+                        properties.getIntervalSeconds(), properties.getTimeoutSeconds()));
     }
 
     /**
      * ONLINE dentro del intervalo, STALE hasta el timeout, OFFLINE a partir del
-     * timeout. La frontera OFFLINE es {@code timeoutSeconds} (spec §13.1: offline
-     * tras 90 s por defecto; {@link HeartbeatProperties}), no el staleAfter — así
-     * la ventana STALE se extiende hasta el timeout configurado y el timeout
-     * realmente decide cuándo una instancia se da por muerta.
+     * timeout (spec §13.1: offline tras {@code timeoutSeconds}). El timeout decide
+     * cuándo una instancia se da por muerta.
      */
     HeartbeatLiveness livenessOf(Instant lastSeenAt, Instant now, LivenessThresholds thresholds) {
         long elapsed = Duration.between(lastSeenAt, now).getSeconds();
@@ -131,6 +129,6 @@ public class RegistryHeartbeatService {
         return HeartbeatLiveness.OFFLINE;
     }
 
-    record LivenessThresholds(int intervalSeconds, int staleAfterSeconds, int timeoutSeconds) {
+    record LivenessThresholds(int intervalSeconds, int timeoutSeconds) {
     }
 }

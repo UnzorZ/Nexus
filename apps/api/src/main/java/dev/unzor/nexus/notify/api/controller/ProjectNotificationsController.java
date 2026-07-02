@@ -4,12 +4,14 @@ import dev.unzor.nexus.notify.api.dto.GlobalVariables;
 import dev.unzor.nexus.notify.api.dto.NotificationSummary;
 import dev.unzor.nexus.notify.api.dto.NotificationTemplateSummary;
 import dev.unzor.nexus.notify.api.dto.RenderedTemplate;
+import dev.unzor.nexus.notify.api.dto.SmtpConnectionCheck;
 import dev.unzor.nexus.notify.api.dto.SmtpSettingsSummary;
 import dev.unzor.nexus.notify.api.requests.NotificationTemplateRequest;
 import dev.unzor.nexus.notify.api.requests.PreviewTemplateRequest;
 import dev.unzor.nexus.notify.api.requests.SaveGlobalVariablesRequest;
 import dev.unzor.nexus.notify.api.requests.SaveSmtpSettingsRequest;
 import dev.unzor.nexus.notify.api.requests.SendTestNotificationRequest;
+import dev.unzor.nexus.notify.application.service.NotifyEmailSender;
 import dev.unzor.nexus.notify.application.service.ProjectNotificationsService;
 import dev.unzor.nexus.notify.application.service.ProjectSmtpSettingsService;
 import dev.unzor.nexus.projects.application.service.ProjectAccessService;
@@ -42,13 +44,16 @@ class ProjectNotificationsController {
 
     private final ProjectNotificationsService notificationsService;
     private final ProjectSmtpSettingsService smtpSettingsService;
+    private final NotifyEmailSender emailSender;
     private final ProjectAccessService projectAccessService;
 
     ProjectNotificationsController(ProjectNotificationsService notificationsService,
                                    ProjectSmtpSettingsService smtpSettingsService,
+                                   NotifyEmailSender emailSender,
                                    ProjectAccessService projectAccessService) {
         this.notificationsService = notificationsService;
         this.smtpSettingsService = smtpSettingsService;
+        this.emailSender = emailSender;
         this.projectAccessService = projectAccessService;
     }
 
@@ -136,7 +141,23 @@ class ProjectNotificationsController {
         boolean isInstanceAdmin = isInstanceAdmin(authentication);
         projectAccessService.requireManage(projectId, principal.accountId(), isInstanceAdmin);
         return smtpSettingsService.save(projectId, request.host(), request.port(), request.username(),
-                request.from(), request.password(), principal.accountId());
+                request.from(), request.password(), request.tlsMode(), request.trustedCaPem(),
+                principal.accountId());
+    }
+
+    /**
+     * Comprueba la conexión SMTP guardada (resolve + anti-SSRF + STARTTLS verificado
+     * + AUTH) sin enviar correo. requireManage: expone el resultado de la conexión.
+     */
+    @PostMapping("/smtp/test-connection")
+    SmtpConnectionCheck testSmtpConnection(
+            @PathVariable UUID projectId,
+            @AuthenticationPrincipal AuthenticatedAccount principal,
+            Authentication authentication
+    ) {
+        boolean isInstanceAdmin = isInstanceAdmin(authentication);
+        projectAccessService.requireManage(projectId, principal.accountId(), isInstanceAdmin);
+        return emailSender.testConnection(projectId);
     }
 
     @PostMapping("/templates/{templateId}/preview")

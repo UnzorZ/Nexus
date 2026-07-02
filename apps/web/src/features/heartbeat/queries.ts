@@ -38,7 +38,6 @@ export function useSaveRegistrySettings(projectId: string) {
   return useMutation({
     mutationFn: (vars: {
       intervalSeconds: number;
-      staleAfterSeconds: number;
       timeoutSeconds: number;
     }) => withCsrf((token) => saveRegistrySettings(projectId, vars, token)),
     onSuccess: () => {

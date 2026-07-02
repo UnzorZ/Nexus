@@ -42,6 +42,13 @@ public class NotificationTemplate {
     @Column(name = "project_id", nullable = false)
     private UUID projectId;
 
+    /**
+     * Sequence por proyecto (1, 2, 3, ...): id corto, estable y legible para
+     * referencia humana/SDK. Lo asigna el servicio al crear (max+1).
+     */
+    @Column(name = "sequence", nullable = false)
+    private Integer sequence;
+
     @Column(nullable = false, length = 120)
     private String name;
 
@@ -81,6 +88,11 @@ public class NotificationTemplate {
         this.subject = Objects.requireNonNull(subject);
         this.bodyTemplate = Objects.requireNonNull(bodyTemplate);
         this.variables = variables == null ? Map.of() : variables;
+    }
+
+    /** Asigna la secuencia por proyecto; la calcula el servicio (max+1). */
+    public void assignSequence(int sequence) {
+        this.sequence = sequence;
     }
 
     @PrePersist

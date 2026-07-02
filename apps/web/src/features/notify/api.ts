@@ -8,6 +8,7 @@ export type NotificationStatus = "PENDING" | "SENT" | "FAILED";
 
 export type NotificationTemplate = {
   id: string;
+  sequence: number;
   name: string;
   channel: NotificationChannel;
   subject: string;
@@ -111,8 +112,12 @@ export type SmtpSettings = {
   username: string | null;
   from: string | null;
   passwordConfigured: boolean;
+  tlsMode: "PUBLIC" | "PINNED";
+  trustedCaConfigured: boolean;
   updatedAt: string | null;
 };
+
+export type SmtpConnectionCheck = { ok: boolean; message: string };
 
 export async function fetchSmtpSettings(
   projectId: string,
@@ -131,6 +136,8 @@ export async function saveSmtpSettings(
     username: string;
     from: string;
     password: string;
+    tlsMode: "PUBLIC" | "PINNED";
+    trustedCaPem?: string;
   },
   csrfToken: string,
 ): Promise<SmtpSettings> {
@@ -141,6 +148,22 @@ export async function saveSmtpSettings(
       headers: { [CSRF_HEADER_NAME]: csrfToken },
       redirect: "manual",
       errorMessage: "No se pudo guardar la configuración SMTP.",
+    },
+  );
+}
+
+/** Comprueba la conexión SMTP guardada (STARTTLS verificado + AUTH) sin enviar correo. */
+export async function testSmtpConnection(
+  projectId: string,
+  csrfToken: string,
+): Promise<SmtpConnectionCheck> {
+  return apiClient.post<SmtpConnectionCheck>(
+    apiRoutes.panel.projects.notify.smtpTestConnection(projectId),
+    {},
+    {
+      headers: { [CSRF_HEADER_NAME]: csrfToken },
+      redirect: "manual",
+      errorMessage: "No se pudo comprobar la conexión SMTP.",
     },
   );
 }

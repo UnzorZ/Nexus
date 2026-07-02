@@ -35,12 +35,16 @@ export function KeyValueEditor({
   keyPlaceholder = "name",
   valuePlaceholder = "default value",
   addLabel = "Add variable",
+  keyTrigger = false,
 }: {
   rows: KV[];
   onChange: (rows: KV[]) => void;
   keyPlaceholder?: string;
   valuePlaceholder?: string;
   addLabel?: string;
+  /** When true, the key field is decorated as the trigger `{$ … }`: `{$` and `}`
+   * render at low opacity and the user writes the name in the middle. */
+  keyTrigger?: boolean;
 }) {
   function update(index: number, field: keyof KV, value: string) {
     onChange(rows.map((row, i) => (i === index ? { ...row, [field]: value } : row)));
@@ -50,12 +54,29 @@ export function KeyValueEditor({
     <div className="flex flex-col gap-2">
       {rows.map((row, index) => (
         <div key={index} className="flex items-center gap-2">
-          <Input
-            className="font-mono text-xs"
-            placeholder={keyPlaceholder}
-            value={row.key}
-            onChange={(e) => update(index, "key", e.target.value)}
-          />
+          {keyTrigger ? (
+            <div className="flex h-7 w-full min-w-0 items-center rounded-md border border-input bg-input/20 px-2 font-mono text-xs transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30 dark:bg-input/30">
+              <span aria-hidden className="shrink-0 select-none text-muted-foreground/60">
+                &#123;$
+              </span>
+              <input
+                className="w-full min-w-0 bg-transparent px-1 text-foreground outline-none placeholder:text-muted-foreground/50"
+                placeholder={keyPlaceholder}
+                value={row.key}
+                onChange={(e) => update(index, "key", e.target.value)}
+              />
+              <span aria-hidden className="shrink-0 select-none text-muted-foreground/60">
+                &#125;
+              </span>
+            </div>
+          ) : (
+            <Input
+              className="font-mono text-xs"
+              placeholder={keyPlaceholder}
+              value={row.key}
+              onChange={(e) => update(index, "key", e.target.value)}
+            />
+          )}
           <Input
             className="font-mono text-xs"
             placeholder={valuePlaceholder}

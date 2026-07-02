@@ -34,6 +34,17 @@ public class ProjectSmtpSettings {
     @Column(name = "password_enc")
     private String passwordEnc;
 
+    /**
+     * Modo de confianza TLS (ADR-0013): {@code PUBLIC} (truststore público por
+     * defecto) o {@code PINNED} (confiar sólo en {@code trustedCaPem}).
+     */
+    @Column(name = "tls_mode")
+    private String tlsMode = "PUBLIC";
+
+    /** CA (PEM) en la que confiar cuando {@code tlsMode = PINNED}; ignorable en PUBLIC. */
+    @Column(name = "trusted_ca_pem")
+    private String trustedCaPem;
+
     private Instant createdAt;
     private Instant updatedAt;
 
@@ -41,22 +52,27 @@ public class ProjectSmtpSettings {
     }
 
     public ProjectSmtpSettings(UUID projectId, String host, int port, String username,
-                               String fromAddress, String passwordEnc) {
+                               String fromAddress, String passwordEnc, String tlsMode, String trustedCaPem) {
         this.projectId = projectId;
         this.host = host;
         this.port = port;
         this.username = username;
         this.fromAddress = fromAddress;
         this.passwordEnc = passwordEnc;
+        this.tlsMode = tlsMode;
+        this.trustedCaPem = trustedCaPem;
     }
 
     /** Sobrescribe todos los campos salvo la PK y los timestamps. */
-    public void rewrite(String host, int port, String username, String fromAddress, String passwordEnc) {
+    public void rewrite(String host, int port, String username, String fromAddress, String passwordEnc,
+                        String tlsMode, String trustedCaPem) {
         this.host = host;
         this.port = port;
         this.username = username;
         this.fromAddress = fromAddress;
         this.passwordEnc = passwordEnc;
+        this.tlsMode = tlsMode;
+        this.trustedCaPem = trustedCaPem;
     }
 
     @PrePersist
@@ -93,6 +109,14 @@ public class ProjectSmtpSettings {
 
     public String getPasswordEnc() {
         return passwordEnc;
+    }
+
+    public String getTlsMode() {
+        return tlsMode;
+    }
+
+    public String getTrustedCaPem() {
+        return trustedCaPem;
     }
 
     public Instant getCreatedAt() {

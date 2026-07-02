@@ -3,6 +3,7 @@ package dev.unzor.nexus.notify.api.controller;
 import dev.unzor.nexus.notify.domain.exception.InvalidNotificationRequestException;
 import dev.unzor.nexus.notify.domain.exception.NotifyTemplateAlreadyExistsException;
 import dev.unzor.nexus.notify.domain.exception.NotifyTemplateNotFoundException;
+import dev.unzor.nexus.notify.domain.exception.UnsafeSmtpHostException;
 import dev.unzor.nexus.projects.domain.exception.ProjectAccessDeniedException;
 import dev.unzor.nexus.projects.domain.exception.ProjectNotFoundException;
 import org.springframework.http.HttpStatus;
@@ -21,6 +22,14 @@ class NotificationsExceptionHandler {
     @ExceptionHandler(NotifyTemplateNotFoundException.class)
     ResponseEntity<ProblemDetail> handleNotFound(NotifyTemplateNotFoundException exception) {
         return notFound(exception.getMessage());
+    }
+
+    @ExceptionHandler(UnsafeSmtpHostException.class)
+    ResponseEntity<ProblemDetail> handleUnsafeSmtpHost(UnsafeSmtpHostException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_ENTITY, exception.getMessage());
+        problem.setTitle("Unsafe SMTP host");
+        problem.setProperty("code", "smtp_unsafe_host");
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(problem);
     }
 
     @ExceptionHandler(NotifyTemplateAlreadyExistsException.class)

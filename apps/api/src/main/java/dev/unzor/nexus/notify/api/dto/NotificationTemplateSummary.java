@@ -9,6 +9,7 @@ import java.util.UUID;
 
 public record NotificationTemplateSummary(
         UUID id,
+        int sequence,
         String name,
         NotificationChannel channel,
         String subject,
@@ -20,6 +21,7 @@ public record NotificationTemplateSummary(
     public static NotificationTemplateSummary from(NotificationTemplate template) {
         return new NotificationTemplateSummary(
                 template.getId(),
+                template.getSequence() == null ? 0 : template.getSequence(),
                 template.getName(),
                 template.getChannel(),
                 template.getSubject(),

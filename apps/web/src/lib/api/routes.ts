@@ -166,6 +166,10 @@ export const apiRoutes = {
           apiUrl(
             `/api/panel/v1/projects/${encodeURIComponent(projectId)}/notify/smtp`,
           ),
+        smtpTestConnection: (projectId: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/notify/smtp/test-connection`,
+          ),
         variables: (projectId: string) =>
           apiUrl(
             `/api/panel/v1/projects/${encodeURIComponent(projectId)}/notify/variables`,

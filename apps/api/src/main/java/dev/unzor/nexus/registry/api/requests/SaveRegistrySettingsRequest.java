@@ -7,12 +7,11 @@ import jakarta.validation.constraints.NotNull;
 
 /**
  * Cuerpo del guardado de umbrales de liveness ({@code PUT .../heartbeats/settings}).
- * Se valida {@code 1 <= intervalSeconds <= staleAfterSeconds <= timeoutSeconds}.
+ * Se valida {@code 1 <= intervalSeconds <= timeoutSeconds}.
  */
 @JsonIgnoreProperties(ignoreUnknown = false)
 public record SaveRegistrySettingsRequest(
         @NotNull @Min(1) @Max(86400) Integer intervalSeconds,
-        @NotNull @Min(1) @Max(86400) Integer staleAfterSeconds,
         @NotNull @Min(1) @Max(86400) Integer timeoutSeconds
 ) {
 }

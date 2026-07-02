@@ -71,17 +71,17 @@ class RegistryHeartbeatServiceTests {
     @Test
     void livenessDerivedFromLastSeenAndThresholds() {
         Instant now = Instant.parse("2026-06-30T12:00:00Z");
-        // interval=30, staleAfter=60, timeout=90
+        // interval=30, timeout=90
         RegistryHeartbeatService.LivenessThresholds thresholds =
-                new RegistryHeartbeatService.LivenessThresholds(30, 60, 90);
+                new RegistryHeartbeatService.LivenessThresholds(30, 90);
         // within beat interval (<=30s) -> ONLINE
         assertThat(service.livenessOf(now.minus(10, ChronoUnit.SECONDS), now, thresholds)).isEqualTo(HeartbeatLiveness.ONLINE);
         // entered stale window (30s < .. ) -> STALE
         assertThat(service.livenessOf(now.minus(60, ChronoUnit.SECONDS), now, thresholds)).isEqualTo(HeartbeatLiveness.STALE);
-        // stale extends THROUGH timeout boundary (past staleAfter=60 but <= timeout=90) -> STALE
+        // stale extends THROUGH timeout boundary (interval < .. <= timeout) -> STALE
         assertThat(service.livenessOf(now.minus(75, ChronoUnit.SECONDS), now, thresholds)).isEqualTo(HeartbeatLiveness.STALE);
         assertThat(service.livenessOf(now.minus(90, ChronoUnit.SECONDS), now, thresholds)).isEqualTo(HeartbeatLiveness.STALE);
-        // past timeout -> OFFLINE (timeout, not staleAfter, is the OFFLINE boundary)
+        // past timeout -> OFFLINE (timeout is the OFFLINE boundary)
         assertThat(service.livenessOf(now.minus(95, ChronoUnit.SECONDS), now, thresholds)).isEqualTo(HeartbeatLiveness.OFFLINE);
         assertThat(service.livenessOf(now.minus(120, ChronoUnit.SECONDS), now, thresholds)).isEqualTo(HeartbeatLiveness.OFFLINE);
     }

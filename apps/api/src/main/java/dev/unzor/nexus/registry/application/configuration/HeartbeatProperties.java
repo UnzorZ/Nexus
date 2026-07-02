@@ -13,7 +13,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class HeartbeatProperties {
 
     private int intervalSeconds = 30;
-    private int staleAfterSeconds = 60;
     private int timeoutSeconds = 90;
 
     public int getIntervalSeconds() {
@@ -22,14 +21,6 @@ public class HeartbeatProperties {
 
     public void setIntervalSeconds(int intervalSeconds) {
         this.intervalSeconds = intervalSeconds;
-    }
-
-    public int getStaleAfterSeconds() {
-        return staleAfterSeconds;
-    }
-
-    public void setStaleAfterSeconds(int staleAfterSeconds) {
-        this.staleAfterSeconds = staleAfterSeconds;
     }
 
     public int getTimeoutSeconds() {

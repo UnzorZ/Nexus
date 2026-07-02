@@ -1,13 +1,14 @@
 package dev.unzor.nexus.notify.api.dto;
 
 import dev.unzor.nexus.notify.domain.entity.ProjectSmtpSettings;
+import dev.unzor.nexus.notify.domain.enums.SmtpTlsMode;
 
 import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Vista de la configuración SMTP de un proyecto. La contraseña nunca se
- * devuelve; sólo si está configurada.
+ * Vista de la configuración SMTP de un proyecto. La contraseña y la CA subida
+ * nunca se devuelven; sólo si están configuradas.
  */
 public record SmtpSettingsSummary(
         UUID projectId,
@@ -16,6 +17,8 @@ public record SmtpSettingsSummary(
         String username,
         String from,
         boolean passwordConfigured,
+        String tlsMode,
+        boolean trustedCaConfigured,
         Instant updatedAt
 ) {
     public static SmtpSettingsSummary from(ProjectSmtpSettings settings) {
@@ -26,6 +29,8 @@ public record SmtpSettingsSummary(
                 settings.getUsername(),
                 settings.getFromAddress(),
                 settings.getPasswordEnc() != null && !settings.getPasswordEnc().isBlank(),
+                SmtpTlsMode.resolve(settings.getTlsMode()).name(),
+                settings.getTrustedCaPem() != null && !settings.getTrustedCaPem().isBlank(),
                 settings.getUpdatedAt());
     }
 }

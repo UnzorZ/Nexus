@@ -34,7 +34,6 @@ export async function fetchHeartbeats(
 export type RegistrySettings = {
   projectId: string;
   intervalSeconds: number;
-  staleAfterSeconds: number;
   timeoutSeconds: number;
   overridden: boolean;
   updatedAt: string | null;
@@ -53,7 +52,6 @@ export async function saveRegistrySettings(
   projectId: string,
   body: {
     intervalSeconds: number;
-    staleAfterSeconds: number;
     timeoutSeconds: number;
   },
   csrfToken: string,

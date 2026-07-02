@@ -65,7 +65,7 @@ class ProjectRegistryController {
             Authentication authentication
     ) {
         projectAccessService.requireManage(projectId, principal.accountId(), isInstanceAdmin(authentication));
-        return service.saveSettings(projectId, request.intervalSeconds(), request.staleAfterSeconds(),
+        return service.saveSettings(projectId, request.intervalSeconds(),
                 request.timeoutSeconds(), principal.accountId());
     }
 

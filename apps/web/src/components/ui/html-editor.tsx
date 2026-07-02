@@ -61,11 +61,14 @@ export function HtmlEditor({
   onChange,
   textareaId,
   className,
+  readOnly = false,
 }: {
   value: string;
   onChange: (value: string) => void;
   textareaId?: string;
   className?: string;
+  /** Sólo lectura: resalta sin permitir editar (p. ej. vista previa). */
+  readOnly?: boolean;
 }) {
   const preRef = useRef<HTMLPreElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -101,8 +104,14 @@ export function HtmlEditor({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onScroll={syncScroll}
+        readOnly={readOnly}
         spellCheck={false}
-        className={`absolute inset-0 h-full w-full resize-none bg-transparent text-transparent caret-foreground outline-none ${metrics}`}
+        tabIndex={readOnly ? -1 : undefined}
+        className={cn(
+          "absolute inset-0 h-full w-full resize-none bg-transparent text-transparent outline-none",
+          metrics,
+          readOnly ? "caret-transparent" : "caret-foreground",
+        )}
       />
     </div>
   );
