@@ -12,17 +12,16 @@ import java.util.UUID;
 public record RegistrySettings(
         UUID projectId,
         int intervalSeconds,
-        int staleAfterSeconds,
         int timeoutSeconds,
         boolean overridden,
         Instant updatedAt
 ) {
-    public static RegistrySettings defaults(UUID projectId, int interval, int staleAfter, int timeout) {
-        return new RegistrySettings(projectId, interval, staleAfter, timeout, false, null);
+    public static RegistrySettings defaults(UUID projectId, int interval, int timeout) {
+        return new RegistrySettings(projectId, interval, timeout, false, null);
     }
 
     public static RegistrySettings from(ProjectRegistrySettings settings) {
         return new RegistrySettings(settings.getProjectId(), settings.getIntervalSeconds(),
-                settings.getStaleAfterSeconds(), settings.getTimeoutSeconds(), true, settings.getUpdatedAt());
+                settings.getTimeoutSeconds(), true, settings.getUpdatedAt());
     }
 }

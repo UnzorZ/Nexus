@@ -61,7 +61,6 @@ export function RegistryModule() {
   const canManage = project?.canManage ?? false;
   const [thresholds, setThresholds] = useState({
     interval: "30",
-    staleAfter: "60",
     timeout: "90",
   });
 
@@ -70,7 +69,6 @@ export function RegistryModule() {
     if (settings) {
       setThresholds({
         interval: String(settings.intervalSeconds),
-        staleAfter: String(settings.staleAfterSeconds),
         timeout: String(settings.timeoutSeconds),
       });
     }
@@ -80,7 +78,6 @@ export function RegistryModule() {
   function saveThresholds() {
     saveSettingsM.mutateAsync({
       intervalSeconds: Number(thresholds.interval) || 0,
-      staleAfterSeconds: Number(thresholds.staleAfter) || 0,
       timeoutSeconds: Number(thresholds.timeout) || 0,
     });
   }
@@ -213,7 +210,7 @@ export function RegistryModule() {
 
       <Panel
         title="Liveness thresholds"
-        description="How Nexus decides what's alive, per project. Standard = ONLINE window; Stale = STALE window; Timeout = OFFLINE/expiry cap. Must satisfy standard ≤ stale ≤ timeout."
+        description="How Nexus decides what's alive, per project. Standard = ONLINE window; Timeout = OFFLINE cap (STALE in between). Must satisfy standard ≤ timeout."
         action={
           settings?.overridden ? (
             <StatusBadge tone="amber">Project override</StatusBadge>
@@ -224,7 +221,7 @@ export function RegistryModule() {
       >
         <div className="flex flex-col gap-4">
           {canManage ? (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="reg-standard">Standard (online, s)</Label>
                 <Input
@@ -234,18 +231,6 @@ export function RegistryModule() {
                   value={thresholds.interval}
                   onChange={(e) =>
                     setThresholds((t) => ({ ...t, interval: e.target.value }))
-                  }
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="reg-stale">Stale time (s)</Label>
-                <Input
-                  id="reg-stale"
-                  type="number"
-                  min={1}
-                  value={thresholds.staleAfter}
-                  onChange={(e) =>
-                    setThresholds((t) => ({ ...t, staleAfter: e.target.value }))
                   }
                 />
               </div>
@@ -263,9 +248,8 @@ export function RegistryModule() {
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
               <div>Standard: {settings?.intervalSeconds ?? "—"}s</div>
-              <div>Stale: {settings?.staleAfterSeconds ?? "—"}s</div>
               <div>Timeout: {settings?.timeoutSeconds ?? "—"}s</div>
             </div>
           )}
@@ -274,7 +258,7 @@ export function RegistryModule() {
           ) : null}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs text-muted-foreground">
-              ONLINE within standard · STALE until stale time · OFFLINE after.
+              ONLINE within standard · STALE until timeout · OFFLINE after.
             </p>
             <div className="flex items-center gap-2">
               <Button asChild variant="outline" size="sm">

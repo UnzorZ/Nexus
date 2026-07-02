@@ -29,25 +29,20 @@ public class ProjectRegistrySettings {
     @Column(name = "interval_seconds", nullable = false)
     private int intervalSeconds;
 
-    @Column(name = "stale_after_seconds", nullable = false)
-    private int staleAfterSeconds;
-
     @Column(name = "timeout_seconds", nullable = false)
     private int timeoutSeconds;
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    public ProjectRegistrySettings(UUID projectId, int intervalSeconds, int staleAfterSeconds, int timeoutSeconds) {
+    public ProjectRegistrySettings(UUID projectId, int intervalSeconds, int timeoutSeconds) {
         this.projectId = projectId;
         this.intervalSeconds = intervalSeconds;
-        this.staleAfterSeconds = staleAfterSeconds;
         this.timeoutSeconds = timeoutSeconds;
     }
 
-    public void update(int intervalSeconds, int staleAfterSeconds, int timeoutSeconds) {
+    public void update(int intervalSeconds, int timeoutSeconds) {
         this.intervalSeconds = intervalSeconds;
-        this.staleAfterSeconds = staleAfterSeconds;
         this.timeoutSeconds = timeoutSeconds;
     }
 

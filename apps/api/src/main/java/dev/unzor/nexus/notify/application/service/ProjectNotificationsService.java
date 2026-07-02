@@ -86,8 +86,10 @@ public class ProjectNotificationsService {
                     "A template named '" + name + "' already exists in this project.");
         }
         try {
-            NotificationTemplate saved = templateRepository.saveAndFlush(
-                    new NotificationTemplate(projectId, name, NotificationChannel.EMAIL, subject, bodyTemplate, variables));
+            NotificationTemplate template = new NotificationTemplate(
+                    projectId, name, NotificationChannel.EMAIL, subject, bodyTemplate, variables);
+            template.assignSequence(nextSequence(projectId));
+            NotificationTemplate saved = templateRepository.saveAndFlush(template);
             eventPublisher.publishEvent(AuditEvent.byAccount(
                     projectId, "notify.template.created", "notification_template",
                     Objects.toString(saved.getId(), null), actorAccountId, Map.of("name", name)));
@@ -99,6 +101,11 @@ public class ProjectNotificationsService {
             }
             throw exception;
         }
+    }
+
+    /** Siguiente número de secuencia por proyecto (max+1). */
+    private int nextSequence(UUID projectId) {
+        return templateRepository.findMaxSequenceByProjectId(projectId).orElse(0) + 1;
     }
 
     @Transactional
@@ -200,7 +207,10 @@ public class ProjectNotificationsService {
         projectLookupService.requireById(projectId);
         NotificationTemplate template = requireTemplate(projectId, templateId);
         Map<String, String> resolved = resolveVariables(projectId, template.getVariables(), variables);
-        return new RenderedTemplate(render(template.getSubject(), resolved), render(template.getBodyTemplate(), resolved));
+        // El body se renderiza con marcadores <span class="nx-var" data-var="…"> para
+        // que la vista previa resalte dónde cayó cada variable y permita navegar a ella.
+        return new RenderedTemplate(render(template.getSubject(), resolved),
+                renderHighlighted(template.getBodyTemplate(), resolved));
     }
 
     /** Lectura de las variables globales del proyecto. */
@@ -282,6 +292,36 @@ public class ProjectNotificationsService {
             matcher.appendReplacement(result, Matcher.quoteReplacement(value));
         }
         matcher.appendTail(result);
+        return result.toString();
+    }
+
+    /**
+     * Igual que {@link #render} pero envuelve cada valor sustituido en
+     * {@code <span class="nx-var" data-var="…">valor</span>}. Sólo para la vista
+     * previa: así el panel resalta dónde acabó cada variable y puede navegar a la
+     * sustitución al hacer clic en la variable. El envío real usa {@link #render}
+     * (sin marcadores).
+     */
+    static String renderHighlighted(String text, Map<String, String> variables) {
+        String afterDollar = replaceAllHighlighted(text, VARIABLE_DOLLAR, variables);
+        return replaceAllHighlighted(afterDollar, VARIABLE_MUSTACHE, variables);
+    }
+
+    private static String replaceAllHighlighted(String text, Pattern pattern, Map<String, String> variables) {
+        Matcher matcher = pattern.matcher(text);
+        StringBuilder result = new StringBuilder();
+        int last = 0;
+        while (matcher.find()) {
+            result.append(text, last, matcher.start());
+            String key = matcher.group(1);
+            String value = variables == null ? "" : variables.getOrDefault(key, "");
+            // key es \w+ → seguro dentro de un atributo; value se inserta tal cual (HTML).
+            result.append("<span class=\"nx-var\" data-var=\"").append(key).append("\">")
+                    .append(value)
+                    .append("</span>");
+            last = matcher.end();
+        }
+        result.append(text, last, text.length());
         return result.toString();
     }
 

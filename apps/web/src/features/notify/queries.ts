@@ -12,6 +12,7 @@ import {
   saveNotifyVariables,
   saveSmtpSettings,
   sendTestNotification,
+  testSmtpConnection,
   updateNotifyTemplate,
 } from "./api";
 import { queryKeys } from "@/lib/api/queryKeys";
@@ -99,11 +100,20 @@ export function useSaveSmtpSettings(projectId: string) {
       username: string;
       from: string;
       password: string;
+      tlsMode: "PUBLIC" | "PINNED";
+      trustedCaPem?: string;
     }) => withCsrf((token) => saveSmtpSettings(projectId, vars, token)),
     onSuccess: () =>
       qc.invalidateQueries({
         queryKey: queryKeys.projects.notifySmtp(projectId),
       }),
+  });
+}
+
+/** Comprueba la conexión SMTP guardada sin enviar correo. */
+export function useTestSmtpConnection(projectId: string) {
+  return useMutation({
+    mutationFn: () => withCsrf((token) => testSmtpConnection(projectId, token)),
   });
 }
 

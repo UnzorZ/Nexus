@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import DOMPurify from "dompurify";
 import { Upload } from "lucide-react";
 import { PlusIcon } from "@/components/ui/plus";
 import { EllipsisIcon } from "@/components/ui/ellipsis-icon";
@@ -62,12 +63,14 @@ import {
   useSaveNotifyVariables,
   useSaveSmtpSettings,
   useSendTestNotify,
+  useTestSmtpConnection,
   useUpdateNotifyTemplate,
 } from "@/features/notify/queries";
 import type {
   Notification,
   NotificationStatus,
   NotificationTemplate,
+  SmtpConnectionCheck,
 } from "@/features/notify/api";
 import { toFieldErrors, toMessage } from "@/lib/api/errors";
 import { useProject } from "@/app/projects/[projectId]/useProject";
@@ -87,6 +90,8 @@ type SmtpForm = {
   username: string;
   from: string;
   password: string;
+  tlsMode: "PUBLIC" | "PINNED";
+  trustedCaPem: string;
 };
 const EMPTY_SMTP: SmtpForm = {
   host: "",
@@ -94,6 +99,8 @@ const EMPTY_SMTP: SmtpForm = {
   username: "",
   from: "",
   password: "",
+  tlsMode: "PUBLIC",
+  trustedCaPem: "",
 };
 
 const NOTIFY_MESSAGES = {
@@ -118,6 +125,7 @@ export function NotifyModule() {
   const saveSmtpM = useSaveSmtpSettings(projectId);
   const saveVarsM = useSaveNotifyVariables(projectId);
   const sendTestM = useSendTestNotify(projectId);
+  const testConnM = useTestSmtpConnection(projectId);
 
   const templates = templatesQ.data ?? null;
   const notifications = notificationsQ.data ?? null;
@@ -147,7 +155,7 @@ export function NotifyModule() {
   const [previewTarget, setPreviewTarget] = useState<NotificationTemplate | null>(
     null,
   );
-  const [previewVars, setPreviewVars] = useState("{\n  \"name\": \"Ada\"\n}");
+  const [previewVarsRows, setPreviewVarsRows] = useState<KV[]>([]);
   const [previewResult, setPreviewResult] = useState<{
     subject: string;
     body: string;
@@ -156,7 +164,10 @@ export function NotifyModule() {
   // SMTP
   const [smtpForm, setSmtpForm] = useState<SmtpForm>(EMPTY_SMTP);
   const [showSmtpPassword, setShowSmtpPassword] = useState(false);
+  const [connResult, setConnResult] = useState<SmtpConnectionCheck | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const caFileInputRef = useRef<HTMLInputElement>(null);
+  const previewBodyRef = useRef<HTMLDivElement>(null);
 
   // Global variables
   const [globalRows, setGlobalRows] = useState<KV[]>([]);
@@ -204,10 +215,21 @@ export function NotifyModule() {
         username: smtp.username ?? "",
         from: smtp.from ?? "",
         password: "",
+        tlsMode: smtp.tlsMode ?? "PUBLIC",
+        trustedCaPem: "",
       });
+      setConnResult(null);
     }
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [smtp]);
+
+  // Cuerpo del preview sanitizado: DOMPurify elimina todo vector de JS
+  // (<script>, atributos on*, URIs javascript:) y deja sólo HTML estático.
+  // Conserva los spans de resaltado (class nx-var + data-var).
+  const sanitizedPreviewBody = useMemo(() => {
+    if (!previewResult) return "";
+    return DOMPurify.sanitize(previewResult.body, { ADD_ATTR: ["data-var"] });
+  }, [previewResult]);
 
   const busy = createM.isPending || updateM.isPending || deleteM.isPending;
   const fieldErrors = toFieldErrors(createM.error ?? updateM.error);
@@ -256,10 +278,55 @@ export function NotifyModule() {
     setVarsTarget(template);
   }
 
+  /**
+   * Variables efectivas de una template: globales del proyecto como base con los
+   * defaults de la template por encima. Es exactamente lo que se sustituirá al
+   * renderizar (el backend hace el mismo merge).
+   */
+  function effectiveVariables(
+    template: NotificationTemplate,
+  ): Record<string, string> {
+    return {
+      ...(globalVars?.variables ?? {}),
+      ...(template.variables ?? {}),
+    };
+  }
+
   function openPreview(template: NotificationTemplate) {
     resetActionErrors();
     setPreviewResult(null);
+    const merged = effectiveVariables(template);
+    // Mostramos el set efectivo (globals + defaults) ya resuelto, y renderizamos
+    // de inmediato: el usuario ve qué variables se aplican y el resultado.
+    setPreviewVarsRows(recordToRows(merged));
     setPreviewTarget(template);
+    void renderPreview(template.id, merged);
+  }
+
+  async function renderPreview(
+    templateId: string,
+    variables: Record<string, string>,
+  ) {
+    resetActionErrors();
+    try {
+      const result = await previewM.mutateAsync({ templateId, variables });
+      setPreviewResult(result);
+    } catch {
+      setPreviewResult(null);
+    }
+  }
+
+  /** Lleva el scroll del body a la sustitución de una variable y la hace flash. */
+  function scrollToVar(key: string) {
+    const container = previewBodyRef.current;
+    if (!container) return;
+    const target = container.querySelector(`[data-var="${key}"]`);
+    if (!(target instanceof HTMLElement)) return;
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+    target.classList.remove("nx-var-flash");
+    void target.offsetWidth; // reflow para reiniciar la animación
+    target.classList.add("nx-var-flash");
+    window.setTimeout(() => target.classList.remove("nx-var-flash"), 1300);
   }
 
   function onUploadHtml(event: React.ChangeEvent<HTMLInputElement>) {
@@ -312,33 +379,9 @@ export function NotifyModule() {
     }
   }
 
-  async function doPreview() {
-    if (!previewTarget) return;
-    let variables: Record<string, string> = {};
-    try {
-      const parsed = previewVars.trim() ? JSON.parse(previewVars) : {};
-      if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-        throw new Error("not an object");
-      }
-      variables = parsed;
-    } catch {
-      window.alert("Variables must be a JSON object, e.g. {\"name\":\"Ada\"}");
-      return;
-    }
-    resetActionErrors();
-    try {
-      const result = await previewM.mutateAsync({
-        templateId: previewTarget.id,
-        variables,
-      });
-      setPreviewResult(result);
-    } catch {
-      setPreviewResult(null);
-    }
-  }
-
   async function saveSmtp() {
     saveSmtpM.reset();
+    setConnResult(null);
     const port = Number(smtpForm.port);
     await saveSmtpM.mutateAsync({
       host: smtpForm.host.trim(),
@@ -346,7 +389,35 @@ export function NotifyModule() {
       username: smtpForm.username.trim(),
       from: smtpForm.from.trim(),
       password: smtpForm.password,
+      tlsMode: smtpForm.tlsMode,
+      // En PINNED se envía la CA; en PUBLIC se omite (el backend la descarta).
+      trustedCaPem:
+        smtpForm.tlsMode === "PINNED" ? smtpForm.trustedCaPem : undefined,
     });
+  }
+
+  /** Prueba la conexión SMTP ya guardada (sin enviar correo). */
+  async function testConn() {
+    setConnResult(null);
+    testConnM.reset();
+    try {
+      const result = await testConnM.mutateAsync();
+      setConnResult(result);
+    } catch {
+      setConnResult(null);
+    }
+  }
+
+  function onUploadCa(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = typeof reader.result === "string" ? reader.result : "";
+      setSmtpForm((f) => ({ ...f, trustedCaPem: text }));
+    };
+    reader.readAsText(file);
+    event.target.value = "";
   }
 
   async function saveGlobalVariables() {
@@ -478,6 +549,7 @@ export function NotifyModule() {
                 rows={testVarsRows}
                 onChange={setTestVarsRows}
                 addLabel="Add override"
+                keyTrigger
               />
             </div>
             <div className="flex items-center gap-3">
@@ -505,7 +577,11 @@ export function NotifyModule() {
           }
         >
           <div className="flex flex-col gap-3">
-            <KeyValueEditor rows={globalRows} onChange={setGlobalRows} />
+            <KeyValueEditor
+              rows={globalRows}
+              onChange={setGlobalRows}
+              keyTrigger
+            />
             {varsError ? (
               <p className="text-xs text-destructive">{varsError}</p>
             ) : null}
@@ -585,6 +661,138 @@ export function NotifyModule() {
                 />
               </div>
             </div>
+            {/* TLS trust mode (ADR-0013) */}
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="smtp-tls">TLS trust</Label>
+              <Select
+                value={smtpForm.tlsMode}
+                onValueChange={(v) =>
+                  setSmtpForm((f) => ({
+                    ...f,
+                    tlsMode: v as "PUBLIC" | "PINNED",
+                  }))
+                }
+              >
+                <SelectTrigger id="smtp-tls" size="sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="PUBLIC">
+                    Public CA (Gmail, SendGrid, Let&apos;s Encrypt…)
+                  </SelectItem>
+                  <SelectItem value="PINNED">
+                    Self-signed / private CA (pin a certificate)
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {smtpForm.tlsMode === "PUBLIC"
+                  ? "The server certificate is verified against public CAs. Use this for any provider with a public certificate."
+                  : "Trust only the CA you upload below — for a self-signed or internal SMTP server."}
+              </p>
+            </div>
+
+            {smtpForm.tlsMode === "PUBLIC" ? (
+              <details className="rounded border border-border bg-muted/30 p-3 text-xs">
+                <summary className="cursor-pointer font-medium text-foreground">
+                  No public cert yet? Get one free with Let&apos;s Encrypt
+                </summary>
+                <div className="mt-2 flex flex-col gap-2 text-muted-foreground">
+                  <p>
+                    If your SMTP server uses a self-signed or Cloudflare-Origin
+                    certificate, Nexus can&apos;t verify it in this mode. Issue a
+                    free public certificate via DNS-01 (no port to open):
+                  </p>
+                  <ol className="ml-4 list-decimal space-y-1.5">
+                    <li>
+                      On your mail server, install{" "}
+                      <code className="font-mono">certbot</code> and the
+                      Cloudflare DNS plugin
+                      (<code className="font-mono">python3-certbot-dns-cloudflare</code>).
+                    </li>
+                    <li>
+                      Create a Cloudflare API token with{" "}
+                      <code className="font-mono">Zone · DNS · Edit</code> for your
+                      domain.
+                    </li>
+                    <li>
+                      Issue the certificate:
+                      <pre className="mt-1 overflow-x-auto rounded bg-background/60 p-2 font-mono">
+{`certbot certonly --dns-cloudflare \\
+  --dns-cloudflare-credentials ~/.cloudflare.ini \\
+  -d mail.yourdomain.com`}
+                      </pre>
+                    </li>
+                    <li>
+                      Point your SMTP server at{" "}
+                      <code className="font-mono">
+                        /etc/letsencrypt/live/mail.yourdomain.com/
+                      </code>{" "}
+                      (<code className="font-mono">fullchain.pem</code> +{" "}
+                      <code className="font-mono">privkey.pem</code>) and reload it.
+                    </li>
+                    <li>
+                      Verify (you should see{" "}
+                      <em>Verification: OK</em>):
+                      <pre className="mt-1 overflow-x-auto rounded bg-background/60 p-2 font-mono">
+{`openssl s_client -starttls smtp \\
+  -connect mail.yourdomain.com:25 \\
+  -servername mail.yourdomain.com -brief`}
+                      </pre>
+                    </li>
+                  </ol>
+                  <p>
+                    No Cloudflare? Use HTTP-01 (needs port 80 open):{" "}
+                    <code className="font-mono">
+                      certbot certonly --standalone -d mail.yourdomain.com
+                    </code>
+                    .
+                  </p>
+                </div>
+              </details>
+            ) : null}
+
+            {smtpForm.tlsMode === "PINNED" ? (
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <Label htmlFor="smtp-ca">Trusted CA certificate (PEM)</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => caFileInputRef.current?.click()}
+                  >
+                    <Upload size={14} />
+                    Upload .pem/.crt
+                  </Button>
+                  <input
+                    ref={caFileInputRef}
+                    type="file"
+                    accept=".pem,.crt,.cer,application/x-pem-file,text/plain"
+                    className="hidden"
+                    onChange={onUploadCa}
+                  />
+                </div>
+                <Textarea
+                  id="smtp-ca"
+                  value={smtpForm.trustedCaPem}
+                  onChange={(e) =>
+                    setSmtpForm((f) => ({ ...f, trustedCaPem: e.target.value }))
+                  }
+                  rows={6}
+                  placeholder={
+                    "-----BEGIN CERTIFICATE-----\n…\n-----END CERTIFICATE-----"
+                  }
+                  className="font-mono text-xs"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {smtp?.trustedCaConfigured
+                    ? "A CA is saved. Paste or upload to replace it (leave untouched to keep)."
+                    : "Paste the PEM of your SMTP server's CA. Required to save in this mode."}
+                </p>
+              </div>
+            ) : null}
+
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="smtp-pass">Password</Label>
               <div className="flex items-center gap-2">
@@ -615,14 +823,52 @@ export function NotifyModule() {
             {smtpError ? (
               <p className="text-xs text-destructive">{smtpError}</p>
             ) : null}
-            <div className="flex justify-end">
+            {connResult ? (
+              <div
+                className={
+                  connResult.ok
+                    ? "rounded border border-emerald-500/40 bg-emerald-500/10 p-3"
+                    : "rounded border border-destructive/40 bg-destructive/10 p-3"
+                }
+              >
+                <StatusBadge tone={connResult.ok ? "emerald" : "red"} dot>
+                  {connResult.ok ? "Connection OK" : "Connection failed"}
+                </StatusBadge>
+                <p className="mt-1.5 break-words font-mono text-xs text-muted-foreground">
+                  {connResult.message}
+                </p>
+              </div>
+            ) : null}
+            {testConnM.isError ? (
+              <p className="text-xs text-destructive">
+                {toMessage(testConnM.error, NOTIFY_MESSAGES)}
+              </p>
+            ) : null}
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={testConn}
+                disabled={testConnM.isPending || !smtp?.host || !smtp?.from}
+                title={
+                  !smtp?.host || !smtp?.from
+                    ? "Save your SMTP settings first."
+                    : "Test the saved connection (TLS verified + AUTH)"
+                }
+              >
+                {testConnM.isPending ? "Testing…" : "Test connection"}
+              </Button>
               <Button
                 size="sm"
                 onClick={saveSmtp}
                 disabled={
                   saveSmtpM.isPending ||
                   !smtpForm.host.trim() ||
-                  !smtpForm.from.trim()
+                  !smtpForm.from.trim() ||
+                  (smtpForm.tlsMode === "PINNED" &&
+                    !smtpForm.trustedCaPem.trim() &&
+                    !smtp?.trustedCaConfigured)
                 }
               >
                 {saveSmtpM.isPending ? "Saving…" : "Save SMTP settings"}
@@ -660,6 +906,7 @@ export function NotifyModule() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12">ID</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Subject</TableHead>
                 <TableHead>Variables</TableHead>
@@ -671,6 +918,11 @@ export function NotifyModule() {
                 const count = Object.keys(template.variables ?? {}).length;
                 return (
                   <TableRow key={template.id}>
+                    <TableCell>
+                      <code className="font-mono text-xs text-muted-foreground">
+                        #{template.sequence}
+                      </code>
+                    </TableCell>
                     <TableCell className="font-medium">{template.name}</TableCell>
                     <TableCell className="text-muted-foreground">
                       {template.subject}
@@ -851,7 +1103,11 @@ export function NotifyModule() {
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>Variables (defaults)</Label>
-              <KeyValueEditor rows={formVarsRows} onChange={setFormVarsRows} />
+              <KeyValueEditor
+                rows={formVarsRows}
+                onChange={setFormVarsRows}
+                keyTrigger
+              />
               <p className="text-xs text-muted-foreground">
                 These fill in when a send doesn&apos;t override them. Globals apply
                 underneath.
@@ -891,7 +1147,11 @@ export function NotifyModule() {
             </DialogDescription>
           </DialogHeader>
           <div className="py-1">
-            <KeyValueEditor rows={varsRows} onChange={setVarsRows} />
+            <KeyValueEditor
+              rows={varsRows}
+              onChange={setVarsRows}
+              keyTrigger
+            />
           </div>
           <DialogFooter>
             <DialogClose asChild>
@@ -918,28 +1178,47 @@ export function NotifyModule() {
           }
         }}
       >
-        <DialogContent>
+        <DialogContent className="sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle>Preview {previewTarget?.name}</DialogTitle>
             <DialogDescription>
-              Render the template with sample variables. Triggers like{" "}
+              Effective variables (globals + this template&apos;s defaults) and
+              the rendered template. Triggers like{" "}
               <code className="font-mono">{"{$name}"}</code> are substituted. No
               email is sent.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-4 py-1">
+            {/* Effective variables — read only, no overrides */}
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="ntf-preview-vars">Variables (JSON)</Label>
-              <Textarea
-                id="ntf-preview-vars"
-                value={previewVars}
-                onChange={(e) => setPreviewVars(e.target.value)}
-                rows={5}
-                className="font-mono text-xs"
-              />
+              <Label>Effective variables (globals + defaults)</Label>
+              <div className="overflow-hidden rounded-md border border-input">
+                {previewVarsRows.length === 0 ? (
+                  <p className="px-3 py-2 text-xs text-muted-foreground">
+                    No variables apply to this template.
+                  </p>
+                ) : (
+                  previewVarsRows.map((row, idx) => (
+                    <div
+                      key={`${row.key}-${idx}`}
+                      onClick={() => scrollToVar(row.key)}
+                      title="Jump to this substitution in the body"
+                      className="flex cursor-pointer items-center gap-3 border-b border-input px-3 py-1.5 text-xs transition-colors last:border-b-0 hover:bg-muted/50"
+                    >
+                      <code className="shrink-0 font-mono text-muted-foreground">{`{$${row.key}}`}</code>
+                      <span className="min-w-0 break-words">
+                        {row.value || (
+                          <em className="text-muted-foreground">(empty)</em>
+                        )}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
+            {/* Rendered output */}
             {previewResult ? (
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-3">
                 <div className="flex flex-col gap-1">
                   <span className="text-xs text-muted-foreground">Subject</span>
                   <span className="text-sm font-medium">
@@ -947,24 +1226,26 @@ export function NotifyModule() {
                   </span>
                 </div>
                 <div className="flex flex-col gap-1">
-                  <span className="text-xs text-muted-foreground">Body</span>
-                  <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded bg-muted/40 p-2 font-mono text-xs">
-                    {previewResult.body}
-                  </pre>
+                  <span className="text-xs text-muted-foreground">
+                    Body (rendered — highlighted values were substituted)
+                  </span>
+                  <div
+                    ref={previewBodyRef}
+                    className="h-96 overflow-auto rounded-md border border-input bg-background p-4 text-sm text-foreground"
+                    dangerouslySetInnerHTML={{ __html: sanitizedPreviewBody }}
+                  />
                 </div>
               </div>
-            ) : null}
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {previewM.isPending ? "Rendering…" : "Render failed."}
+              </p>
+            )}
           </div>
           <DialogFooter>
             <DialogClose asChild>
               <Button variant="outline">Close</Button>
             </DialogClose>
-            <Button
-              onClick={doPreview}
-              disabled={previewM.isPending || !previewTarget}
-            >
-              {previewM.isPending ? "Rendering…" : "Render preview"}
-            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
