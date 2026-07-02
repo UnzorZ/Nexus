@@ -9,7 +9,6 @@ import {
   CheckCircle2,
   Code2,
   Database,
-  FileText,
   Gauge,
   HardDrive,
   History,
@@ -155,7 +154,6 @@ const MODULES: {
   { key: "nexus/config", Icon: Settings2, title: "Config", desc: "Dynamic configuration per project.", c: "indigo", status: "planned" },
   { key: "nexus/metrics", Icon: Gauge, title: "Metrics", desc: "Usage and uptime signals.", c: "cyan", status: "planned" },
   { key: "nexus/backup", Icon: Database, title: "Backups", desc: "Snapshots and restore.", c: "blue", status: "planned" },
-  { key: "nexus/documents", Icon: FileText, title: "Documents", desc: "Generated from templates.", c: "amber", status: "planned" },
 ];
 
 const STEPS: { Icon: typeof CheckCircle2; label: string; text: string }[] = [

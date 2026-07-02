@@ -46,7 +46,7 @@ class ProjectModuleServiceTests {
 
         List<ProjectModuleStatus> result = service.listForProject(projectId);
 
-        assertThat(result).hasSize(11);
+        assertThat(result).hasSize(10);
         // Los habilitados por defecto deben reflejar exactamente el catálogo
         // (NexusModule.enabledByDefault); se deriva del enum para no acoplar el
         // test a la lista literal y que crezca con cada módulo nuevo.

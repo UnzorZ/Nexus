@@ -131,24 +131,6 @@ export const apiRoutes = {
             `/api/panel/v1/projects/${encodeURIComponent(projectId)}/metrics`,
           ),
       },
-      documents: {
-        templatesRoot: (projectId: string) =>
-          apiUrl(
-            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/documents/templates`,
-          ),
-        templateById: (projectId: string, templateId: string) =>
-          apiUrl(
-            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/documents/templates/${encodeURIComponent(templateId)}`,
-          ),
-        render: (projectId: string, templateId: string) =>
-          apiUrl(
-            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/documents/templates/${encodeURIComponent(templateId)}/render`,
-          ),
-        rendersRoot: (projectId: string) =>
-          apiUrl(
-            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/documents/renders`,
-          ),
-      },
       notify: {
         templatesRoot: (projectId: string) =>
           apiUrl(

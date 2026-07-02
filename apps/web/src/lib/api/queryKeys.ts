@@ -35,10 +35,6 @@ export const queryKeys = {
       ["projects", projectId, "config"] as const,
     metrics: (projectId: string) =>
       ["projects", projectId, "metrics"] as const,
-    documents: (projectId: string) =>
-      ["projects", projectId, "documents"] as const,
-    documentRenders: (projectId: string) =>
-      ["projects", projectId, "documents", "renders"] as const,
     notifyTemplates: (projectId: string) =>
       ["projects", projectId, "notify", "templates"] as const,
     notifications: (projectId: string) =>

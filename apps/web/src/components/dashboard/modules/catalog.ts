@@ -5,7 +5,6 @@ import {
   Activity,
   Archive,
   Bell,
-  FileText,
   Gauge,
   HardDrive,
   KeyRound,
@@ -45,7 +44,6 @@ export const MODULE_CATALOG: ModuleMeta[] = [
   { key: "storage", name: "Storage", description: "Per-project blob storage and object lifecycle.", category: "Data", Icon: HardDrive, iconBg: tint.blue.bg, iconColor: tint.blue.text },
   { key: "vault", name: "Vault", description: "Encrypted secrets and project-scoped key values.", category: "Data", Icon: KeyRound, iconBg: tint.red.bg, iconColor: tint.red.text },
   { key: "backup", name: "Backup", description: "Scheduled project data snapshots and restore points.", category: "Data", Icon: Archive, iconBg: tint.indigo.bg, iconColor: tint.indigo.text },
-  { key: "documents", name: "Documents", description: "Document generation and templated exports.", category: "Data", Icon: FileText, iconBg: tint.violet.bg, iconColor: tint.violet.text },
   { key: "config", name: "Config", description: "Dynamic project configuration and feature flags.", category: "Operations", Icon: Settings, iconBg: tint.amber.bg, iconColor: tint.amber.text },
   { key: "metrics", name: "Metrics", description: "Project-scoped usage metrics and instrumentation.", category: "Operations", Icon: Gauge, iconBg: tint.cyan.bg, iconColor: tint.cyan.text },
 ];
