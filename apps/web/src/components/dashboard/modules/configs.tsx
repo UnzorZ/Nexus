@@ -5,7 +5,6 @@ import { NotifyModule } from "./notify";
 import { StorageModule } from "./storage";
 import { VaultModule } from "./vault";
 import { BackupModule } from "./backup";
-import { DocumentsModule } from "./documents";
 import { ConfigModule } from "./config";
 import { MetricsModule } from "./metrics";
 import { IdentityModule } from "./identity";
@@ -19,7 +18,6 @@ export const MODULE_CONFIGS: Record<string, ComponentType> = {
   storage: StorageModule,
   vault: VaultModule,
   backup: BackupModule,
-  documents: DocumentsModule,
   config: ConfigModule,
   metrics: MetricsModule,
   identity: IdentityModule,

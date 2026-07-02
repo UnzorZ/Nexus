@@ -50,7 +50,6 @@ public class ModuleGate {
             "heartbeats", NexusModule.REGISTRY,
             "config", NexusModule.CONFIG,
             "metrics", NexusModule.METRICS,
-            "documents", NexusModule.DOCUMENTS,
             "notify", NexusModule.NOTIFY,
             "vault", NexusModule.VAULT);
 
@@ -59,7 +58,6 @@ public class ModuleGate {
             "/api/v1/registry", NexusModule.REGISTRY,
             "/api/v1/config", NexusModule.CONFIG,
             "/api/v1/metrics", NexusModule.METRICS,
-            "/api/v1/documents", NexusModule.DOCUMENTS,
             "/api/v1/notify", NexusModule.NOTIFY,
             "/api/v1/vault", NexusModule.VAULT);
 
