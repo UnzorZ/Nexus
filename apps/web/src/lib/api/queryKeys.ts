@@ -50,4 +50,10 @@ export const queryKeys = {
   },
 
   sessions: () => ["sessions"] as const,
+
+  instance: {
+    smtp: () => ["instance", "smtp"] as const,
+    status: () => ["instance", "status"] as const,
+    settings: () => ["instance", "settings"] as const,
+  },
 } as const;

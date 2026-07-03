@@ -1,5 +1,6 @@
 package dev.unzor.nexus.modules.application.service;
 
+import dev.unzor.nexus.instance.application.service.InstanceSettingsService;
 import dev.unzor.nexus.modules.api.dto.ProjectModuleStatus;
 import dev.unzor.nexus.modules.domain.entity.ProjectModule;
 import dev.unzor.nexus.modules.domain.enums.NexusModule;
@@ -34,9 +35,16 @@ class ProjectModuleServiceTests {
 
     private final ProjectModuleRepository projectModuleRepository = mock(ProjectModuleRepository.class);
     private final ProjectLookupService projectLookupService = mock(ProjectLookupService.class);
+    private final InstanceSettingsService instanceSettings = stubInstanceSettings();
     private final ProjectModuleService service =
             new ProjectModuleService(projectModuleRepository, projectLookupService, noopTransactionManager(),
-                    mock(ApplicationEventPublisher.class));
+                    mock(ApplicationEventPublisher.class), instanceSettings);
+
+    private static InstanceSettingsService stubInstanceSettings() {
+        InstanceSettingsService service = mock(InstanceSettingsService.class);
+        when(service.defaultModuleKeys()).thenReturn(Optional.empty());
+        return service;
+    }
 
     @Test
     void listForProjectReturnsAllModulesWithDefaultFlagsForFreshProject() {

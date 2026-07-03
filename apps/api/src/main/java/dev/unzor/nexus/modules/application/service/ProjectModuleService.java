@@ -1,5 +1,6 @@
 package dev.unzor.nexus.modules.application.service;
 
+import dev.unzor.nexus.instance.application.service.InstanceSettingsService;
 import dev.unzor.nexus.modules.api.dto.ProjectModuleStatus;
 import dev.unzor.nexus.modules.domain.entity.ProjectModule;
 import dev.unzor.nexus.modules.domain.enums.NexusModule;
@@ -16,13 +17,16 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
  * Orquesta la lectura y actualización del registro de módulos por proyecto.
  *
- * <p>Los módulos sin fila persistida heredan el valor por defecto del catálogo.</p>
+ * <p>Los módulos sin fila persistida heredan el valor por defecto: el del
+ * operador (configuración de instancia) si está definido, si no el del catálogo.</p>
  */
 @Service
 public class ProjectModuleService {
@@ -31,12 +35,14 @@ public class ProjectModuleService {
     private final ProjectLookupService projectLookupService;
     private final TransactionTemplate transactionTemplate;
     private final ApplicationEventPublisher eventPublisher;
+    private final InstanceSettingsService instanceSettings;
 
     public ProjectModuleService(
             ProjectModuleRepository projectModuleRepository,
             ProjectLookupService projectLookupService,
             PlatformTransactionManager transactionManager,
-            ApplicationEventPublisher eventPublisher
+            ApplicationEventPublisher eventPublisher,
+            InstanceSettingsService instanceSettings
     ) {
         this.projectModuleRepository = projectModuleRepository;
         this.projectLookupService = projectLookupService;
@@ -45,6 +51,7 @@ public class ProjectModuleService {
         // transacción ya marcada como rollback-only.
         this.transactionTemplate = new TransactionTemplate(transactionManager);
         this.eventPublisher = eventPublisher;
+        this.instanceSettings = instanceSettings;
     }
 
     @Transactional(readOnly = true)
@@ -61,14 +68,15 @@ public class ProjectModuleService {
         return Arrays.stream(NexusModule.values())
                 .map(module -> new ProjectModuleStatus(
                         module.key(),
-                        stored.getOrDefault(module, module.enabledByDefault()),
-                        module.enabledByDefault()))
+                        stored.getOrDefault(module, effectiveDefault(module)),
+                        effectiveDefault(module)))
                 .toList();
     }
 
     /**
      * Consulta de runtime para el module gate: ¿está el módulo habilitado para el
-     * proyecto? Una fila ausente hereda el valor por defecto del catálogo.
+     * proyecto? Una fila ausente hereda el valor por defecto efectivo (instancia o
+     * catálogo).
      *
      * <p>A diferencia de {@link #listForProject}, no verifica la existencia del
      * proyecto (el controlador ya devolverá 404 para uno inexistente); el gate
@@ -78,6 +86,16 @@ public class ProjectModuleService {
     public boolean isEnabled(UUID projectId, NexusModule module) {
         return projectModuleRepository.findByProjectIdAndModule(projectId, module)
                 .map(ProjectModule::isEnabled)
+                .orElseGet(() -> effectiveDefault(module));
+    }
+
+    /**
+     * Default efectivo de un módulo: el del operador (configuración de instancia)
+     * si la ha definido, si no el del catálogo ({@link NexusModule#enabledByDefault()}).
+     */
+    private boolean effectiveDefault(NexusModule module) {
+        Optional<Set<String>> configured = instanceSettings.defaultModuleKeys();
+        return configured.map(keys -> keys.contains(module.key()))
                 .orElseGet(module::enabledByDefault);
     }
 
@@ -114,7 +132,7 @@ public class ProjectModuleService {
                     .orElseGet(() -> new ProjectModule(projectId, module, enabled));
             row.setEnabled(enabled);
             projectModuleRepository.save(row);
-            return new ProjectModuleStatus(module.key(), enabled, module.enabledByDefault());
+            return new ProjectModuleStatus(module.key(), enabled, effectiveDefault(module));
         });
     }
 }

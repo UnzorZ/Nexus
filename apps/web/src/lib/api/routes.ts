@@ -29,6 +29,15 @@ export const apiRoutes = {
           `/api/panel/v1/sessions/${encodeURIComponent(publicSessionId)}`,
         ),
     },
+    instance: {
+      smtp: apiUrl("/api/panel/v1/instance/smtp"),
+      smtpTestConnection: apiUrl("/api/panel/v1/instance/smtp/test-connection"),
+      status: apiUrl("/api/panel/v1/instance/status"),
+      settings: apiUrl("/api/panel/v1/instance/settings"),
+      registration: apiUrl("/api/panel/v1/instance/registration"),
+      modulesDefaults: apiUrl("/api/panel/v1/instance/modules-defaults"),
+      heartbeat: apiUrl("/api/panel/v1/instance/heartbeat"),
+    },
     projects: {
       root: apiUrl("/api/panel/v1/projects"),
       byId: (projectId: string) =>

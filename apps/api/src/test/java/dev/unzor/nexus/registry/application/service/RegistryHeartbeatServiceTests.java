@@ -1,5 +1,6 @@
 package dev.unzor.nexus.registry.application.service;
 
+import dev.unzor.nexus.instance.application.service.InstanceSettingsService;
 import dev.unzor.nexus.projects.application.service.ProjectLookupService;
 import dev.unzor.nexus.registry.api.requests.HeartbeatRequest;
 import dev.unzor.nexus.registry.application.configuration.HeartbeatProperties;
@@ -28,8 +29,16 @@ class RegistryHeartbeatServiceTests {
     private final ProjectRegistrySettingsRepository settingsRepository = mock(ProjectRegistrySettingsRepository.class);
     private final ProjectLookupService projectLookupService = mock(ProjectLookupService.class);
     private final HeartbeatProperties properties = new HeartbeatProperties();
+    private final InstanceSettingsService instanceSettings = stubInstanceSettings();
     private final RegistryHeartbeatService service = new RegistryHeartbeatService(
-            repository, settingsRepository, projectLookupService, properties, mock(ApplicationEventPublisher.class));
+            repository, settingsRepository, projectLookupService, properties, instanceSettings,
+            mock(ApplicationEventPublisher.class));
+
+    private static InstanceSettingsService stubInstanceSettings() {
+        InstanceSettingsService service = mock(InstanceSettingsService.class);
+        when(service.heartbeatDefaults()).thenReturn(Optional.empty());
+        return service;
+    }
 
     @Test
     void recordCreatesNewInstanceWhenAbsent() {

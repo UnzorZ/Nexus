@@ -6,6 +6,7 @@ import dev.unzor.nexus.admin.domain.entity.NexusAccount;
 import dev.unzor.nexus.admin.domain.enums.NexusAccountStatus;
 import dev.unzor.nexus.admin.domain.exception.NexusAccountEmailAlreadyExistsException;
 import dev.unzor.nexus.admin.persistence.repository.NexusAccountRepository;
+import dev.unzor.nexus.instance.application.service.InstanceSettingsService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.hibernate.exception.ConstraintViolationException;
@@ -30,12 +31,20 @@ class CreateNexusAccountServiceTests {
             mock(PasswordEncoder.class);
     private final InstanceAdminBootstrapService instanceAdminBootstrapService =
             mock(InstanceAdminBootstrapService.class);
+    private final InstanceSettingsService instanceSettings = stubInstanceSettings();
     private final CreateNexusAccountService service =
             new CreateNexusAccountService(
                     accountRepository,
                     passwordEncoder,
-                    instanceAdminBootstrapService
+                    instanceAdminBootstrapService,
+                    instanceSettings
             );
+
+    private static InstanceSettingsService stubInstanceSettings() {
+        InstanceSettingsService service = mock(InstanceSettingsService.class);
+        when(service.isRegistrationOpen()).thenReturn(true);
+        return service;
+    }
 
     @Test
     void normalizesEmailAndHashesPasswordBeforePersisting() {

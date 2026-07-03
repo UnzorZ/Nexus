@@ -1,5 +1,6 @@
 package dev.unzor.nexus.registry.application.service;
 
+import dev.unzor.nexus.instance.application.service.InstanceSettingsService;
 import dev.unzor.nexus.projects.application.service.ProjectLookupService;
 import dev.unzor.nexus.registry.api.dto.HeartbeatInstanceView;
 import dev.unzor.nexus.registry.api.dto.HeartbeatReceipt;
@@ -37,17 +38,20 @@ public class RegistryHeartbeatService {
     private final ProjectRegistrySettingsRepository settingsRepository;
     private final ProjectLookupService projectLookupService;
     private final HeartbeatProperties properties;
+    private final InstanceSettingsService instanceSettings;
     private final ApplicationEventPublisher eventPublisher;
 
     public RegistryHeartbeatService(ProjectHeartbeatRepository repository,
                                     ProjectRegistrySettingsRepository settingsRepository,
                                     ProjectLookupService projectLookupService,
                                     HeartbeatProperties properties,
+                                    InstanceSettingsService instanceSettings,
                                     ApplicationEventPublisher eventPublisher) {
         this.repository = repository;
         this.settingsRepository = settingsRepository;
         this.projectLookupService = projectLookupService;
         this.properties = properties;
+        this.instanceSettings = instanceSettings;
         this.eventPublisher = eventPublisher;
     }
 
@@ -82,8 +86,7 @@ public class RegistryHeartbeatService {
         projectLookupService.requireById(projectId);
         return settingsRepository.findByProjectId(projectId)
                 .map(RegistrySettings::from)
-                .orElseGet(() -> RegistrySettings.defaults(projectId,
-                        properties.getIntervalSeconds(), properties.getTimeoutSeconds()));
+                .orElseGet(() -> RegistrySettings.defaults(projectId, fallbackInterval(), fallbackTimeout()));
     }
 
     @Transactional
@@ -105,12 +108,24 @@ public class RegistryHeartbeatService {
         return RegistrySettings.from(saved);
     }
 
-    /** Umbrales efectivos: override del proyecto o defaults globales. */
+    /** Umbrales efectivos: override del proyecto, si no el default de instancia, si no el env. */
     private LivenessThresholds resolveThresholds(UUID projectId) {
         return settingsRepository.findByProjectId(projectId)
                 .map(s -> new LivenessThresholds(s.getIntervalSeconds(), s.getTimeoutSeconds()))
-                .orElseGet(() -> new LivenessThresholds(
-                        properties.getIntervalSeconds(), properties.getTimeoutSeconds()));
+                .orElseGet(() -> new LivenessThresholds(fallbackInterval(), fallbackTimeout()));
+    }
+
+    /** Default de instancia si el operador lo definió, si no el env ({@link HeartbeatProperties}). */
+    private int fallbackInterval() {
+        return instanceSettings.heartbeatDefaults()
+                .map(d -> d[0])
+                .orElseGet(properties::getIntervalSeconds);
+    }
+
+    private int fallbackTimeout() {
+        return instanceSettings.heartbeatDefaults()
+                .map(d -> d[1])
+                .orElseGet(properties::getTimeoutSeconds);
     }
 
     /**
