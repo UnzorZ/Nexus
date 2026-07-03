@@ -30,7 +30,8 @@ public record ProjectUserPrincipal(
         String username,
         String password,
         Collection<? extends GrantedAuthority> authorities,
-        boolean enabled
+        boolean enabled,
+        long authzVersion
 ) implements UserDetails, Serializable {
 
     /**
@@ -45,7 +46,7 @@ public record ProjectUserPrincipal(
      * (el contexto se serializa a Redis, así que no debe llevar credenciales).
      */
     public ProjectUserPrincipal withoutCredentials() {
-        return new ProjectUserPrincipal(projectId, userId, username, null, authorities, enabled);
+        return new ProjectUserPrincipal(projectId, userId, username, null, authorities, enabled, authzVersion);
     }
 
     public static ProjectUserPrincipal from(
@@ -60,7 +61,8 @@ public record ProjectUserPrincipal(
                 login,
                 user.getPasswordHash(),
                 authorities,
-                user.canAuthenticate()
+                user.canAuthenticate(),
+                user.getAuthzVersion()
         );
     }
 

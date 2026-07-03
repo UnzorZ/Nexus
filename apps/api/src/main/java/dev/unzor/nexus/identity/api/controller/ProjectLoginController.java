@@ -53,6 +53,7 @@ class ProjectLoginController {
             @PathVariable String projectSlug,
             @RequestParam String email,
             @RequestParam String password,
+            @RequestParam(name = "continue", required = false) String continueUrl,
             HttpServletRequest request,
             HttpServletResponse response,
             Model model,
@@ -61,7 +62,7 @@ class ProjectLoginController {
         ProjectAuthenticationContext context = resolve(projectSlug);
         try {
             sessionAuthenticator.authenticate(context.projectId(), email, password, request, response);
-            return "redirect:/p/" + context.projectSlug() + "/me";
+            return "redirect:" + safePostLoginTarget(continueUrl, context.projectSlug());
         } catch (BadCredentialsException | UsernameNotFoundException e) {
             model.addAttribute("projectSlug", context.projectSlug());
             model.addAttribute("projectId", context.projectId());
@@ -82,6 +83,18 @@ class ProjectLoginController {
         ProjectAuthenticationContext context = resolve(projectSlug);
         model.addAttribute("projectSlug", context.projectSlug());
         return "identity/project-me";
+    }
+
+    /**
+     * Destino post-login: el {@code continue} sólo si apunta al mismo realm
+     * ({@code /p/{slug}/...}, anti open-redirect); en caso contrario, la página /me.
+     */
+    private static String safePostLoginTarget(String continueUrl, String projectSlug) {
+        String me = "/p/" + projectSlug + "/me";
+        if (continueUrl != null && continueUrl.startsWith("/p/" + projectSlug + "/")) {
+            return continueUrl;
+        }
+        return me;
     }
 
     private ProjectAuthenticationContext resolve(String projectSlug) {

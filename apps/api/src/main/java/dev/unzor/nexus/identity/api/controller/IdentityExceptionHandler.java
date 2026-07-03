@@ -1,5 +1,7 @@
 package dev.unzor.nexus.identity.api.controller;
 
+import dev.unzor.nexus.identity.domain.exception.OauthClientIdAlreadyExistsException;
+import dev.unzor.nexus.identity.domain.exception.OauthClientNotFoundException;
 import dev.unzor.nexus.identity.domain.exception.ProjectUserEmailAlreadyExistsException;
 import dev.unzor.nexus.identity.domain.exception.ProjectUserNotFoundException;
 import dev.unzor.nexus.projects.domain.exception.ProjectAccessDeniedException;
@@ -34,6 +36,24 @@ class IdentityExceptionHandler {
         problem.setTitle("Conflict");
         problem.setProperty("code", "conflict");
         problem.setProperty("email", exception.getEmail());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler(OauthClientNotFoundException.class)
+    ResponseEntity<ProblemDetail> handleOauthClientNotFound(OauthClientNotFoundException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, "OAuth client not found.");
+        problem.setTitle("Not found");
+        problem.setProperty("code", "resource_not_found");
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
+    }
+
+    @ExceptionHandler(OauthClientIdAlreadyExistsException.class)
+    ResponseEntity<ProblemDetail> handleOauthClientConflict(OauthClientIdAlreadyExistsException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT, "An OAuth client with that client id already exists.");
+        problem.setTitle("Conflict");
+        problem.setProperty("code", "conflict");
+        problem.setProperty("client_id", exception.getClientId());
         return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
     }
 
