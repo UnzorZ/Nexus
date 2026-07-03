@@ -75,6 +75,28 @@ export const apiRoutes = {
             `/api/panel/v1/projects/${encodeURIComponent(projectId)}/members/${encodeURIComponent(memberId)}/transfer-ownership`,
           ),
       },
+      users: {
+        root: (projectId: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/users`,
+          ),
+        byId: (projectId: string, userId: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/users/${encodeURIComponent(userId)}`,
+          ),
+        statusAction: (
+          projectId: string,
+          userId: string,
+          action: "suspend" | "reactivate" | "disable",
+        ) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/users/${encodeURIComponent(userId)}/${action}`,
+          ),
+        resetPassword: (projectId: string, userId: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/users/${encodeURIComponent(userId)}/reset-password`,
+          ),
+      },
       permissions: {
         root: (projectId: string) =>
           apiUrl(

@@ -56,6 +56,29 @@ public record AuditEvent(
                 metadata);
     }
 
+    /** Actor {@code PROJECT_USER}: un usuario final autenticado en el realm de un proyecto. */
+    public static AuditEvent byProjectUser(
+            UUID projectId,
+            String action,
+            String resourceType,
+            String resourceId,
+            UUID userId,
+            Map<String, Object> metadata
+    ) {
+        return new AuditEvent(
+                projectId,
+                action,
+                resourceType,
+                resourceId,
+                Severity.forAction(action),
+                "PROJECT_USER",
+                userId == null ? null : userId.toString(),
+                MDC.get("ip"),
+                MDC.get("userAgent"),
+                MDC.get("traceId"),
+                metadata);
+    }
+
     /** Actor {@code ANONYMOUS}: p. ej. un rechazo de auth sin actor identificado. */
     public static AuditEvent anonymous(
             UUID projectId,

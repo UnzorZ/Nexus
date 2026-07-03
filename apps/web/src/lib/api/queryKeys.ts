@@ -17,6 +17,7 @@ export const queryKeys = {
     all: () => ["projects"] as const,
     detail: (projectId: string) => ["projects", projectId] as const,
     members: (projectId: string) => ["projects", projectId, "members"] as const,
+    users: (projectId: string) => ["projects", projectId, "users"] as const,
     roles: (projectId: string) => ["projects", projectId, "roles"] as const,
     permissions: (projectId: string) =>
       ["projects", projectId, "permissions"] as const,

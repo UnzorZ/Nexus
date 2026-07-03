@@ -3,6 +3,7 @@ package dev.unzor.nexus.identity.persistence.repository;
 import dev.unzor.nexus.identity.domain.entity.ProjectUser;
 import org.springframework.data.repository.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -22,4 +23,10 @@ public interface ProjectUserRepository extends Repository<ProjectUser, UUID> {
     Optional<ProjectUser> findByProjectIdAndEmailIgnoreCase(UUID projectId, String email);
 
     boolean existsByProjectIdAndEmailIgnoreCase(UUID projectId, String email);
+
+    List<ProjectUser> findAllByProjectId(UUID projectId);
+
+    boolean existsByProjectIdAndId(UUID projectId, UUID userId);
+
+    void delete(ProjectUser user);
 }
