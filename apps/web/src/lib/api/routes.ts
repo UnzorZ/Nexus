@@ -97,6 +97,24 @@ export const apiRoutes = {
             `/api/panel/v1/projects/${encodeURIComponent(projectId)}/users/${encodeURIComponent(userId)}/reset-password`,
           ),
       },
+      oauthClients: {
+        root: (projectId: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/oauth-clients`,
+          ),
+        byId: (projectId: string, id: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/oauth-clients/${encodeURIComponent(id)}`,
+          ),
+        rotate: (projectId: string, id: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/oauth-clients/${encodeURIComponent(id)}/rotate`,
+          ),
+        disable: (projectId: string, id: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/oauth-clients/${encodeURIComponent(id)}/disable`,
+          ),
+      },
       permissions: {
         root: (projectId: string) =>
           apiUrl(

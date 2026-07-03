@@ -60,8 +60,10 @@ public class SecurityConfig {
      */
     @Bean
     @Order(1)
-    public SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http)
-            throws Exception {
+    public SecurityFilterChain authorizationServerSecurityFilterChain(
+            HttpSecurity http,
+            ProjectOauthAuthenticationEntryPoint htmlEntryPoint
+    ) throws Exception {
         OAuth2AuthorizationServerConfigurer authorizationServerConfigurer =
                 new OAuth2AuthorizationServerConfigurer();
 
@@ -75,7 +77,7 @@ public class SecurityConfig {
                 )
                 .exceptionHandling(exceptions -> exceptions
                         .defaultAuthenticationEntryPointFor(
-                                new LoginUrlAuthenticationEntryPoint("/oauth2/authentication-required"),
+                                htmlEntryPoint,
                                 new MediaTypeRequestMatcher(MediaType.TEXT_HTML)
                         )
                         .defaultAuthenticationEntryPointFor(
@@ -267,6 +269,9 @@ public class SecurityConfig {
      */
     @Bean
     public AuthorizationServerSettings authorizationServerSettings() {
-        return AuthorizationServerSettings.builder().build();
+        // multi-issuer: SAS resuelve el issuer por-request desde el path
+        // (/p/{slug}/oauth2/* => issuer {origin}/p/{slug}); el endpointsMatcher
+        // se auto-ensancha a /**/oauth2/** + /**/.well-known/** (B2, spec §15.3).
+        return AuthorizationServerSettings.builder().multipleIssuersAllowed(true).build();
     }
 }

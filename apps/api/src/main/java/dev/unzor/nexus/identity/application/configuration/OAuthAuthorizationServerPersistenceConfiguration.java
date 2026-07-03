@@ -1,5 +1,8 @@
 package dev.unzor.nexus.identity.application.configuration;
 
+import dev.unzor.nexus.identity.application.service.ProjectOauthClientToRegisteredClientMapper;
+import dev.unzor.nexus.identity.persistence.CompositeRegisteredClientRepository;
+import dev.unzor.nexus.identity.persistence.repository.ProjectOauthClientRepository;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -13,9 +16,21 @@ import org.springframework.security.oauth2.server.authorization.client.Registere
 @Configuration
 class OAuthAuthorizationServerPersistenceConfiguration {
 
+    /**
+     * Repositorio compuesto de clientes: clientes OAuth por proyecto
+     * (project_oauth_clients) + cliente técnico global (oauth2_registered_client,
+     * reconciliado por OidcRegisteredClientBootstrap). El JDBC global vive dentro
+     * del composite; las autorizaciones/consent siguen usando los servicios JDBC
+     * default (keyean por registered_client_id + principal_name).
+     */
     @Bean
-    RegisteredClientRepository registeredClientRepository(JdbcTemplate jdbcTemplate) {
-        return new JdbcRegisteredClientRepository(jdbcTemplate);
+    RegisteredClientRepository registeredClientRepository(
+            JdbcTemplate jdbcTemplate,
+            ProjectOauthClientRepository projectRepository,
+            ProjectOauthClientToRegisteredClientMapper mapper
+    ) {
+        return new CompositeRegisteredClientRepository(
+                projectRepository, mapper, new JdbcRegisteredClientRepository(jdbcTemplate));
     }
 
     @Bean
