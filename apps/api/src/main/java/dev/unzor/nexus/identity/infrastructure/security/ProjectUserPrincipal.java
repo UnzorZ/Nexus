@@ -4,6 +4,7 @@ import dev.unzor.nexus.identity.domain.entity.ProjectUser;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
+import java.io.Serializable;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
@@ -30,13 +31,21 @@ public record ProjectUserPrincipal(
         String password,
         Collection<? extends GrantedAuthority> authorities,
         boolean enabled
-) implements UserDetails {
+) implements UserDetails, Serializable {
 
     /**
      * Crea una copia inmutable de las authorities para evitar cambios durante la sesión.
      */
     public ProjectUserPrincipal {
         authorities = List.copyOf(authorities);
+    }
+
+    /**
+     * Devuelve una copia sin el hash de la contraseña para almacenar en la sesión
+     * (el contexto se serializa a Redis, así que no debe llevar credenciales).
+     */
+    public ProjectUserPrincipal withoutCredentials() {
+        return new ProjectUserPrincipal(projectId, userId, username, null, authorities, enabled);
     }
 
     public static ProjectUserPrincipal from(

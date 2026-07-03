@@ -3,6 +3,9 @@
         allowedDependencies = {
                 "projects :: Application",
                 "projects :: Api",
+                "projects :: Exceptions",
+                "shared :: AuditEvents",
+                "shared :: Security",
                 "shared :: Validation"
         }
 )

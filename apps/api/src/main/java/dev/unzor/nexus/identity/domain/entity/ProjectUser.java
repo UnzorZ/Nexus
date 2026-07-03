@@ -134,6 +134,23 @@ public class ProjectUser {
     }
 
     /**
+     * Actualiza el nombre público y, opcionalmente, el username del perfil.
+     * No altera el estado ({@link ProjectUserStatus}) ni la contraseña.
+     */
+    public void updateProfile(String displayName, String username) {
+        this.displayName = Objects.requireNonNull(displayName, "displayName");
+        this.username = username;
+    }
+
+    /**
+     * Reemplaza el hash de la contraseña (debe llegar ya hasheada por el
+     * {@code PasswordEncoder}); lo usa tanto el alta como el reset de contraseña.
+     */
+    public void updatePassword(String passwordHash) {
+        this.passwordHash = Objects.requireNonNull(passwordHash, "passwordHash");
+    }
+
+    /**
      * Invalida snapshots o cachés de permisos calculados con una versión anterior.
      *
      * <p>Debe invocarse cuando cambien roles, permisos directos u otra información

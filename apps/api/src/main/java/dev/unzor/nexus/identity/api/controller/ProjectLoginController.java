@@ -2,34 +2,92 @@ package dev.unzor.nexus.identity.api.controller;
 
 import dev.unzor.nexus.identity.application.context.ProjectAuthenticationContext;
 import dev.unzor.nexus.identity.application.service.ProjectSlugResolver;
+import dev.unzor.nexus.identity.infrastructure.security.ProjectSessionAuthenticator;
 import dev.unzor.nexus.projects.domain.exception.ProjectNotFoundException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.server.ResponseStatusException;
 
+/**
+ * Login funcional de usuarios finales por proyecto, bajo {@code /p/{projectSlug}}.
+ * El GET renderiza el formulario (Thymeleaf); el POST autentica vía
+ * {@link ProjectSessionAuthenticator} y, si todo va bien, establece la sesión y
+ * redirige a {@code /me}. Cualquier fallo (usuario inexistente, suspendido,
+ * contraseña errónea) se colapsa al mismo error genérico para no revelar si el
+ * email existe (anti-enumeración).
+ */
 @Controller
 @RequestMapping("/p/{projectSlug}")
 class ProjectLoginController {
 
     private final ProjectSlugResolver projectSlugResolver;
+    private final ProjectSessionAuthenticator sessionAuthenticator;
 
-    ProjectLoginController(ProjectSlugResolver projectSlugResolver) {
+    ProjectLoginController(ProjectSlugResolver projectSlugResolver, ProjectSessionAuthenticator sessionAuthenticator) {
         this.projectSlugResolver = projectSlugResolver;
+        this.sessionAuthenticator = sessionAuthenticator;
     }
 
     @GetMapping("/login")
-    String login(@PathVariable String projectSlug, Model model) {
+    String loginForm(@PathVariable String projectSlug, Model model, CsrfToken csrfToken) {
+        ProjectAuthenticationContext context = resolve(projectSlug);
+        model.addAttribute("projectSlug", context.projectSlug());
+        model.addAttribute("projectId", context.projectId());
+        model.addAttribute("csrf", csrfToken);
+        return "identity/project-login";
+    }
+
+    @PostMapping("/login")
+    String loginSubmit(
+            @PathVariable String projectSlug,
+            @RequestParam String email,
+            @RequestParam String password,
+            HttpServletRequest request,
+            HttpServletResponse response,
+            Model model,
+            CsrfToken csrfToken
+    ) {
+        ProjectAuthenticationContext context = resolve(projectSlug);
         try {
-            ProjectAuthenticationContext context = projectSlugResolver.resolve(projectSlug);
+            sessionAuthenticator.authenticate(context.projectId(), email, password, request, response);
+            return "redirect:/p/" + context.projectSlug() + "/me";
+        } catch (BadCredentialsException | UsernameNotFoundException e) {
             model.addAttribute("projectSlug", context.projectSlug());
             model.addAttribute("projectId", context.projectId());
-            return "identity/project-login-reserved";
+            model.addAttribute("csrf", csrfToken);
+            model.addAttribute("email", email);
+            model.addAttribute("error", ProjectSessionAuthenticator.GENERIC_ERROR);
+            return "identity/project-login";
         }
-        catch (ProjectNotFoundException exception) {
+    }
+
+    /**
+     * Landing mínima post-login (smoke target de B1). La cadena /p/** exige
+     * autenticación; el principal autenticado lo aporta la sesión creada en el
+     * login. La app real de usuarios finales llega con B2 (OAuth).
+     */
+    @GetMapping("/me")
+    String me(@PathVariable String projectSlug, Model model) {
+        ProjectAuthenticationContext context = resolve(projectSlug);
+        model.addAttribute("projectSlug", context.projectSlug());
+        return "identity/project-me";
+    }
+
+    private ProjectAuthenticationContext resolve(String projectSlug) {
+        try {
+            return projectSlugResolver.resolve(projectSlug);
+        } catch (ProjectNotFoundException exception) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Project not found");
         }
     }
