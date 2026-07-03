@@ -50,4 +50,23 @@ class MultiIssuerEndpointsIT {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.issuer", Matchers.endsWith("/p/warehouse")));
     }
+
+    @Test
+    void discoveryExposesOidcEndSessionEndpoint() throws Exception {
+        // SAS sirve el RP-initiated logout en /connect/logout (no /oauth2/logout).
+        mockMvc.perform(get("/p/shop/.well-known/openid-configuration"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.end_session_endpoint", Matchers.containsString("/p/shop/connect/logout")));
+    }
+
+    /**
+     * El endpoint de introspection (B3) está activo por defecto y se anuncia en el
+     * discovery del realm (junto con {@code end_session_endpoint}).
+     */
+    @Test
+    void discoveryExposesIntrospectionEndpoint() throws Exception {
+        mockMvc.perform(get("/p/shop/.well-known/openid-configuration"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.introspection_endpoint", Matchers.containsString("/p/shop/oauth2/introspect")));
+    }
 }

@@ -16,6 +16,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
@@ -70,6 +71,12 @@ public class ProjectUser {
 
     @Column(name = "last_login_at")
     private Instant lastLoginAt;
+
+    @Column(name = "failed_login_attempts", nullable = false)
+    private int failedLoginAttempts;
+
+    @Column(name = "locked_until")
+    private Instant lockedUntil;
 
     @Column(name = "authz_version", nullable = false)
     private long authzVersion;
@@ -131,6 +138,47 @@ public class ProjectUser {
      */
     public void recordLogin(Instant loggedInAt) {
         lastLoginAt = Objects.requireNonNull(loggedInAt);
+    }
+
+    /**
+     * ¿El usuario está temporalmente bloqueado por demasiados intentos fallidos?
+     */
+    public boolean isLocked(Instant now) {
+        return lockedUntil != null && lockedUntil.isAfter(now);
+    }
+
+    /**
+     * Registra un intento fallido de login: incrementa el contador y, al alcanzar
+     * {@code maxAttempts}, fija el desbloqueo a {@code now + lockDuration}.
+     *
+     * <p>Si un bloqueo anterior ya expiró, reinicia el contador antes de contar este
+     * intento, de modo que el usuario pueda volver a bloquearse tras la ventana. No se
+     * invoca mientras el usuario esté bloqueado (el flujo de autenticación lo rechaza
+     * antes vía {@link #isLocked}).</p>
+     *
+     * @return {@code true} si esta llamada deja al usuario bloqueado
+     */
+    public boolean recordFailedLogin(Instant now, int maxAttempts, Duration lockDuration) {
+        Objects.requireNonNull(now, "now");
+        Objects.requireNonNull(lockDuration, "lockDuration");
+        if (lockedUntil != null && !lockedUntil.isAfter(now)) {
+            failedLoginAttempts = 0;
+            lockedUntil = null;
+        }
+        failedLoginAttempts++;
+        if (failedLoginAttempts >= maxAttempts) {
+            lockedUntil = now.plus(lockDuration);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Reinicia el contador de intentos fallidos y libera cualquier bloqueo (login OK).
+     */
+    public void resetFailedLogins() {
+        failedLoginAttempts = 0;
+        lockedUntil = null;
     }
 
     /**

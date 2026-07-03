@@ -18,7 +18,7 @@ class ProjectSecurityConfiguration {
         http
                 .securityMatcher("/p/**")
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/p/*/login").permitAll()
+                        .requestMatchers("/p/*/login", "/p/*/logout").permitAll()
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(exceptions -> exceptions

@@ -122,6 +122,7 @@ export default function ProjectOauthClientsPage() {
     redirectUris: "",
     confidential: true,
     requirePkce: true,
+    consentRequired: false,
   });
   const [revealed, setRevealed] = useState<OauthClientCreated | null>(null);
   const [removeTarget, setRemoveTarget] = useState<OauthClientSummary | null>(null);
@@ -134,7 +135,7 @@ export default function ProjectOauthClientsPage() {
     .filter(Boolean);
 
   function resetForm() {
-    setForm({ name: "", redirectUris: "", confidential: true, requirePkce: true });
+    setForm({ name: "", redirectUris: "", confidential: true, requirePkce: true, consentRequired: false });
   }
 
   async function onCreate() {
@@ -147,7 +148,7 @@ export default function ProjectOauthClientsPage() {
         redirectUris,
         requirePkce: effectiveRequirePkce,
         confidential: form.confidential,
-        consentRequired: false,
+        consentRequired: form.consentRequired,
       });
       setCreateOpen(false);
       resetForm();
@@ -451,6 +452,15 @@ export default function ProjectOauthClientsPage() {
                   className="size-4"
                 />
                 Require PKCE
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={form.consentRequired}
+                  onChange={(e) => setForm((f) => ({ ...f, consentRequired: e.target.checked }))}
+                  className="size-4"
+                />
+                Require consent
               </label>
             </div>
             {createError ? (
