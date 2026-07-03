@@ -4,7 +4,9 @@ import dev.unzor.nexus.admin.api.dto.NexusAccountDetails;
 import dev.unzor.nexus.admin.api.requests.CreateNexusAccountRequest;
 import dev.unzor.nexus.admin.domain.entity.NexusAccount;
 import dev.unzor.nexus.admin.domain.exception.NexusAccountEmailAlreadyExistsException;
+import dev.unzor.nexus.admin.domain.exception.RegistrationClosedException;
 import dev.unzor.nexus.admin.persistence.repository.NexusAccountRepository;
+import dev.unzor.nexus.instance.application.service.InstanceSettingsService;
 import dev.unzor.nexus.shared.validation.EmailNormalizer;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -28,15 +30,18 @@ public class CreateNexusAccountService {
     private final NexusAccountRepository accountRepository;
     private final PasswordEncoder passwordEncoder;
     private final InstanceAdminBootstrapService instanceAdminBootstrapService;
+    private final InstanceSettingsService instanceSettings;
 
     public CreateNexusAccountService(
             NexusAccountRepository accountRepository,
             PasswordEncoder passwordEncoder,
-            InstanceAdminBootstrapService instanceAdminBootstrapService
+            InstanceAdminBootstrapService instanceAdminBootstrapService,
+            InstanceSettingsService instanceSettings
     ) {
         this.accountRepository = accountRepository;
         this.passwordEncoder = passwordEncoder;
         this.instanceAdminBootstrapService = instanceAdminBootstrapService;
+        this.instanceSettings = instanceSettings;
     }
 
     /**
@@ -48,6 +53,12 @@ public class CreateNexusAccountService {
      */
     @Transactional
     public NexusAccountDetails create(CreateNexusAccountRequest request) {
+        // Registro cerrado por el operador: rechaza nuevas altas, salvo el
+        // bootstrap del primer admin (ADR-0010) si aún no existe ninguno.
+        if (!instanceSettings.isRegistrationOpen() && accountRepository.existsByInstanceAdminTrue()) {
+            throw new RegistrationClosedException();
+        }
+
         String normalizedEmail = EmailNormalizer.normalize(request.email());
         String displayName = request.displayName().trim();
 

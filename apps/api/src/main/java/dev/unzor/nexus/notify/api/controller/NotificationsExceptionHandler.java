@@ -6,6 +6,7 @@ import dev.unzor.nexus.notify.domain.exception.NotifyTemplateNotFoundException;
 import dev.unzor.nexus.notify.domain.exception.UnsafeSmtpHostException;
 import dev.unzor.nexus.projects.domain.exception.ProjectAccessDeniedException;
 import dev.unzor.nexus.projects.domain.exception.ProjectNotFoundException;
+import dev.unzor.nexus.shared.security.InstanceAccessRequiredException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -54,6 +55,15 @@ class NotificationsExceptionHandler {
                 HttpStatus.FORBIDDEN, "You do not have access to this project.");
         problem.setTitle("Forbidden");
         problem.setProperty("code", "permission_denied");
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(problem);
+    }
+
+    @ExceptionHandler(InstanceAccessRequiredException.class)
+    ResponseEntity<ProblemDetail> handleInstanceAccessRequired(InstanceAccessRequiredException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.FORBIDDEN, exception.getMessage());
+        problem.setTitle("Forbidden");
+        problem.setProperty("code", "instance_admin_required");
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(problem);
     }
 

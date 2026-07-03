@@ -10,8 +10,12 @@ import { BellIcon } from "@/components/ui/bell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { HtmlEditor } from "@/components/ui/html-editor";
+import {
+  SmtpSettingsForm,
+  EMPTY_SMTP_FORM,
+  type SmtpFormValue,
+} from "@/components/ui/smtp-settings-form";
 import {
   KeyValueEditor,
   recordToRows,
@@ -84,25 +88,6 @@ const STATUS_TONE: Record<NotificationStatus, "emerald" | "red" | "amber"> = {
 type FormState = { name: string; subject: string; bodyTemplate: string };
 const EMPTY_FORM: FormState = { name: "", subject: "", bodyTemplate: "" };
 
-type SmtpForm = {
-  host: string;
-  port: string;
-  username: string;
-  from: string;
-  password: string;
-  tlsMode: "PUBLIC" | "PINNED";
-  trustedCaPem: string;
-};
-const EMPTY_SMTP: SmtpForm = {
-  host: "",
-  port: "587",
-  username: "",
-  from: "",
-  password: "",
-  tlsMode: "PUBLIC",
-  trustedCaPem: "",
-};
-
 const NOTIFY_MESSAGES = {
   permission: "You don't have permission to manage this project's notifications.",
   forbidden: "Your session expired. Reload the page and try again.",
@@ -162,11 +147,9 @@ export function NotifyModule() {
   } | null>(null);
 
   // SMTP
-  const [smtpForm, setSmtpForm] = useState<SmtpForm>(EMPTY_SMTP);
-  const [showSmtpPassword, setShowSmtpPassword] = useState(false);
+  const [smtpForm, setSmtpForm] = useState<SmtpFormValue>(EMPTY_SMTP_FORM);
   const [connResult, setConnResult] = useState<SmtpConnectionCheck | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const caFileInputRef = useRef<HTMLInputElement>(null);
   const previewBodyRef = useRef<HTMLDivElement>(null);
 
   // Global variables
@@ -408,18 +391,6 @@ export function NotifyModule() {
     }
   }
 
-  function onUploadCa(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const text = typeof reader.result === "string" ? reader.result : "";
-      setSmtpForm((f) => ({ ...f, trustedCaPem: text }));
-    };
-    reader.readAsText(file);
-    event.target.value = "";
-  }
-
   async function saveGlobalVariables() {
     saveVarsM.reset();
     await saveVarsM.mutateAsync(rowsToRecord(globalRows));
@@ -612,275 +583,21 @@ export function NotifyModule() {
           </StatusBadge>
         }
       >
-        {canManage ? (
-          <div className="flex flex-col gap-4">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="smtp-host">Host</Label>
-                <Input
-                  id="smtp-host"
-                  placeholder="smtp.example.com"
-                  value={smtpForm.host}
-                  onChange={(e) =>
-                    setSmtpForm((f) => ({ ...f, host: e.target.value }))
-                  }
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="smtp-port">Port</Label>
-                <Input
-                  id="smtp-port"
-                  type="number"
-                  placeholder="587"
-                  value={smtpForm.port}
-                  onChange={(e) =>
-                    setSmtpForm((f) => ({ ...f, port: e.target.value }))
-                  }
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="smtp-user">Username</Label>
-                <Input
-                  id="smtp-user"
-                  placeholder="notifications@example.com"
-                  value={smtpForm.username}
-                  onChange={(e) =>
-                    setSmtpForm((f) => ({ ...f, username: e.target.value }))
-                  }
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="smtp-from">From</Label>
-                <Input
-                  id="smtp-from"
-                  placeholder="Project <notifications@example.com>"
-                  value={smtpForm.from}
-                  onChange={(e) =>
-                    setSmtpForm((f) => ({ ...f, from: e.target.value }))
-                  }
-                />
-              </div>
-            </div>
-            {/* TLS trust mode (ADR-0013) */}
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="smtp-tls">TLS trust</Label>
-              <Select
-                value={smtpForm.tlsMode}
-                onValueChange={(v) =>
-                  setSmtpForm((f) => ({
-                    ...f,
-                    tlsMode: v as "PUBLIC" | "PINNED",
-                  }))
-                }
-              >
-                <SelectTrigger id="smtp-tls" size="sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="PUBLIC">
-                    Public CA (Gmail, SendGrid, Let&apos;s Encrypt…)
-                  </SelectItem>
-                  <SelectItem value="PINNED">
-                    Self-signed / private CA (pin a certificate)
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                {smtpForm.tlsMode === "PUBLIC"
-                  ? "The server certificate is verified against public CAs. Use this for any provider with a public certificate."
-                  : "Trust only the CA you upload below — for a self-signed or internal SMTP server."}
-              </p>
-            </div>
-
-            {smtpForm.tlsMode === "PUBLIC" ? (
-              <details className="rounded border border-border bg-muted/30 p-3 text-xs">
-                <summary className="cursor-pointer font-medium text-foreground">
-                  No public cert yet? Get one free with Let&apos;s Encrypt
-                </summary>
-                <div className="mt-2 flex flex-col gap-2 text-muted-foreground">
-                  <p>
-                    If your SMTP server uses a self-signed or Cloudflare-Origin
-                    certificate, Nexus can&apos;t verify it in this mode. Issue a
-                    free public certificate via DNS-01 (no port to open):
-                  </p>
-                  <ol className="ml-4 list-decimal space-y-1.5">
-                    <li>
-                      On your mail server, install{" "}
-                      <code className="font-mono">certbot</code> and the
-                      Cloudflare DNS plugin
-                      (<code className="font-mono">python3-certbot-dns-cloudflare</code>).
-                    </li>
-                    <li>
-                      Create a Cloudflare API token with{" "}
-                      <code className="font-mono">Zone · DNS · Edit</code> for your
-                      domain.
-                    </li>
-                    <li>
-                      Issue the certificate:
-                      <pre className="mt-1 overflow-x-auto rounded bg-background/60 p-2 font-mono">
-{`certbot certonly --dns-cloudflare \\
-  --dns-cloudflare-credentials ~/.cloudflare.ini \\
-  -d mail.yourdomain.com`}
-                      </pre>
-                    </li>
-                    <li>
-                      Point your SMTP server at{" "}
-                      <code className="font-mono">
-                        /etc/letsencrypt/live/mail.yourdomain.com/
-                      </code>{" "}
-                      (<code className="font-mono">fullchain.pem</code> +{" "}
-                      <code className="font-mono">privkey.pem</code>) and reload it.
-                    </li>
-                    <li>
-                      Verify (you should see{" "}
-                      <em>Verification: OK</em>):
-                      <pre className="mt-1 overflow-x-auto rounded bg-background/60 p-2 font-mono">
-{`openssl s_client -starttls smtp \\
-  -connect mail.yourdomain.com:25 \\
-  -servername mail.yourdomain.com -brief`}
-                      </pre>
-                    </li>
-                  </ol>
-                  <p>
-                    No Cloudflare? Use HTTP-01 (needs port 80 open):{" "}
-                    <code className="font-mono">
-                      certbot certonly --standalone -d mail.yourdomain.com
-                    </code>
-                    .
-                  </p>
-                </div>
-              </details>
-            ) : null}
-
-            {smtpForm.tlsMode === "PINNED" ? (
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <Label htmlFor="smtp-ca">Trusted CA certificate (PEM)</Label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => caFileInputRef.current?.click()}
-                  >
-                    <Upload size={14} />
-                    Upload .pem/.crt
-                  </Button>
-                  <input
-                    ref={caFileInputRef}
-                    type="file"
-                    accept=".pem,.crt,.cer,application/x-pem-file,text/plain"
-                    className="hidden"
-                    onChange={onUploadCa}
-                  />
-                </div>
-                <Textarea
-                  id="smtp-ca"
-                  value={smtpForm.trustedCaPem}
-                  onChange={(e) =>
-                    setSmtpForm((f) => ({ ...f, trustedCaPem: e.target.value }))
-                  }
-                  rows={6}
-                  placeholder={
-                    "-----BEGIN CERTIFICATE-----\n…\n-----END CERTIFICATE-----"
-                  }
-                  className="font-mono text-xs"
-                />
-                <p className="text-xs text-muted-foreground">
-                  {smtp?.trustedCaConfigured
-                    ? "A CA is saved. Paste or upload to replace it (leave untouched to keep)."
-                    : "Paste the PEM of your SMTP server's CA. Required to save in this mode."}
-                </p>
-              </div>
-            ) : null}
-
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="smtp-pass">Password</Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  id="smtp-pass"
-                  type={showSmtpPassword ? "text" : "password"}
-                  placeholder={
-                    smtp?.passwordConfigured
-                      ? "•••••••• (leave blank to keep current)"
-                      : "smtp password"
-                  }
-                  value={smtpForm.password}
-                  onChange={(e) =>
-                    setSmtpForm((f) => ({ ...f, password: e.target.value }))
-                  }
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon-sm"
-                  aria-label={showSmtpPassword ? "Hide password" : "Show password"}
-                  onClick={() => setShowSmtpPassword((s) => !s)}
-                >
-                  {showSmtpPassword ? "Hide" : "Show"}
-                </Button>
-              </div>
-            </div>
-            {smtpError ? (
-              <p className="text-xs text-destructive">{smtpError}</p>
-            ) : null}
-            {connResult ? (
-              <div
-                className={
-                  connResult.ok
-                    ? "rounded border border-emerald-500/40 bg-emerald-500/10 p-3"
-                    : "rounded border border-destructive/40 bg-destructive/10 p-3"
-                }
-              >
-                <StatusBadge tone={connResult.ok ? "emerald" : "red"} dot>
-                  {connResult.ok ? "Connection OK" : "Connection failed"}
-                </StatusBadge>
-                <p className="mt-1.5 break-words font-mono text-xs text-muted-foreground">
-                  {connResult.message}
-                </p>
-              </div>
-            ) : null}
-            {testConnM.isError ? (
-              <p className="text-xs text-destructive">
-                {toMessage(testConnM.error, NOTIFY_MESSAGES)}
-              </p>
-            ) : null}
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={testConn}
-                disabled={testConnM.isPending || !smtp?.host || !smtp?.from}
-                title={
-                  !smtp?.host || !smtp?.from
-                    ? "Save your SMTP settings first."
-                    : "Test the saved connection (TLS verified + AUTH)"
-                }
-              >
-                {testConnM.isPending ? "Testing…" : "Test connection"}
-              </Button>
-              <Button
-                size="sm"
-                onClick={saveSmtp}
-                disabled={
-                  saveSmtpM.isPending ||
-                  !smtpForm.host.trim() ||
-                  !smtpForm.from.trim() ||
-                  (smtpForm.tlsMode === "PINNED" &&
-                    !smtpForm.trustedCaPem.trim() &&
-                    !smtp?.trustedCaConfigured)
-                }
-              >
-                {saveSmtpM.isPending ? "Saving…" : "Save SMTP settings"}
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2 text-sm text-muted-foreground">
-            <span>Host: {smtp?.host ?? "—"}</span>
-            <span>From: {smtp?.from ?? "—"}</span>
-          </div>
-        )}
+        <SmtpSettingsForm
+          value={smtpForm}
+          onChange={setSmtpForm}
+          passwordConfigured={smtp?.passwordConfigured ?? false}
+          trustedCaConfigured={smtp?.trustedCaConfigured ?? false}
+          savedConfigured={!!smtp?.host && !!smtp?.from}
+          onSave={saveSmtp}
+          onTestConnection={testConn}
+          saving={saveSmtpM.isPending}
+          testing={testConnM.isPending}
+          testResult={connResult}
+          testError={testConnM.error}
+          error={smtpError}
+          canEdit={canManage}
+        />
       </Panel>
 
       {/* Templates */}
