@@ -70,7 +70,11 @@ public class SecurityConfig {
         http
                 .securityMatcher(authorizationServerConfigurer.getEndpointsMatcher())
                 .with(authorizationServerConfigurer, authorizationServer ->
-                        authorizationServer.oidc(Customizer.withDefaults())
+                        authorizationServer
+                                // Pantalla de consentimiento con branding (B3): SAS redirige aquí
+                                // cuando un cliente requiere consentimiento. Ver ConsentController.
+                                .authorizationEndpoint(ae -> ae.consentPage("/oauth2/consent"))
+                                .oidc(Customizer.withDefaults())
                 )
                 .authorizeHttpRequests(authorize ->
                         authorize.anyRequest().authenticated()

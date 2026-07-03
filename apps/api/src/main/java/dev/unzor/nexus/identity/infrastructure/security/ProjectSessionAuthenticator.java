@@ -1,11 +1,14 @@
 package dev.unzor.nexus.identity.infrastructure.security;
 
+import dev.unzor.nexus.identity.application.configuration.IdentityLoginProperties;
 import dev.unzor.nexus.identity.application.service.RecordProjectUserLoginService;
 import dev.unzor.nexus.identity.domain.entity.ProjectUser;
 import dev.unzor.nexus.identity.persistence.repository.ProjectUserRepository;
 import dev.unzor.nexus.shared.audit.AuditEvent;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -17,6 +20,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -41,13 +45,25 @@ import java.util.UUID;
 @Component
 public class ProjectSessionAuthenticator {
 
+    private static final Logger log = LoggerFactory.getLogger(ProjectSessionAuthenticator.class);
+
     public static final String GENERIC_ERROR = "Invalid email or password.";
+
+    /** Contraseña fija cuyo hash precalculado iguala el tiempo de la rama "usuario inexistente". */
+    private static final String DUMMY_PASSWORD = "nexus-timing-equalization-fixed-dummy-password";
 
     private final ProjectUserUserDetailsService userDetailsService;
     private final ProjectUserRepository repository;
     private final PasswordEncoder passwordEncoder;
     private final RecordProjectUserLoginService recordLoginService;
     private final ApplicationEventPublisher eventPublisher;
+    private final IdentityLoginProperties loginProperties;
+    /**
+     * Hash precalculado al construir el componente para que la rama de "usuario
+     * inexistente" ejecute exactamente un {@code matches} de BCrypt, igualando su
+     * tiempo al de "contraseña errónea" (anti-enumeración por timing, B3).
+     */
+    private final String dummyPasswordHash;
     private final HttpSessionSecurityContextRepository securityContextRepository =
             new HttpSessionSecurityContextRepository();
 
@@ -56,13 +72,16 @@ public class ProjectSessionAuthenticator {
             ProjectUserRepository repository,
             PasswordEncoder passwordEncoder,
             RecordProjectUserLoginService recordLoginService,
-            ApplicationEventPublisher eventPublisher
+            ApplicationEventPublisher eventPublisher,
+            IdentityLoginProperties loginProperties
     ) {
         this.userDetailsService = userDetailsService;
         this.repository = repository;
         this.passwordEncoder = passwordEncoder;
         this.recordLoginService = recordLoginService;
         this.eventPublisher = eventPublisher;
+        this.loginProperties = loginProperties;
+        this.dummyPasswordHash = passwordEncoder.encode(DUMMY_PASSWORD);
     }
 
     /**
@@ -83,17 +102,35 @@ public class ProjectSessionAuthenticator {
             user = repository.findByProjectIdAndId(projectId, principal.userId())
                     .orElseThrow(() -> new UsernameNotFoundException("Project user not found"));
         } catch (UsernameNotFoundException e) {
+            // Igualación de tiempos (B3): ejecutar el mismo coste BCrypt que en una
+            // verificación real, para que un usuario inexistente no se distinga de una
+            // contraseña errónea por el tiempo de respuesta (anti-enumeración).
+            passwordEncoder.matches(rawPassword, dummyPasswordHash);
             publishFailure(projectId, null, email);
             throw new BadCredentialsException(GENERIC_ERROR);
         }
 
+        Instant now = Instant.now();
         if (!user.canAuthenticate()) {
             publishFailure(projectId, user.getId(), user.getEmail());
             throw new BadCredentialsException(GENERIC_ERROR);
         }
-        if (!passwordEncoder.matches(rawPassword, principal.getPassword())) {
+        if (user.isLocked(now)) {
+            // Bloqueo temporal por intentos fallidos: mismo mensaje genérico para no
+            // revelar que la cuenta existe ni que está bloqueada (anti-enumeración).
             publishFailure(projectId, user.getId(), user.getEmail());
             throw new BadCredentialsException(GENERIC_ERROR);
+        }
+        if (!passwordEncoder.matches(rawPassword, principal.getPassword())) {
+            recordFailedLoginBestEffort(user, now);
+            publishFailure(projectId, user.getId(), user.getEmail());
+            throw new BadCredentialsException(GENERIC_ERROR);
+        }
+
+        // Éxito: limpiar el contador de intentos fallidos (best-effort, sólo si procede).
+        if (user.getFailedLoginAttempts() != 0 || user.getLockedUntil() != null) {
+            user.resetFailedLogins();
+            saveBestEffort(user);
         }
 
         // Éxito: anti session-fixation (rotar el id de sesión, igual que el panel).
@@ -120,5 +157,26 @@ public class ProjectSessionAuthenticator {
         eventPublisher.publishEvent(AuditEvent.byProjectUser(
                 projectId, "project_user.login_failed", "project_user",
                 userId == null ? null : userId.toString(), userId, Map.of("email", email)));
+    }
+
+    /**
+     * Registra un intento fallido e incrementa/bloquea (best-effort): un fallo de
+     * persistencia no debe impedir el rechazo del login; el contador queda como esté.
+     */
+    private void recordFailedLoginBestEffort(ProjectUser user, Instant now) {
+        try {
+            user.recordFailedLogin(now, loginProperties.maxAttempts(), loginProperties.lockoutDuration());
+            repository.save(user);
+        } catch (RuntimeException e) {
+            log.warn("Failed to record project-user failed login: userId={}", user.getId(), e);
+        }
+    }
+
+    private void saveBestEffort(ProjectUser user) {
+        try {
+            repository.save(user);
+        } catch (RuntimeException e) {
+            log.warn("Failed to persist project-user state: userId={}", user.getId(), e);
+        }
     }
 }

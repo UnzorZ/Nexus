@@ -6,8 +6,10 @@ import dev.unzor.nexus.identity.infrastructure.security.ProjectSessionAuthentica
 import dev.unzor.nexus.projects.domain.exception.ProjectNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.stereotype.Controller;
@@ -83,6 +85,38 @@ class ProjectLoginController {
         ProjectAuthenticationContext context = resolve(projectSlug);
         model.addAttribute("projectSlug", context.projectSlug());
         return "identity/project-me";
+    }
+
+    /**
+     * Cierre de sesión SP-initiated (B3). El GET muestra la confirmación (o la página
+     * "sesión cerrada" si llega {@code ?done}); el POST invalida la sesión, limpia el
+     * {@code SecurityContext} y redirige a {@code ?done}. La cadena {@code /p/...} deja
+     * la ruta de logout como {@code permitAll} para que la página final sea alcanzable
+     * sin sesión; el POST sigue protegido por CSRF.
+     */
+    @GetMapping("/logout")
+    String logoutForm(
+            @PathVariable String projectSlug,
+            @RequestParam(name = "done", required = false) String done,
+            Model model,
+            CsrfToken csrfToken
+    ) {
+        ProjectAuthenticationContext context = resolve(projectSlug);
+        model.addAttribute("projectSlug", context.projectSlug());
+        model.addAttribute("done", done != null);
+        model.addAttribute("csrf", csrfToken);
+        return "identity/project-signed-out";
+    }
+
+    @PostMapping("/logout")
+    String logoutSubmit(@PathVariable String projectSlug, HttpServletRequest request) {
+        resolve(projectSlug); // 404 si el proyecto no existe
+        HttpSession session = request.getSession(false);
+        if (session != null) {
+            session.invalidate();
+        }
+        SecurityContextHolder.clearContext();
+        return "redirect:/p/" + projectSlug + "/logout?done";
     }
 
     /**
