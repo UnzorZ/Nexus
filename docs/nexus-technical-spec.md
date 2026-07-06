@@ -200,7 +200,6 @@ Candidate modules:
 - `config`
 - `metrics`
 - `backup`
-- `documents`
 
 ### 5.9 Permission
 
@@ -1283,7 +1282,6 @@ Project-configurable modules:
 - config,
 - metrics,
 - backup,
-- documents.
 
 Recommended MVP default:
 

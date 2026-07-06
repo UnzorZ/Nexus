@@ -30,9 +30,33 @@ export const queryKeys = {
       ["projects", projectId, "api-keys"] as const,
     heartbeats: (projectId: string) =>
       ["projects", projectId, "heartbeats"] as const,
+    registrySettings: (projectId: string) =>
+      ["projects", projectId, "registry", "settings"] as const,
     audit: (projectId: string, rangeMs: number) =>
       ["projects", projectId, "audit", rangeMs] as const,
+    config: (projectId: string) =>
+      ["projects", projectId, "config"] as const,
+    metrics: (projectId: string) =>
+      ["projects", projectId, "metrics"] as const,
+    notifyTemplates: (projectId: string) =>
+      ["projects", projectId, "notify", "templates"] as const,
+    notifications: (projectId: string) =>
+      ["projects", projectId, "notify", "notifications"] as const,
+    notifySmtp: (projectId: string) =>
+      ["projects", projectId, "notify", "smtp"] as const,
+    notifyVariables: (projectId: string) =>
+      ["projects", projectId, "notify", "variables"] as const,
+    vaultSecrets: (projectId: string) =>
+      ["projects", projectId, "vault", "secrets"] as const,
+    vaultEncryption: (projectId: string) =>
+      ["projects", projectId, "vault", "encryption"] as const,
   },
 
   sessions: () => ["sessions"] as const,
+
+  instance: {
+    smtp: () => ["instance", "smtp"] as const,
+    status: () => ["instance", "status"] as const,
+    settings: () => ["instance", "settings"] as const,
+  },
 } as const;

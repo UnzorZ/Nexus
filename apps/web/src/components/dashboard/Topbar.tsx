@@ -1,10 +1,11 @@
 "use client";
 
 import { useSyncExternalStore, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useThemeReveal } from "@/components/ui/theme-toggle";
-import { LogOut, Settings, User } from "lucide-react";
+import { LogOut, Server, Settings, User } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -222,6 +223,17 @@ export function Topbar({
               <Settings className="size-4" />
               Account settings
             </DropdownMenuItem>
+            {account.instanceAdmin ? (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild className="gap-2">
+                  <Link href="/instance-settings">
+                    <Server className="size-4" />
+                    Instance settings
+                  </Link>
+                </DropdownMenuItem>
+              </>
+            ) : null}
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={handleLogout}

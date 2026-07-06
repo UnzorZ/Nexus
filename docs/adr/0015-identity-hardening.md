@@ -84,4 +84,4 @@ multi-issuer server. Before identity can run in production, two classes of gap r
 
 Per-IP lockout; a custom branded `logoutResponseHandler` for RP-initiated logout; the
 user↔role/permission assignment module (which would drive `authz_version` bumps); email-
-verification + password-reset flows; per-project signing keys (ADR-0013 chose shared).
+verification + password-reset flows; per-project signing keys (ADR-0016 chose shared).

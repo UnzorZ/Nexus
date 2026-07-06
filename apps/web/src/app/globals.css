@@ -217,6 +217,29 @@ button:disabled,
   }
   html {
     @apply font-sans;
-    scrollbar-gutter: stable;
+    /* No scrollbar-gutter:stable here. It conflicts with react-remove-scroll
+       (Radix Select/Dialog): when the lock fires, it adds padding-right to
+       compensate a scrollbar that the stable gutter already reserved, shifting
+       the page ~15px. Without it, react-remove-scroll compensates the real
+       scrollbar exactly → no shift on open/close. */
   }
+}
+
+/* Preview (notify): resalta dónde se sustituyó cada variable en el HTML
+   renderado y hace flash al navegar a ella desde la lista superior. */
+.nx-var {
+  background-color: color-mix(in oklab, var(--primary) 18%, transparent);
+  border-radius: 3px;
+  padding: 0.05em 0.2em;
+}
+@keyframes nx-var-flash {
+  0% {
+    background-color: color-mix(in oklab, var(--primary) 45%, transparent);
+  }
+  100% {
+    background-color: color-mix(in oklab, var(--primary) 18%, transparent);
+  }
+}
+.nx-var-flash {
+  animation: nx-var-flash 1.2s ease-out;
 }

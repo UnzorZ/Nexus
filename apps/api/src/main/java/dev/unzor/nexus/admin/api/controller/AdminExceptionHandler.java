@@ -1,6 +1,7 @@
 package dev.unzor.nexus.admin.api.controller;
 
 import dev.unzor.nexus.admin.domain.exception.NexusAccountEmailAlreadyExistsException;
+import dev.unzor.nexus.admin.domain.exception.RegistrationClosedException;
 import dev.unzor.nexus.admin.domain.exception.SessionNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -55,6 +56,17 @@ class AdminExceptionHandler {
         problem.setTitle("Forbidden");
         problem.setProperty("code", "account_suspended");
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(problem);
+    }
+
+    @ExceptionHandler(RegistrationClosedException.class)
+    ResponseEntity<ProblemDetail> handleRegistrationClosed(RegistrationClosedException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT,
+                exception.getMessage()
+        );
+        problem.setTitle("Conflict");
+        problem.setProperty("code", "registration_closed");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
     }
 
     @ExceptionHandler(SessionNotFoundException.class)

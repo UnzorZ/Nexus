@@ -1,5 +1,6 @@
 package dev.unzor.nexus.modules.application.service;
 
+import dev.unzor.nexus.instance.application.service.InstanceSettingsService;
 import dev.unzor.nexus.modules.api.dto.ProjectModuleStatus;
 import dev.unzor.nexus.modules.domain.entity.ProjectModule;
 import dev.unzor.nexus.modules.domain.enums.NexusModule;
@@ -16,6 +17,7 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.AbstractPlatformTransactionManager;
 import org.springframework.transaction.support.DefaultTransactionStatus;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -33,9 +35,16 @@ class ProjectModuleServiceTests {
 
     private final ProjectModuleRepository projectModuleRepository = mock(ProjectModuleRepository.class);
     private final ProjectLookupService projectLookupService = mock(ProjectLookupService.class);
+    private final InstanceSettingsService instanceSettings = stubInstanceSettings();
     private final ProjectModuleService service =
             new ProjectModuleService(projectModuleRepository, projectLookupService, noopTransactionManager(),
-                    mock(ApplicationEventPublisher.class));
+                    mock(ApplicationEventPublisher.class), instanceSettings);
+
+    private static InstanceSettingsService stubInstanceSettings() {
+        InstanceSettingsService service = mock(InstanceSettingsService.class);
+        when(service.defaultModuleKeys()).thenReturn(Optional.empty());
+        return service;
+    }
 
     @Test
     void listForProjectReturnsAllModulesWithDefaultFlagsForFreshProject() {
@@ -45,16 +54,24 @@ class ProjectModuleServiceTests {
 
         List<ProjectModuleStatus> result = service.listForProject(projectId);
 
-        assertThat(result).hasSize(11);
+        assertThat(result).hasSize(10);
+        // Los habilitados por defecto deben reflejar exactamente el catálogo
+        // (NexusModule.enabledByDefault); se deriva del enum para no acoplar el
+        // test a la lista literal y que crezca con cada módulo nuevo.
         assertThat(result.stream().filter(ProjectModuleStatus::enabled).map(ProjectModuleStatus::key))
-                .containsExactlyInAnyOrder("identity", "permissions", "registry", "audit");
+                .containsExactlyInAnyOrderElementsOf(
+                        Arrays.stream(NexusModule.values())
+                                .filter(NexusModule::enabledByDefault)
+                                .map(NexusModule::key)
+                                .toList());
         assertThat(result.stream().filter(m -> m.key().equals("identity")))
                 .singleElement()
                 .satisfies(m -> {
                     assertThat(m.enabled()).isTrue();
                     assertThat(m.enabledByDefault()).isTrue();
                 });
-        assertThat(result.stream().filter(m -> m.key().equals("vault")))
+        // STORAGE sigue sin estar habilitado por defecto (módulo diferido).
+        assertThat(result.stream().filter(m -> m.key().equals("storage")))
                 .singleElement()
                 .satisfies(m -> {
                     assertThat(m.enabled()).isFalse();

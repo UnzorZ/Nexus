@@ -1,4 +1,5 @@
 import { apiClient } from "@/lib/api/client";
+import { CSRF_HEADER_NAME } from "@/lib/api/csrf";
 import { apiRoutes } from "@/lib/api/routes";
 
 /** Liveness derivada (server-side) de una instancia a partir de last_seen. */
@@ -26,5 +27,42 @@ export async function fetchHeartbeats(
   return apiClient.get<HeartbeatInstance[]>(
     apiRoutes.panel.projects.heartbeats.root(projectId),
     { redirect: "manual", errorMessage: "No se pudieron cargar los heartbeats." },
+  );
+}
+
+/** Umbrales de liveness de un proyecto (override o defaults globales). */
+export type RegistrySettings = {
+  projectId: string;
+  intervalSeconds: number;
+  timeoutSeconds: number;
+  overridden: boolean;
+  updatedAt: string | null;
+};
+
+export async function fetchRegistrySettings(
+  projectId: string,
+): Promise<RegistrySettings> {
+  return apiClient.get<RegistrySettings>(
+    apiRoutes.panel.projects.heartbeats.settings(projectId),
+    { redirect: "manual", errorMessage: "No se pudieron cargar los umbrales." },
+  );
+}
+
+export async function saveRegistrySettings(
+  projectId: string,
+  body: {
+    intervalSeconds: number;
+    timeoutSeconds: number;
+  },
+  csrfToken: string,
+): Promise<RegistrySettings> {
+  return apiClient.put<RegistrySettings>(
+    apiRoutes.panel.projects.heartbeats.settings(projectId),
+    body,
+    {
+      headers: { [CSRF_HEADER_NAME]: csrfToken },
+      redirect: "manual",
+      errorMessage: "No se pudieron guardar los umbrales.",
+    },
   );
 }

@@ -18,12 +18,11 @@ public enum NexusModule {
     STORAGE("storage"),
     VAULT("vault"),
     BACKUP("backup"),
-    DOCUMENTS("documents"),
     CONFIG("config"),
     METRICS("metrics");
 
     private static final EnumSet<NexusModule> DEFAULT_ENABLED =
-            EnumSet.of(IDENTITY, PERMISSIONS, REGISTRY, AUDIT);
+            EnumSet.of(IDENTITY, PERMISSIONS, REGISTRY, AUDIT, CONFIG, METRICS, NOTIFY, VAULT);
 
     private final String key;
 
