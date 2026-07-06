@@ -285,14 +285,6 @@ nexus.oauth.jwk.key-password=${NEXUS_OAUTH_JWK_KEY_PASSWORD:devpassword}
 | `NEXUS_OAUTH_JWK_KEY_ALIAS` | `nexus-dev-key` | Alias de la clave activa |
 | `NEXUS_OAUTH_JWK_KEY_PASSWORD` | `devpassword` | Password de la clave activa; producción debe sobrescribirlo |
 
----
-
-## Testing con Postman
-
-Existe una colección Postman en [`docs/api/postman/`](../api/postman/README.md) para probar el Authorization Server OAuth2/OIDC (discovery, authorize, token, userinfo, refresh). El panel Nexus usa sesión HTTP en `/panel/login`, no este flujo OIDC.
-
----
-
 ## Dependencias
 
 ```groovy

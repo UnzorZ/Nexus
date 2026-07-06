@@ -108,7 +108,7 @@ const initialMembers: Member[] = [
   {
     id: "m-1",
     name: "Marcos",
-    email: "marcos@unzor.xyz",
+    email: "user@example.org",
     role: "OWNER",
     status: "active",
     mfa: true,

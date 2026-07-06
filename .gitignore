@@ -42,6 +42,9 @@ out/
 ### Playwright MCP ###
 .playwright-mcp/
 
+### Agent local artifacts ###
+.agents/
+
 ### Local env overrides + artifacts (machine-specific; never commit) ###
 /.env
 /apps/web/.env.local

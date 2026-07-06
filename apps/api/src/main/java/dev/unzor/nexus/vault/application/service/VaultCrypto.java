@@ -3,7 +3,6 @@ package dev.unzor.nexus.vault.application.service;
 import dev.unzor.nexus.vault.application.configuration.VaultProperties;
 import dev.unzor.nexus.vault.domain.enums.VaultCipher;
 import org.springframework.core.env.Environment;
-import org.springframework.core.env.Profiles;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.Cipher;
@@ -14,7 +13,9 @@ import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
+import java.util.Arrays;
 import java.util.Base64;
+import java.util.Set;
 
 /**
  * Cifrado AEAD de los secretos del vault. Soporta AES-256-GCM (por defecto) y
@@ -23,8 +24,9 @@ import java.util.Base64;
  * proyecto resuelto por {@link VaultKeyResolver}.
  *
  * <p><b>Fail-closed:</b> si la master key global está en blanco, o es el default
- * de dev bajo el perfil {@code prod}, el bean falla al construirse — nunca se
- * cifran secretos con una clave conocida en producción.</p>
+ * de dev bajo cualquier perfil que no sea explícitamente de desarrollo, el bean
+ * falla al construirse; nunca se cifran secretos con una clave conocida fuera de
+ * local/test.</p>
  */
 @Component
 public class VaultCrypto {
@@ -32,6 +34,7 @@ public class VaultCrypto {
     public static final String DEV_DEFAULT_MASTER_KEY = "nexus-dev-vault-master-key-do-not-use-in-prod";
     private static final int NONCE_BYTES = 12;
     private static final int GCM_TAG_BITS = 128;
+    private static final Set<String> DEV_PROFILES = Set.of("dev", "local", "test", "remote-dev");
 
     private final String globalMasterKey;
     private final SecureRandom random = new SecureRandom();
@@ -41,11 +44,19 @@ public class VaultCrypto {
         if (masterKey == null || masterKey.isBlank()) {
             throw new IllegalStateException("nexus.vault.master-key must be set.");
         }
-        if (DEV_DEFAULT_MASTER_KEY.equals(masterKey) && environment.acceptsProfiles(Profiles.of("prod"))) {
+        if (DEV_DEFAULT_MASTER_KEY.equals(masterKey) && !isDevProfile(environment)) {
             throw new IllegalStateException(
-                    "nexus.vault.master-key must be overridden from the dev default in the 'prod' profile.");
+                    "nexus.vault.master-key must be overridden from the dev default outside dev profiles.");
         }
         this.globalMasterKey = masterKey;
+    }
+
+    private static boolean isDevProfile(Environment environment) {
+        String[] active = environment.getActiveProfiles();
+        if (active.length == 0) {
+            return true;
+        }
+        return Arrays.stream(active).anyMatch(DEV_PROFILES::contains);
     }
 
     /** Master key global de la instancia (para wrapping de overrides y fallback). */
