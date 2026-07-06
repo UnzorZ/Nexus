@@ -159,7 +159,7 @@ public class ProjectNotificationsService {
 
     @Transactional
     public NotificationSummary send(UUID projectId, String to, String templateName, String subject,
-                                    String body, Map<String, String> variables) {
+                                    String body, Map<String, String> variables, UUID actorAccountId) {
         projectLookupService.requireById(projectId);
         UUID templateId = null;
         String finalSubject;
@@ -188,12 +188,12 @@ public class ProjectNotificationsService {
             notification.markSent(Instant.now());
             eventPublisher.publishEvent(AuditEvent.byAccount(
                     projectId, "notify.sent", "notification", notification.getId().toString(),
-                    null, Map.of("recipient", to)));
+                    actorAccountId, Map.of("recipient", to)));
         } catch (RuntimeException exception) {
             notification.markFailed(truncate(exception.getMessage()));
             eventPublisher.publishEvent(AuditEvent.byAccount(
                     projectId, "notify.failed", "notification", notification.getId().toString(),
-                    null, Map.of("recipient", to)));
+                    actorAccountId, Map.of("recipient", to)));
         }
         return NotificationSummary.from(notificationRepository.save(notification));
     }

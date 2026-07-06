@@ -73,9 +73,11 @@ a session login under `/p/**`.
   clients force PKCE.
 - **Bootstrap client unchanged.** The global technical client still reconciles
   into `oauth2_registered_client`; the composite routes it via the global fallback.
-- **One migration added, versioned V27** — numbered above the
-  `feat/greenfield-modules` (V12–V24) and `feat/instance-smtp` (V25–V26) ranges
-  so it merges into master without a Flyway version collision.
+- **One migration added, versioned V27** (above the original master V1–V11). The
+  `feat/greenfield-modules` and `feat/instance-smtp` migrations were later renumbered
+  from their branch versions (V12–V26) to **V29–V43** — above this V27/V28 — so they
+  apply cleanly on deployments that had already shipped V27/V28 (Flyway with
+  out-of-order disabled would otherwise skip versions below the installed max).
 - **`authz_version` is read-only for now.** The claim mirrors the ProjectUser's
   current value (starts at 0); the bump wiring (`incrementAuthzVersion()` on
   role/permission assignment) lands with the permissions→user binding (B3).

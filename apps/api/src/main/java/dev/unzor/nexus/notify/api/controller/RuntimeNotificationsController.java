@@ -31,6 +31,6 @@ class RuntimeNotificationsController {
     NotificationSummary send(@Valid @RequestBody SendNotificationRequest request,
                              @AuthenticationPrincipal ResolvedApiKey apiKey) {
         return notificationsService.send(apiKey.projectId(), request.to(), request.templateName(),
-                request.subject(), request.body(), request.variables());
+                request.subject(), request.body(), request.variables(), null);
     }
 }

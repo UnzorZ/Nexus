@@ -207,7 +207,7 @@ class ProjectNotificationsController {
         boolean isInstanceAdmin = isInstanceAdmin(authentication);
         projectAccessService.requireManage(projectId, principal.accountId(), isInstanceAdmin);
         return notificationsService.send(projectId, request.to(), request.templateName(),
-                request.subject(), request.body(), request.variables());
+                request.subject(), request.body(), request.variables(), principal.accountId());
     }
 
     private static boolean isInstanceAdmin(Authentication authentication) {
