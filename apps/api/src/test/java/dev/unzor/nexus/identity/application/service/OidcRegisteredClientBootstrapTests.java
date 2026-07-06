@@ -34,7 +34,11 @@ class OidcRegisteredClientBootstrapTests {
 
         assertThat(client).isNotNull();
         assertThat(client.getId()).isEqualTo(bootstrapProperties.registeredClientId());
-        assertThat(client.getClientSecret()).startsWith("{bcrypt}");
+        // El bean PasswordEncoder es BCrypt plano, así que el client_secret se almacena sin
+        // el prefijo "{bcrypt}" (con prefijo, SAS no lo reconoce -> invalid_client).
+        assertThat(client.getClientSecret()).startsWith("$2");
+        assertThat(passwordEncoder.matches(bootstrapProperties.clientSecret(), client.getClientSecret()))
+                .isTrue();
     }
 
     @Test
@@ -82,7 +86,7 @@ class OidcRegisteredClientBootstrapTests {
                     .containsExactly(changedProperties.postLogoutRedirectUri());
             assertThat(passwordEncoder.matches(
                     changedProperties.clientSecret(),
-                    updated.getClientSecret().substring("{bcrypt}".length())
+                    updated.getClientSecret()
             )).isTrue();
         }
         finally {

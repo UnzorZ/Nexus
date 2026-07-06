@@ -2,10 +2,14 @@ package dev.unzor.nexus.identity.persistence;
 
 import dev.unzor.nexus.TestcontainersConfiguration;
 import dev.unzor.nexus.identity.application.configuration.NexusOAuthBootstrapProperties;
+import dev.unzor.nexus.identity.infrastructure.security.ProjectUserPrincipal;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.OAuth2AccessToken;
 import org.springframework.security.oauth2.core.oidc.OidcScopes;
@@ -17,8 +21,11 @@ import org.springframework.security.oauth2.server.authorization.OAuth2TokenType;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
 
+import java.security.Principal;
 import java.time.Instant;
+import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -70,6 +77,43 @@ class OAuthPersistenceIntegrationTests {
         assertThat(authorizationService.findById("integration-authorization")).isNotNull();
         assertThat(authorizationService.findByToken("integration-access-token", OAuth2TokenType.ACCESS_TOKEN))
                 .isNotNull();
+    }
+
+    @Test
+    void projectUserPrincipalAndNumericClaimRoundTripThroughJdbc() {
+        // Regresión: SAS persiste en oauth2_authorization el principal autenticado y los
+        // claims de los tokens emitidos (authz_version) con @class tipado por default-typing.
+        // Si el PolymorphicTypeValidator del row-mapper JDBC no permite nuestro
+        // ProjectUserPrincipal (o java.lang.Long), findByToken lanza
+        // "BasicPolymorphicTypeValidator denied resolution" y rompe consent/token/introspect.
+        RegisteredClient client = registeredClientRepository.findByClientId(bootstrapProperties.clientId());
+        ProjectUserPrincipal principal = new ProjectUserPrincipal(
+                UUID.randomUUID(), UUID.randomUUID(), "alice", null,
+                List.of(new SimpleGrantedAuthority("ROLE_PROJECT_USER")), true, 0L);
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+                principal, null, principal.getAuthorities());
+        OAuth2AccessToken accessToken = new OAuth2AccessToken(
+                OAuth2AccessToken.TokenType.BEARER, "principal-roundtrip-token",
+                Instant.now(), Instant.now().plusSeconds(300), Set.of(OidcScopes.OPENID));
+
+        OAuth2Authorization authorization = OAuth2Authorization.withRegisteredClient(client)
+                .id("principal-roundtrip")
+                .principalName("alice")
+                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+                .attribute(Principal.class.getName(), authentication)
+                .attribute("authz_version", 0L)
+                .token(accessToken)
+                .build();
+
+        authorizationService.save(authorization);
+
+        OAuth2Authorization reloaded = authorizationService.findByToken(
+                "principal-roundtrip-token", OAuth2TokenType.ACCESS_TOKEN);
+        assertThat(reloaded).isNotNull();
+        Authentication reloadedAuthentication = reloaded.getAttribute(Principal.class.getName());
+        assertThat(reloadedAuthentication).isNotNull();
+        assertThat(reloadedAuthentication.getPrincipal()).isInstanceOf(ProjectUserPrincipal.class);
+        assertThat(reloaded.<Long>getAttribute("authz_version")).isEqualTo(0L);
     }
 
     @Test

@@ -104,6 +104,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(
                                 "/identity/**",
+                                "/oauth2/consent",
                                 "/oauth2/authentication-required",
                                 "/oauth2/bootstrap/callback",
                                 "/.well-known/appspecific/**",

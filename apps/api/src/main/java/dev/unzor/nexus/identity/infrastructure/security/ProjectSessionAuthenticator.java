@@ -14,6 +14,8 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.FactorGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -22,6 +24,8 @@ import org.springframework.security.web.context.HttpSessionSecurityContextReposi
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -143,8 +147,19 @@ public class ProjectSessionAuthenticator {
                 NexusSessionAttributes.PROJECT_USER_ID, user.getId().toString());
 
         ProjectUserPrincipal sessionPrincipal = principal.withoutCredentials();
+        // Spring Security 7.0 deriva el claim auth_time del id_token a partir del
+        // issuedAt de un FactorGrantedAuthority del Authentication. El
+        // DaoAuthenticationProvider estándar lo añade automáticamente; como ésta es
+        // autenticación manual hay que incluirlo, si no SAS lanza
+        // "authenticationTime cannot be null" al emitir el id_token (flujo
+        // authorization_code + scope openid). Round-tripa por JDBC gracias al
+        // FactorGrantedAuthorityMixin de SecurityJacksonModules.
+        GrantedAuthority passwordFactor = FactorGrantedAuthority
+                .withAuthority(FactorGrantedAuthority.PASSWORD_AUTHORITY).issuedAt(now).build();
+        List<GrantedAuthority> authorities = new ArrayList<>(sessionPrincipal.getAuthorities());
+        authorities.add(passwordFactor);
         Authentication authentication = new UsernamePasswordAuthenticationToken(
-                sessionPrincipal, null, sessionPrincipal.getAuthorities());
+                sessionPrincipal, null, authorities);
 
         var securityContext = SecurityContextHolder.createEmptyContext();
         securityContext.setAuthentication(authentication);

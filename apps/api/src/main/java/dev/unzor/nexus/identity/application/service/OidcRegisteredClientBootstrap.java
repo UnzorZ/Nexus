@@ -23,8 +23,6 @@ import java.util.Set;
 @Component
 public class OidcRegisteredClientBootstrap implements ApplicationRunner {
 
-    private static final String BCRYPT_PREFIX = "{bcrypt}";
-
     private final RegisteredClientRepository registeredClientRepository;
     private final NexusOAuthBootstrapProperties properties;
     private final PasswordEncoder passwordEncoder;
@@ -120,16 +118,16 @@ public class OidcRegisteredClientBootstrap implements ApplicationRunner {
     }
 
     private String encodeClientSecret(String rawSecret) {
-        return BCRYPT_PREFIX + passwordEncoder.encode(rawSecret);
+        // Sin prefijo "{bcrypt}": el bean PasswordEncoder es un BCryptPasswordEncoder
+        // plano, y SAS verifica el client_secret con ese mismo bean (con prefijo,
+        // BCryptPasswordEncoder lo rechaza -> invalid_client en el token endpoint).
+        return passwordEncoder.encode(rawSecret);
     }
 
     private boolean matchesClientSecret(String encodedSecret) {
-        if (encodedSecret == null || !encodedSecret.startsWith(BCRYPT_PREFIX)) {
+        if (encodedSecret == null) {
             return false;
         }
-        return passwordEncoder.matches(
-                properties.clientSecret(),
-                encodedSecret.substring(BCRYPT_PREFIX.length())
-        );
+        return passwordEncoder.matches(properties.clientSecret(), encodedSecret);
     }
 }

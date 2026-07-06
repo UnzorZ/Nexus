@@ -5,8 +5,9 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
+import java.util.Collections;
 import java.util.UUID;
 
 /**
@@ -36,9 +37,16 @@ public record ProjectUserPrincipal(
 
     /**
      * Crea una copia inmutable de las authorities para evitar cambios durante la sesión.
+     *
+     * <p>Se envuelve como {@code Collections.unmodifiableList(new ArrayList(...))} (y no
+     * {@code List.copyOf}) a propósito: el principal se persiste dentro de
+     * {@code oauth2_authorization} y SAS/Jackson 3 sólo permite round-trip de tipos de
+     * colección en la lista del {@code PolymorphicTypeValidator} de Spring Security;
+     * {@code ImmutableCollections$List12} (lo que devuelve {@code List.copyOf}) NO está en
+     * esa lista, mientras que {@code Collections$UnmodifiableRandomAccessList} sí.
      */
     public ProjectUserPrincipal {
-        authorities = List.copyOf(authorities);
+        authorities = Collections.unmodifiableList(new ArrayList<>(authorities));
     }
 
     /**

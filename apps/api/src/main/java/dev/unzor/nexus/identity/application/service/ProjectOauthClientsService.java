@@ -78,7 +78,12 @@ public class ProjectOauthClientsService {
         String secretHash = null;
         if (confidential) {
             rawSecret = secretGenerator.generateClientSecret();
-            secretHash = "{bcrypt}" + passwordEncoder.encode(rawSecret);
+            // El bean PasswordEncoder es un BCryptPasswordEncoder plano (compartido con
+            // las passwords de ProjectUser, que se almacenan sin prefijo). SAS verifica el
+            // client_secret con ese mismo bean, así que el hash debe ir SIN el prefijo
+            // "{bcrypt}": con prefijo, BCryptPasswordEncoder rechaza ("does not look like
+            // BCrypt") y el token endpoint devuelve invalid_client.
+            secretHash = passwordEncoder.encode(rawSecret);
         }
 
         ProjectOauthClient client = new ProjectOauthClient(
@@ -122,7 +127,7 @@ public class ProjectOauthClientsService {
             throw new IllegalStateException("Cannot rotate secret of a public OAuth client.");
         }
         String rawSecret = secretGenerator.generateClientSecret();
-        client.rotateSecret("{bcrypt}" + passwordEncoder.encode(rawSecret));
+        client.rotateSecret(passwordEncoder.encode(rawSecret));
         ProjectOauthClient saved = repository.save(client);
         audit("oauth_client.rotated", projectId, saved.getId(), actorAccountId,
                 Map.of("name", saved.getName(), "client_id", saved.getClientId()));

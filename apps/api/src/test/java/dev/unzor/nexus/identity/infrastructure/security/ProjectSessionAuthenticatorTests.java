@@ -13,6 +13,7 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.FactorGrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -71,7 +72,10 @@ class ProjectSessionAuthenticatorTests {
 
         assertThat(result.isAuthenticated()).isTrue();
         assertThat(((ProjectUserPrincipal) result.getPrincipal()).password()).isNull(); // sin credenciales
-        assertThat(result.getAuthorities()).extracting(a -> a.getAuthority()).containsExactly("ROLE_PROJECT_USER");
+        // Spring Security 7.0 deriva auth_time del id_token del FactorGrantedAuthority; el
+        // authenticator manual debe añadir FACTOR_PASSWORD (igual que DaoAuthenticationProvider).
+        assertThat(result.getAuthorities()).extracting(a -> a.getAuthority())
+                .containsExactlyInAnyOrder("ROLE_PROJECT_USER", FactorGrantedAuthority.PASSWORD_AUTHORITY);
         // Anti session-fixation: se creó y rotó la sesión.
         assertThat(request.getSession(false)).isNotNull();
         verify(recordLoginService).recordLogin(projectId, user.getId());

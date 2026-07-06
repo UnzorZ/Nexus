@@ -1,17 +1,21 @@
 package dev.unzor.nexus.identity.application.configuration;
 
 import dev.unzor.nexus.identity.application.service.ProjectOauthClientToRegisteredClientMapper;
+import dev.unzor.nexus.identity.infrastructure.security.ProjectUserPrincipal;
 import dev.unzor.nexus.identity.persistence.CompositeRegisteredClientRepository;
 import dev.unzor.nexus.identity.persistence.repository.ProjectOauthClientRepository;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.jackson.SecurityJacksonModules;
 import org.springframework.security.oauth2.server.authorization.JdbcOAuth2AuthorizationConsentService;
 import org.springframework.security.oauth2.server.authorization.JdbcOAuth2AuthorizationService;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationConsentService;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
 import org.springframework.security.oauth2.server.authorization.client.JdbcRegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
+import tools.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
+import tools.jackson.databind.json.JsonMapper;
 
 @Configuration
 class OAuthAuthorizationServerPersistenceConfiguration {
@@ -38,7 +42,31 @@ class OAuthAuthorizationServerPersistenceConfiguration {
             JdbcTemplate jdbcTemplate,
             RegisteredClientRepository registeredClientRepository
     ) {
-        return new JdbcOAuth2AuthorizationService(jdbcTemplate, registeredClientRepository);
+        JdbcOAuth2AuthorizationService service = new JdbcOAuth2AuthorizationService(jdbcTemplate, registeredClientRepository);
+        // El row-mapper JDBC por defecto usa SecurityJacksonModules, cuyo
+        // PolymorphicTypeValidator sólo permite tipos de Spring Security. SAS persiste en
+        // oauth2_authorization: (1) el principal autenticado (ProjectUserPrincipal) y (2) los
+        // claims de los tokens emitidos (metadata.token.claims), que con default-typing NON_FINAL
+        // quedan tipados con @class. Al recargar la autorización (consent grant, token exchange,
+        // introspection vía findByToken) Jackson 3 rechaza con "BasicPolymorphicTypeValidator
+        // denied resolution" -> 500. Ampliamos el validador para los tipos que aparecen en
+        // nuestros claims/principal. setAuthorizationRowMapper sólo afecta a la lectura; la
+        // escritura ya emite el @class correctamente.
+        BasicPolymorphicTypeValidator.Builder typeValidator = BasicPolymorphicTypeValidator.builder()
+                .allowIfSubType(ProjectUserPrincipal.class)
+                .allowIfSubType(Number.class)      // authz_version (Long) y futuros claims numéricos
+                .allowIfSubType(Boolean.class)
+                .allowIfSubType(java.net.URL.class)  // iss queda tipado como URL por el AS
+                .allowIfSubType(java.net.URI.class)
+                .allowIfSubType(java.util.UUID.class);
+        JsonMapper jsonMapper = JsonMapper.builder()
+                .addModules(SecurityJacksonModules.getModules(
+                        JdbcOAuth2AuthorizationService.class.getClassLoader(), typeValidator))
+                .build();
+        service.setAuthorizationRowMapper(
+                new JdbcOAuth2AuthorizationService.JsonMapperOAuth2AuthorizationRowMapper(
+                        registeredClientRepository, jsonMapper));
+        return service;
     }
 
     @Bean
