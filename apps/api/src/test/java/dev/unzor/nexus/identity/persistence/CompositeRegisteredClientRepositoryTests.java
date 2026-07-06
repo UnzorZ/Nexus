@@ -100,6 +100,33 @@ class CompositeRegisteredClientRepositoryTests {
         verify(projectRepo, never()).save(any());
     }
 
+    @Test
+    void findByIdDoesNotExposeDisabledProjectClient() {
+        UUID id = UUID.randomUUID();
+        ProjectOauthClient entity = projectClient(id);
+        entity.disable();
+        when(projectRepo.findById(id)).thenReturn(Optional.of(entity));
+
+        RegisteredClient result = composite.findById(id.toString());
+
+        // DISABLED → no se mapea a RegisteredClient; SAS lo verá como "no encontrado".
+        assertThat(result).isNull();
+        verify(mapper, never()).toRegisteredClient(any());
+    }
+
+    @Test
+    void findByClientIdDoesNotExposeDisabledProjectClient() {
+        String clientId = "nxo-disabled";
+        ProjectOauthClient entity = projectClient(UUID.randomUUID());
+        entity.disable();
+        when(projectRepo.findByClientId(clientId)).thenReturn(Optional.of(entity));
+
+        RegisteredClient result = composite.findByClientId(clientId);
+
+        assertThat(result).isNull();
+        verify(mapper, never()).toRegisteredClient(any());
+    }
+
     private static ProjectOauthClient projectClient(UUID id) {
         return new ProjectOauthClient(
                 UUID.randomUUID(), "nxo-" + id, "{bcrypt}x", "Web",

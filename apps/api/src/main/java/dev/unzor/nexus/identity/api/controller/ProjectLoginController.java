@@ -42,10 +42,19 @@ class ProjectLoginController {
     }
 
     @GetMapping("/login")
-    String loginForm(@PathVariable String projectSlug, Model model, CsrfToken csrfToken) {
+    String loginForm(
+            @PathVariable String projectSlug,
+            @RequestParam(name = "continue", required = false) String continueUrl,
+            Model model,
+            CsrfToken csrfToken
+    ) {
         ProjectAuthenticationContext context = resolve(projectSlug);
         model.addAttribute("projectSlug", context.projectSlug());
         model.addAttribute("projectId", context.projectId());
+        // Preserva el destino OAuth a través del render del formulario: el entry point
+        // del AS redirige a /login?continue=<authorize>; sin esto el POST lo pierde y el
+        // usuario acaba en /me en vez de reanudar la autorización.
+        model.addAttribute("continueTarget", continueUrl);
         model.addAttribute("csrf", csrfToken);
         return "identity/project-login";
     }
