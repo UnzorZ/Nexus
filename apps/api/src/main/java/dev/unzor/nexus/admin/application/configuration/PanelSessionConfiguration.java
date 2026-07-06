@@ -1,5 +1,6 @@
 package dev.unzor.nexus.admin.application.configuration;
 
+import dev.unzor.nexus.shared.security.NexusSessionAttributes;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -129,10 +130,18 @@ public class PanelSessionConfiguration {
     IndexResolver<Session> nexusAccountIdIndexResolver() {
         return session -> {
             String accountId = session.getAttribute(ACCOUNT_ID);
-            if (accountId == null || accountId.isBlank()) {
-                return Map.of();
+            if (accountId != null && !accountId.isBlank()) {
+                return Map.of(FindByIndexNameSessionRepository.PRINCIPAL_NAME_INDEX_NAME, accountId);
             }
-            return Map.of(FindByIndexNameSessionRepository.PRINCIPAL_NAME_INDEX_NAME, accountId);
+            // Sesiones de usuario de proyecto (flujo /p/**): se indexan con un prefijo
+            // distinto del accountId para que no colisionen, permitiendo revocarlas por
+            // usuario (suspend/disable/delete) igual que las del panel.
+            String projectUserId = session.getAttribute(NexusSessionAttributes.PROJECT_USER_ID);
+            if (projectUserId != null && !projectUserId.isBlank()) {
+                return Map.of(FindByIndexNameSessionRepository.PRINCIPAL_NAME_INDEX_NAME,
+                        NexusSessionAttributes.PROJECT_USER_INDEX_PREFIX + projectUserId);
+            }
+            return Map.of();
         };
     }
 }

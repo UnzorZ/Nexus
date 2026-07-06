@@ -24,15 +24,25 @@ public class ProjectUserStatusService {
 
     private final ProjectUserRepository repository;
     private final ApplicationEventPublisher eventPublisher;
+    private final ProjectUserSessionService sessions;
 
-    public ProjectUserStatusService(ProjectUserRepository repository, ApplicationEventPublisher eventPublisher) {
+    public ProjectUserStatusService(
+            ProjectUserRepository repository,
+            ApplicationEventPublisher eventPublisher,
+            ProjectUserSessionService sessions
+    ) {
         this.repository = repository;
         this.eventPublisher = eventPublisher;
+        this.sessions = sessions;
     }
 
     @Transactional
     public ProjectUserDetails suspend(UUID projectId, UUID userId, UUID actorAccountId) {
-        return transition(projectId, userId, actorAccountId, "project_user.suspended", ProjectUser::suspend);
+        ProjectUserDetails details = transition(projectId, userId, actorAccountId, "project_user.suspended", ProjectUser::suspend);
+        // Revoca las sesiones activas: un ProjectUserPrincipal stale no debe seguir
+        // teniendo acceso (web ni OAuth) hasta que la sesión expirase.
+        sessions.revokeAll(userId);
+        return details;
     }
 
     @Transactional
@@ -42,7 +52,9 @@ public class ProjectUserStatusService {
 
     @Transactional
     public ProjectUserDetails disable(UUID projectId, UUID userId, UUID actorAccountId) {
-        return transition(projectId, userId, actorAccountId, "project_user.disabled", ProjectUser::disable);
+        ProjectUserDetails details = transition(projectId, userId, actorAccountId, "project_user.disabled", ProjectUser::disable);
+        sessions.revokeAll(userId);
+        return details;
     }
 
     private ProjectUserDetails transition(

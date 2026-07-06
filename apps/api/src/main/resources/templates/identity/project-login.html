@@ -25,6 +25,7 @@
 
         <form class="login-form" th:action="@{/p/{slug}/login(slug=${projectSlug})}" th:method="post" autocomplete="on">
             <input type="hidden" th:name="${csrf.parameterName}" th:value="${csrf.token}"/>
+            <input type="hidden" name="continue" th:value="${continueTarget}" th:if="${continueTarget}"/>
 
             <div class="form-field">
                 <label for="email">Email</label>

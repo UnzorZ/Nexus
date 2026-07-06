@@ -253,6 +253,9 @@ class ProjectSessionAuthenticatorTests {
     private static ProjectUser activeUser(UUID projectId, String email, String password) {
         ProjectUser user = new ProjectUser(projectId, email, new BCryptPasswordEncoder().encode(password), email);
         user.verifyEmail(Instant.parse("2026-01-01T00:00:00Z"));
+        // El id es @GeneratedValue (lo asigna JPA al persistir); en test unitario lo
+        // fijamos a mano porque el authenticator ya indexa la sesión por user.getId().
+        org.springframework.test.util.ReflectionTestUtils.setField(user, "id", UUID.randomUUID());
         return user;
     }
 

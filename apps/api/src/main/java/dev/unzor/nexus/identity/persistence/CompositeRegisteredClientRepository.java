@@ -2,6 +2,7 @@ package dev.unzor.nexus.identity.persistence;
 
 import dev.unzor.nexus.identity.application.service.ProjectOauthClientToRegisteredClientMapper;
 import dev.unzor.nexus.identity.domain.entity.ProjectOauthClient;
+import dev.unzor.nexus.identity.domain.enums.OauthClientStatus;
 import dev.unzor.nexus.identity.persistence.repository.ProjectOauthClientRepository;
 import org.springframework.security.oauth2.server.authorization.client.JdbcRegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
@@ -53,6 +54,7 @@ public class CompositeRegisteredClientRepository implements RegisteredClientRepo
         try {
             UUID uuid = UUID.fromString(id);
             return projectRepository.findById(uuid)
+                    .filter(CompositeRegisteredClientRepository::isActive)
                     .map(mapper::toRegisteredClient)
                     .orElseGet(() -> global.findById(id));
         } catch (IllegalArgumentException notAUuid) {
@@ -64,7 +66,18 @@ public class CompositeRegisteredClientRepository implements RegisteredClientRepo
     @Override
     public RegisteredClient findByClientId(String clientId) {
         return projectRepository.findByClientId(clientId)
-                .map((ProjectOauthClient c) -> mapper.toRegisteredClient(c))
+                .filter(CompositeRegisteredClientRepository::isActive)
+                .map(mapper::toRegisteredClient)
                 .orElseGet(() -> global.findByClientId(clientId));
+    }
+
+    /**
+     * Un cliente DISABLED no se expone como {@link RegisteredClient}: SAS lo tratará
+     * como "no encontrado" y rechazará nuevos authorize, intercambio de code y uso de
+     * refresh tokens (todos requieren resolver el cliente). Los access tokens en vuelo
+     * caducan solos con su TTL corto.
+     */
+    private static boolean isActive(ProjectOauthClient client) {
+        return client.getStatus() == OauthClientStatus.ACTIVE;
     }
 }

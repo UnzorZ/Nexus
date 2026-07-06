@@ -5,6 +5,7 @@ import dev.unzor.nexus.identity.application.service.RecordProjectUserLoginServic
 import dev.unzor.nexus.identity.domain.entity.ProjectUser;
 import dev.unzor.nexus.identity.persistence.repository.ProjectUserRepository;
 import dev.unzor.nexus.shared.audit.AuditEvent;
+import dev.unzor.nexus.shared.security.NexusSessionAttributes;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
@@ -136,6 +137,10 @@ public class ProjectSessionAuthenticator {
         // Éxito: anti session-fixation (rotar el id de sesión, igual que el panel).
         request.getSession();
         request.changeSessionId();
+        // Indexa la sesión por el id del usuario de proyecto para poder revocarla
+        // (suspend/disable/delete) vía Redis, igual que las del panel.
+        request.getSession().setAttribute(
+                NexusSessionAttributes.PROJECT_USER_ID, user.getId().toString());
 
         ProjectUserPrincipal sessionPrincipal = principal.withoutCredentials();
         Authentication authentication = new UsernamePasswordAuthenticationToken(
