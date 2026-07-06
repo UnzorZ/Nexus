@@ -14,6 +14,13 @@ public class HeartbeatProperties {
 
     private int intervalSeconds = 30;
     private int timeoutSeconds = 90;
+    /**
+     * Dead-band antes de alertar una instancia caída (spec §13.1): una instancia sin
+     * latido durante más de este umbral dispara la notificación offline. Distinto
+     * del {@code timeoutSeconds} (que es el cap de OFFLINE en el display); por
+     * defecto 5 minutos para no alertar por flapping.
+     */
+    private int offlineNotifySeconds = 300;
 
     public int getIntervalSeconds() {
         return intervalSeconds;
@@ -29,5 +36,13 @@ public class HeartbeatProperties {
 
     public void setTimeoutSeconds(int timeoutSeconds) {
         this.timeoutSeconds = timeoutSeconds;
+    }
+
+    public int getOfflineNotifySeconds() {
+        return offlineNotifySeconds;
+    }
+
+    public void setOfflineNotifySeconds(int offlineNotifySeconds) {
+        this.offlineNotifySeconds = offlineNotifySeconds;
     }
 }

@@ -39,6 +39,9 @@ export function useSaveRegistrySettings(projectId: string) {
     mutationFn: (vars: {
       intervalSeconds: number;
       timeoutSeconds: number;
+      /** Omitir (undefined) preserva la config existente de alerta offline. */
+      offlineNotifyEnabled?: boolean;
+      offlineNotifyEmail?: string | null;
     }) => withCsrf((token) => saveRegistrySettings(projectId, vars, token)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.projects.registrySettings(projectId) });

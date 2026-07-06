@@ -2,10 +2,13 @@ package dev.unzor.nexus.registry.application.service;
 
 import dev.unzor.nexus.instance.application.service.InstanceSettingsService;
 import dev.unzor.nexus.projects.application.service.ProjectLookupService;
+import dev.unzor.nexus.registry.api.dto.RegistrySettings;
 import dev.unzor.nexus.registry.api.requests.HeartbeatRequest;
 import dev.unzor.nexus.registry.application.configuration.HeartbeatProperties;
 import dev.unzor.nexus.registry.domain.entity.ProjectHeartbeat;
+import dev.unzor.nexus.registry.domain.entity.ProjectRegistrySettings;
 import dev.unzor.nexus.registry.domain.enums.HeartbeatLiveness;
+import dev.unzor.nexus.registry.domain.exception.InvalidRegistrySettingsException;
 import dev.unzor.nexus.registry.persistence.repository.ProjectHeartbeatRepository;
 import dev.unzor.nexus.registry.persistence.repository.ProjectRegistrySettingsRepository;
 import org.junit.jupiter.api.Test;
@@ -18,6 +21,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -93,5 +97,64 @@ class RegistryHeartbeatServiceTests {
         // past timeout -> OFFLINE (timeout is the OFFLINE boundary)
         assertThat(service.livenessOf(now.minus(95, ChronoUnit.SECONDS), now, thresholds)).isEqualTo(HeartbeatLiveness.OFFLINE);
         assertThat(service.livenessOf(now.minus(120, ChronoUnit.SECONDS), now, thresholds)).isEqualTo(HeartbeatLiveness.OFFLINE);
+    }
+
+    @Test
+    void saveSettingsPersistsOfflineNotifyConfig() {
+        UUID projectId = UUID.randomUUID();
+        when(settingsRepository.findByProjectId(projectId)).thenReturn(Optional.empty());
+        when(settingsRepository.save(any(ProjectRegistrySettings.class))).thenAnswer(i -> i.getArgument(0));
+
+        RegistrySettings result = service.saveSettings(projectId, 30, 90, true, "ops@example.com", UUID.randomUUID());
+
+        assertThat(result.offlineNotifyEnabled()).isTrue();
+        assertThat(result.offlineNotifyEmail()).isEqualTo("ops@example.com");
+        assertThat(result.intervalSeconds()).isEqualTo(30);
+    }
+
+    @Test
+    void saveSettingsRequiresEmailWhenOfflineNotifyEnabled() {
+        UUID projectId = UUID.randomUUID();
+        when(settingsRepository.findByProjectId(projectId)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.saveSettings(projectId, 30, 90, true, "  ", UUID.randomUUID()))
+                .isInstanceOf(InvalidRegistrySettingsException.class);
+    }
+
+    @Test
+    void saveSettingsRejectsInvalidEmailWhenEnabled() {
+        UUID projectId = UUID.randomUUID();
+        when(settingsRepository.findByProjectId(projectId)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.saveSettings(projectId, 30, 90, true, "not-an-email", UUID.randomUUID()))
+                .isInstanceOf(InvalidRegistrySettingsException.class);
+    }
+
+    @Test
+    void saveSettingsClearsEmailWhenDisabled() {
+        UUID projectId = UUID.randomUUID();
+        when(settingsRepository.findByProjectId(projectId)).thenReturn(Optional.empty());
+        when(settingsRepository.save(any(ProjectRegistrySettings.class))).thenAnswer(i -> i.getArgument(0));
+
+        RegistrySettings result = service.saveSettings(projectId, 30, 90, false, "ops@example.com", UUID.randomUUID());
+
+        assertThat(result.offlineNotifyEnabled()).isFalse();
+        assertThat(result.offlineNotifyEmail()).isNull();
+    }
+
+    @Test
+    void saveSettingsPreservesOfflineNotifyWhenOmitted() {
+        // El card del dashboard guarda sólo umbrales (offlineNotify null) → no debe
+        // resetear la config de alerta offline existente.
+        UUID projectId = UUID.randomUUID();
+        ProjectRegistrySettings existing = new ProjectRegistrySettings(projectId, 30, 90);
+        existing.updateOfflineNotify(true, "ops@example.com");
+        when(settingsRepository.findByProjectId(projectId)).thenReturn(Optional.of(existing));
+        when(settingsRepository.save(any(ProjectRegistrySettings.class))).thenAnswer(i -> i.getArgument(0));
+
+        RegistrySettings result = service.saveSettings(projectId, 45, 120, null, null, UUID.randomUUID());
+
+        assertThat(result.intervalSeconds()).isEqualTo(45);
+        assertThat(result.timeoutSeconds()).isEqualTo(120);
+        assertThat(result.offlineNotifyEnabled()).isTrue();
+        assertThat(result.offlineNotifyEmail()).isEqualTo("ops@example.com");
     }
 }

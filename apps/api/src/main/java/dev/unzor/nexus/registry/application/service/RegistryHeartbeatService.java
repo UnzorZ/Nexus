@@ -91,6 +91,7 @@ public class RegistryHeartbeatService {
 
     @Transactional
     public RegistrySettings saveSettings(UUID projectId, int intervalSeconds, int timeoutSeconds,
+                                         Boolean offlineNotifyEnabled, String offlineNotifyEmail,
                                          UUID actorAccountId) {
         projectLookupService.requireById(projectId);
         if (intervalSeconds < 1 || timeoutSeconds < intervalSeconds) {
@@ -100,12 +101,31 @@ public class RegistryHeartbeatService {
         ProjectRegistrySettings settings = settingsRepository.findByProjectId(projectId)
                 .orElse(new ProjectRegistrySettings(projectId, intervalSeconds, timeoutSeconds));
         settings.update(intervalSeconds, timeoutSeconds);
+        // offlineNotify* opcional: si se omite (null), se preserva la config existente
+        // (así el guardado de sólo umbrales no la resetea).
+        if (offlineNotifyEnabled != null) {
+            String email = offlineNotifyEnabled ? normalizeEmail(offlineNotifyEmail) : null;
+            settings.updateOfflineNotify(offlineNotifyEnabled, email);
+        }
         ProjectRegistrySettings saved = settingsRepository.save(settings);
         eventPublisher.publishEvent(AuditEvent.byAccount(
                 projectId, "registry.settings.updated", "registry_settings",
                 projectId.toString(), actorAccountId,
                 Map.of("interval", intervalSeconds, "timeout", timeoutSeconds)));
         return RegistrySettings.from(saved);
+    }
+
+    /** Valida el email sólo si la alerta está activada; lo normaliza (trim) o null. */
+    private static String normalizeEmail(String email) {
+        if (email == null || email.isBlank()) {
+            throw new InvalidRegistrySettingsException(
+                    "offlineNotifyEmail is required when offlineNotifyEnabled is true.");
+        }
+        String trimmed = email.trim();
+        if (!trimmed.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
+            throw new InvalidRegistrySettingsException("offlineNotifyEmail is not a valid email.");
+        }
+        return trimmed;
     }
 
     /** Umbrales efectivos: override del proyecto, si no el default de instancia, si no el env. */

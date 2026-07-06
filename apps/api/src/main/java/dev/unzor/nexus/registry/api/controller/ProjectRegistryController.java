@@ -66,7 +66,8 @@ class ProjectRegistryController {
     ) {
         projectAccessService.requireManage(projectId, principal.accountId(), isInstanceAdmin(authentication));
         return service.saveSettings(projectId, request.intervalSeconds(),
-                request.timeoutSeconds(), principal.accountId());
+                request.timeoutSeconds(), request.offlineNotifyEnabled(),
+                request.offlineNotifyEmail(), principal.accountId());
     }
 
     private static boolean isInstanceAdmin(Authentication authentication) {
