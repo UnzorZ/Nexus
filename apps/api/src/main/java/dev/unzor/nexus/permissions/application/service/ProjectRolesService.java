@@ -9,6 +9,7 @@ import dev.unzor.nexus.permissions.persistence.repository.ProjectRolePermissionR
 import dev.unzor.nexus.permissions.persistence.repository.ProjectRoleRepository;
 import dev.unzor.nexus.projects.application.service.ProjectLookupService;
 import dev.unzor.nexus.shared.audit.AuditEvent;
+import dev.unzor.nexus.shared.audit.ProjectUserAuthoritiesChanged;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -37,17 +38,20 @@ public class ProjectRolesService {
     private final ProjectRolePermissionRepository rolePermissionRepository;
     private final ProjectLookupService projectLookupService;
     private final ApplicationEventPublisher eventPublisher;
+    private final EffectiveAuthoritiesService effectiveAuthoritiesService;
 
     public ProjectRolesService(
             ProjectRoleRepository roleRepository,
             ProjectRolePermissionRepository rolePermissionRepository,
             ProjectLookupService projectLookupService,
-            ApplicationEventPublisher eventPublisher
+            ApplicationEventPublisher eventPublisher,
+            EffectiveAuthoritiesService effectiveAuthoritiesService
     ) {
         this.roleRepository = roleRepository;
         this.rolePermissionRepository = rolePermissionRepository;
         this.projectLookupService = projectLookupService;
         this.eventPublisher = eventPublisher;
+        this.effectiveAuthoritiesService = effectiveAuthoritiesService;
     }
 
     @Transactional(readOnly = true)
@@ -123,11 +127,16 @@ public class ProjectRolesService {
     public void delete(UUID projectId, UUID roleId, UUID actorAccountId) {
         projectLookupService.requireById(projectId);
         ProjectRole role = requireRole(projectId, roleId);
+        // Capturar los asignatarios ANTES del delete: el ON DELETE CASCADE del FK
+        // (role_id) elimina también las filas de project_user_roles, así que hay
+        // que resolverlos antes para poder bumpar su authz_version.
+        Set<UUID> affectedUsers = effectiveAuthoritiesService.userIdsForRole(projectId, roleId);
         roleRepository.delete(role);
         eventPublisher.publishEvent(AuditEvent.byAccount(
                 projectId, "role.deleted", "role", roleId.toString(),
                 actorAccountId, Map.of("key", role.getKey())));
-        // project_role_permissions se elimina vía el ON DELETE CASCADE del FK.
+        // project_role_permissions y project_user_roles se eliminan vía ON DELETE CASCADE.
+        bumpAffectedUsers(projectId, affectedUsers);
     }
 
     /**
@@ -148,7 +157,23 @@ public class ProjectRolesService {
         eventPublisher.publishEvent(AuditEvent.byAccount(
                 projectId, "role.permissions_set", "role", roleId.toString(),
                 actorAccountId, Map.of("count", unique.size())));
+        // Cambiar los permisos del rol cambia las authorities efectivas de todos
+        // sus asignatarios: bump transitivo de su authz_version.
+        bumpAffectedUsers(projectId, effectiveAuthoritiesService.userIdsForRole(projectId, roleId));
         return RoleDetails.from(role, unique);
+    }
+
+    /**
+     * Publica un {@link ProjectUserAuthoritiesChanged} por cada usuario afectado
+     * para que {@code identity} incremente su {@code authz_version} (invalida
+     * snapshots/tokens previos). Fan-out síncrono dentro de la misma tx;
+     * aceptable para cargas de administración (señalado como costura de
+     * escalabilidad si un rol tuviera miles de asignatarios).
+     */
+    private void bumpAffectedUsers(UUID projectId, Set<UUID> userIds) {
+        for (UUID userId : userIds) {
+            eventPublisher.publishEvent(new ProjectUserAuthoritiesChanged(projectId, userId));
+        }
     }
 
     private ProjectRole requireRole(UUID projectId, UUID roleId) {
