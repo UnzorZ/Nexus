@@ -32,6 +32,14 @@ public class ProjectRegistrySettings {
     @Column(name = "timeout_seconds", nullable = false)
     private int timeoutSeconds;
 
+    /** Toggle de alerta offline (heartbeat → notify). */
+    @Column(name = "offline_notify_enabled", nullable = false)
+    private boolean offlineNotifyEnabled;
+
+    /** Destinatario de la alerta offline (null si desactivado). */
+    @Column(name = "offline_notify_email", length = 320)
+    private String offlineNotifyEmail;
+
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
@@ -39,11 +47,19 @@ public class ProjectRegistrySettings {
         this.projectId = projectId;
         this.intervalSeconds = intervalSeconds;
         this.timeoutSeconds = timeoutSeconds;
+        this.offlineNotifyEnabled = false;
+        this.offlineNotifyEmail = null;
     }
 
     public void update(int intervalSeconds, int timeoutSeconds) {
         this.intervalSeconds = intervalSeconds;
         this.timeoutSeconds = timeoutSeconds;
+    }
+
+    /** Actualiza sólo la config de alerta offline (independiente de los umbrales). */
+    public void updateOfflineNotify(boolean offlineNotifyEnabled, String offlineNotifyEmail) {
+        this.offlineNotifyEnabled = offlineNotifyEnabled;
+        this.offlineNotifyEmail = offlineNotifyEmail;
     }
 
     @PrePersist

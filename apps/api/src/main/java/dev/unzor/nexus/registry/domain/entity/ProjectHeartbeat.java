@@ -73,6 +73,14 @@ public class ProjectHeartbeat {
     @Column(name = "last_seen_at", nullable = false)
     private Instant lastSeenAt;
 
+    /**
+     * Marca de cuándo se avisó de la caída actual (offline → notify). Null mientras
+     * la instancia está viva o aún no se ha avisado; se setea al disparar la alerta
+     * y se limpia en el siguiente latido (recuperación → rearme).
+     */
+    @Column(name = "offline_notified_at")
+    private Instant offlineNotifiedAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -116,6 +124,13 @@ public class ProjectHeartbeat {
         this.status = (status == null || status.isBlank()) ? DEFAULT_STATUS : status;
         this.metadata = metadata;
         this.lastSeenAt = Objects.requireNonNull(lastSeenAt);
+        // Recuperación: la instancia volvió a latir → rearma la alerta para la próxima caída.
+        this.offlineNotifiedAt = null;
+    }
+
+    /** Marca que ya se avisó de la caída actual (dedup por outage). */
+    public void markOfflineNotified(Instant at) {
+        this.offlineNotifiedAt = Objects.requireNonNull(at);
     }
 
     @PrePersist

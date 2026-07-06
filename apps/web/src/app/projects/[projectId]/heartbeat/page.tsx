@@ -1,9 +1,12 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Info } from "lucide-react";
 import { ActivityIcon } from "@/components/ui/activity";
 import { ClockIcon } from "@/components/ui/clock";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -28,7 +31,11 @@ import {
   StatusBadge,
 } from "@/components/dashboard/shared";
 import { livenessMeta, formatRelativeTime } from "@/features/heartbeat/display";
-import { useProjectHeartbeats } from "@/features/heartbeat/queries";
+import {
+  useProjectHeartbeats,
+  useProjectRegistrySettings,
+  useSaveRegistrySettings,
+} from "@/features/heartbeat/queries";
 import { toMessage } from "@/lib/api/errors";
 import { useProject } from "../useProject";
 
@@ -66,6 +73,21 @@ export default function ProjectHeartbeatPage() {
   } = useProjectHeartbeats(project?.id ?? "");
   const error = hbError ? toMessage(hbError) : null;
   const refresh = () => refetch();
+
+  const settingsQ = useProjectRegistrySettings(project?.id ?? "");
+  const saveSettingsM = useSaveRegistrySettings(project?.id ?? "");
+  const [notifyEnabled, setNotifyEnabled] = useState(false);
+  const [notifyEmail, setNotifyEmail] = useState("");
+  useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
+    if (settingsQ.data) {
+      setNotifyEnabled(settingsQ.data.offlineNotifyEnabled);
+      setNotifyEmail(settingsQ.data.offlineNotifyEmail ?? "");
+    }
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [settingsQ.data]);
+  const settingsError = saveSettingsM.error ? toMessage(saveSettingsM.error) : null;
+  const canManage = project?.canManage ?? false;
 
   const name = project?.name ?? "...";
   const loadingState = projectLoading || (Boolean(project) && loading);
@@ -105,6 +127,16 @@ export default function ProjectHeartbeatPage() {
   }
 
   const online = instances.filter((i) => i.liveness === "ONLINE").length;
+
+  async function onSaveOfflineAlert() {
+    if (!settingsQ.data) return;
+    await saveSettingsM.mutateAsync({
+      intervalSeconds: settingsQ.data.intervalSeconds,
+      timeoutSeconds: settingsQ.data.timeoutSeconds,
+      offlineNotifyEnabled: notifyEnabled,
+      offlineNotifyEmail: notifyEnabled ? notifyEmail.trim() : null,
+    });
+  }
 
   return (
     <Stagger root className="mx-auto flex w-full max-w-7xl flex-1 flex-col">
@@ -219,6 +251,60 @@ export default function ProjectHeartbeatPage() {
               </TableBody>
             </Table>
           )}
+        </Panel>
+
+        <Panel
+          title="Offline alerts"
+          description="Get an email when an instance has been offline for more than 5 minutes (one alert per outage)."
+        >
+          <div className="flex flex-col gap-4">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={notifyEnabled}
+                onChange={(e) => setNotifyEnabled(e.target.checked)}
+                disabled={!canManage}
+                className="size-4 accent-[var(--accent)]"
+              />
+              Enable offline alerts
+            </label>
+            {canManage ? (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="hb-notify-email">Alert recipient</Label>
+                <Input
+                  id="hb-notify-email"
+                  type="email"
+                  placeholder="ops@example.com"
+                  value={notifyEmail}
+                  onChange={(e) => setNotifyEmail(e.target.value)}
+                  disabled={!notifyEnabled}
+                />
+              </div>
+            ) : settingsQ.data?.offlineNotifyEnabled ? (
+              <p className="text-sm text-muted-foreground">
+                Alerts to {settingsQ.data.offlineNotifyEmail ?? "—"}.
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground">Disabled.</p>
+            )}
+            {settingsError ? (
+              <p className="text-xs text-destructive">{settingsError}</p>
+            ) : null}
+            {canManage ? (
+              <div>
+                <Button
+                  size="sm"
+                  onClick={onSaveOfflineAlert}
+                  disabled={
+                    saveSettingsM.isPending ||
+                    (notifyEnabled && !notifyEmail.trim())
+                  }
+                >
+                  {saveSettingsM.isPending ? "Saving…" : "Save alerts"}
+                </Button>
+              </div>
+            ) : null}
+          </div>
         </Panel>
       </Stagger>
     </Stagger>
