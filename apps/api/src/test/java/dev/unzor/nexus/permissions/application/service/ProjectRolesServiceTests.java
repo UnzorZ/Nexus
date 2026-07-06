@@ -29,9 +29,10 @@ class ProjectRolesServiceTests {
     private final ProjectRoleRepository roleRepository = mock(ProjectRoleRepository.class);
     private final ProjectRolePermissionRepository rolePermissionRepository = mock(ProjectRolePermissionRepository.class);
     private final ProjectLookupService projectLookupService = mock(ProjectLookupService.class);
+    private final EffectiveAuthoritiesService effectiveAuthoritiesService = mock(EffectiveAuthoritiesService.class);
     private final ProjectRolesService service =
             new ProjectRolesService(roleRepository, rolePermissionRepository, projectLookupService,
-                    mock(ApplicationEventPublisher.class));
+                    mock(ApplicationEventPublisher.class), effectiveAuthoritiesService);
 
     @Test
     void listReturnsRolesGroupedWithTheirKeys() {

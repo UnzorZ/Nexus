@@ -4,6 +4,7 @@
                 "projects :: Application",
                 "projects :: Api",
                 "projects :: Exceptions",
+                "permissions :: Application",
                 "shared :: AuditEvents",
                 "shared :: Security",
                 "shared :: Validation"

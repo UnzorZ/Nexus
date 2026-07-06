@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Ban, KeyRound, Pencil, Pause, Play, Trash2, UserPlus } from "lucide-react";
+import { Ban, Check, KeyRound, Pencil, Pause, Play, ShieldCheck, Trash2, UserPlus } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,6 +57,8 @@ import {
 } from "@/features/users/queries";
 import { toFieldErrors, toMessage } from "@/lib/api/errors";
 import type { ProjectUser, ProjectUserStatus } from "@/features/users/api";
+import { useProjectRoles } from "@/features/roles/queries";
+import { useUserRoles, useSetUserRoles } from "@/features/user-roles/queries";
 import { useProject } from "../useProject";
 
 function UsersLoading() {
@@ -128,6 +130,20 @@ export default function ProjectUsersPage() {
   const [resetTarget, setResetTarget] = useState<ProjectUser | null>(null);
   const [resetPassword, setResetPassword] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<ProjectUser | null>(null);
+  const [rolesTarget, setRolesTarget] = useState<ProjectUser | null>(null);
+  // Desviaciones explícitas del usuario respecto al baseline (roles guardados),
+  // derivado de la query. Evita sincronizar estado desde la query con un effect
+  // (que dispararía una cascada de renders).
+  const [roleToggles, setRoleToggles] = useState<Record<string, boolean>>({});
+
+  const rolesQ = useProjectRoles(projectId);
+  const userRolesQ = useUserRoles(projectId, rolesTarget?.id ?? "");
+  const setRolesM = useSetUserRoles(projectId);
+  const savedRoleIds = new Set((userRolesQ.data ?? []).map((r) => r.id));
+  const roleIsSelected = (roleId: string) =>
+    roleToggles[roleId] ?? savedRoleIds.has(roleId);
+  const selectedRoleIds =
+    rolesQ.data?.filter((r) => roleIsSelected(r.id)).map((r) => r.id) ?? [];
 
   const busy =
     createM.isPending ||
@@ -136,7 +152,8 @@ export default function ProjectUsersPage() {
     reactivateM.isPending ||
     disableM.isPending ||
     deleteM.isPending ||
-    resetM.isPending;
+    resetM.isPending ||
+    setRolesM.isPending;
 
   const createFieldErrors = toFieldErrors(createM.error);
   const createError =
@@ -149,7 +166,8 @@ export default function ProjectUsersPage() {
     reactivateM.error ??
     disableM.error ??
     deleteM.error ??
-    resetM.error;
+    resetM.error ??
+    setRolesM.error;
   const actionError = actionErr ? toMessage(actionErr, USER_MESSAGES) : null;
 
   const loading = projectLoading || (Boolean(project) && usersLoading);
@@ -218,6 +236,23 @@ export default function ProjectUsersPage() {
     try {
       await deleteM.mutateAsync(deleteTarget.id);
       setDeleteTarget(null);
+    } catch {
+      /* actionError */
+    }
+  }
+
+  async function onSetRoles() {
+    if (!rolesTarget) return;
+    if (sameIds([...savedRoleIds], selectedRoleIds)) {
+      setRolesTarget(null);
+      setRoleToggles({});
+      return;
+    }
+    resetMutations();
+    try {
+      await setRolesM.mutateAsync({ userId: rolesTarget.id, roleIds: selectedRoleIds });
+      setRolesTarget(null);
+      setRoleToggles({});
     } catch {
       /* actionError */
     }
@@ -373,6 +408,13 @@ export default function ProjectUsersPage() {
                               >
                                 <Pencil className="size-3.5" />
                                 Edit profile
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                disabled={busy}
+                                onClick={() => setRolesTarget(user)}
+                              >
+                                <ShieldCheck className="size-3.5" />
+                                Assign roles
                               </DropdownMenuItem>
                               {user.status === "SUSPENDED" ? (
                                 <DropdownMenuItem
@@ -621,8 +663,81 @@ export default function ProjectUsersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Assign roles dialog */}
+      <Dialog
+        open={rolesTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRolesTarget(null);
+            setRoleToggles({});
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Assign roles to {rolesTarget?.displayName}</DialogTitle>
+            <DialogDescription>
+              Pick the roles this user holds. Their effective permissions are the
+              union of the permissions granted to these roles.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-1 py-1">
+            {rolesQ.isLoading ? (
+              <Skeleton className="h-9 w-full" />
+            ) : !rolesQ.data || rolesQ.data.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                This project has no roles yet. Create one under Roles first.
+              </p>
+            ) : (
+              rolesQ.data.map((role) => {
+                const selected = roleIsSelected(role.id);
+                return (
+                  <button
+                    key={role.id}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() =>
+                      setRoleToggles((t) => ({
+                        ...t,
+                        [role.id]: !roleIsSelected(role.id),
+                      }))
+                    }
+                    className={`flex items-center justify-between rounded-md border px-3 py-2 text-left text-sm transition-colors ${
+                      selected
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:bg-accent"
+                    }`}
+                  >
+                    <span className="flex flex-col">
+                      <span className="font-medium text-foreground">{role.label}</span>
+                      <span className="font-mono text-[11px] text-muted-foreground">
+                        {role.key}
+                      </span>
+                    </span>
+                    {selected ? <Check className="size-4 text-primary" /> : null}
+                  </button>
+                );
+              })
+            )}
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button onClick={onSetRoles} disabled={busy || userRolesQ.isLoading}>
+              {busy ? "Saving…" : "Save roles"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Stagger>
   );
+}
+
+function sameIds(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((id) => b.includes(id));
 }
 
 function Field({

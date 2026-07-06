@@ -2,6 +2,8 @@ package dev.unzor.nexus.identity.infrastructure.security;
 
 import dev.unzor.nexus.identity.domain.entity.ProjectUser;
 import dev.unzor.nexus.identity.persistence.repository.ProjectUserRepository;
+import dev.unzor.nexus.permissions.application.dto.EffectiveAuthorities;
+import dev.unzor.nexus.permissions.application.service.EffectiveAuthoritiesService;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 
@@ -11,6 +13,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -18,7 +21,9 @@ import static org.mockito.Mockito.when;
 class ProjectUserUserDetailsServiceImplTests {
 
     private final ProjectUserRepository repository = mock(ProjectUserRepository.class);
-    private final ProjectUserUserDetailsServiceImpl service = new ProjectUserUserDetailsServiceImpl(repository);
+    private final EffectiveAuthoritiesService effectiveAuthorities = mock(EffectiveAuthoritiesService.class);
+    private final ProjectUserUserDetailsServiceImpl service =
+            new ProjectUserUserDetailsServiceImpl(repository, effectiveAuthorities);
 
     @Test
     void loadsUserScopedByProjectAndGrantsProjectUserRole() {
@@ -26,11 +31,13 @@ class ProjectUserUserDetailsServiceImplTests {
         ProjectUser user = activeUser(projectId, "neo@example.com");
         when(repository.findByProjectIdAndEmailIgnoreCase(projectId, "neo@example.com"))
                 .thenReturn(Optional.of(user));
+        when(effectiveAuthorities.forUser(any(), any())).thenReturn(EffectiveAuthorities.empty());
 
         var principal = (ProjectUserPrincipal) service.loadProjectUser(projectId, "neo@example.com");
 
         assertThat(principal.userId()).isEqualTo(user.getId());
         assertThat(principal.projectId()).isEqualTo(projectId);
+        // Sin roles asignados → sólo la authority base.
         assertThat(principal.getAuthorities())
                 .extracting(a -> a.getAuthority())
                 .containsExactly("ROLE_PROJECT_USER");
@@ -51,6 +58,7 @@ class ProjectUserUserDetailsServiceImplTests {
         UUID projectId = UUID.randomUUID();
         when(repository.findByProjectIdAndEmailIgnoreCase(projectId, "neo@example.com"))
                 .thenReturn(Optional.of(activeUser(projectId, "neo@example.com")));
+        when(effectiveAuthorities.forUser(any(), any())).thenReturn(EffectiveAuthorities.empty());
 
         service.loadProjectUser(projectId, "neo@example.com");
 

@@ -105,6 +105,10 @@ export const apiRoutes = {
           apiUrl(
             `/api/panel/v1/projects/${encodeURIComponent(projectId)}/users/${encodeURIComponent(userId)}/reset-password`,
           ),
+        roles: (projectId: string, userId: string) =>
+          apiUrl(
+            `/api/panel/v1/projects/${encodeURIComponent(projectId)}/users/${encodeURIComponent(userId)}/roles`,
+          ),
       },
       oauthClients: {
         root: (projectId: string) =>
