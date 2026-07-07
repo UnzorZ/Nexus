@@ -54,6 +54,10 @@ public class Project {
     @Column(name = "public_base_url", length = 2048)
     private String publicBaseUrl;
 
+    /** Si true, el realm permite registro público (self-signup); si no, sólo invitación. */
+    @Column(name = "public_registration_enabled", nullable = false)
+    private boolean publicRegistrationEnabled;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
