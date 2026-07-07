@@ -7,7 +7,29 @@ function apiUrl(path: string) {
   return new URL(path, API_BASE_URL).toString();
 }
 
+const slug = (projectSlug: string) => encodeURIComponent(projectSlug);
+
 export const apiRoutes = {
+  /**
+   * API JSON de usuario final ({@code /api/p/{slug}/**}). Cada ruta es función del slug
+   * del proyecto porque pertenece a una cadena de seguridad distinta por proyecto.
+   * Consumida por las páginas Next.js bajo {@code /p/[slug]/**} con credenciales.
+   */
+  endUser: {
+    session: {
+      csrf: (projectSlug: string) => apiUrl(`/api/p/${slug(projectSlug)}/csrf`),
+      login: (projectSlug: string) => apiUrl(`/api/p/${slug(projectSlug)}/login`),
+      me: (projectSlug: string) => apiUrl(`/api/p/${slug(projectSlug)}/me`),
+      logout: (projectSlug: string) => apiUrl(`/api/p/${slug(projectSlug)}/logout`),
+    },
+    register: (projectSlug: string) => apiUrl(`/api/p/${slug(projectSlug)}/register`),
+    verifyEmail: (projectSlug: string) => apiUrl(`/api/p/${slug(projectSlug)}/verify-email`),
+    resendVerification: (projectSlug: string) =>
+      apiUrl(`/api/p/${slug(projectSlug)}/verify-email/resend`),
+    passwordReset: (projectSlug: string) => apiUrl(`/api/p/${slug(projectSlug)}/password-reset`),
+    passwordResetConfirm: (projectSlug: string) =>
+      apiUrl(`/api/p/${slug(projectSlug)}/password-reset/confirm`),
+  },
   panel: {
     accounts: {
       root: apiUrl("/api/panel/v1/accounts"),

@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, use, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { motion } from "motion/react";
 import { CheckCircle2, Eye, EyeOff, ShieldAlert } from "lucide-react";
 import { NexusApiError } from "@/lib/api/client";
-import { EndUserLoginResult, loginEndUser } from "@/features/end-user/api";
+import { registerEndUser } from "@/features/end-user/api";
 import { fadeUp, SPRING_SNAPPY } from "@/components/dashboard/anim";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,71 +15,76 @@ import { Label } from "@/components/ui/label";
 import { AuthShell } from "@/app/login/AuthShell";
 
 /**
- * Login de usuario final por proyecto (sustituye al flujo Thymeleaf). Tras un login JSON
- * correcto, si el backend devuelve `{ redirect }` (la URL absoluta del API de
- * `/oauth2/authorize` a reanudar) se hace una navegación de alto nivel al host del API
- * para que la cookie de sesión viaja y el Authorization Server reanude el flujo.
+ * Alta pública de usuario final por proyecto (sustituye al flujo Thymeleaf). Tras el alta,
+ * el backend envía el email de verificación (estado PENDING_VERIFICATION) y se muestra la
+ * confirmación. Si el registro público está deshabilitado, la API responde 404.
  */
-export default function EndUserLoginPage({
+export default function EndUserRegisterPage({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = use(params);
   return (
-    <Suspense fallback={<AuthShell mode="login" />}>
-      <EndUserLoginScreen slug={slug} />
+    <Suspense fallback={<AuthShell mode="register" />}>
+      <EndUserRegisterScreen slug={slug} />
     </Suspense>
   );
 }
 
-function EndUserLoginScreen({ slug }: { slug: string }) {
-  const router = useRouter();
+function EndUserRegisterScreen({ slug }: { slug: string }) {
   const searchParams = useSearchParams();
   const continueUrl = searchParams.get("continue") ?? undefined;
 
   const [error, setError] = useState<string | null>(null);
-  const [emailNotVerified, setEmailNotVerified] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
 
-  const loginM = useMutation({
-    mutationFn: (input: { email: string; password: string }) =>
-      loginEndUser(slug, { ...input, continueUrl }),
+  const registerM = useMutation({
+    mutationFn: (input: {
+      email: string;
+      password: string;
+      displayName?: string;
+      username?: string;
+    }) => registerEndUser(slug, input),
   });
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
-    setEmailNotVerified(null);
 
     const formData = new FormData(event.currentTarget);
     const email = String(formData.get("email") ?? "").trim();
     const password = String(formData.get("password") ?? "");
+    const displayName = String(formData.get("displayName") ?? "").trim();
+    const username = String(formData.get("username") ?? "").trim();
 
     if (!email) {
       setError("Please enter your email address.");
       return;
     }
-    if (!password) {
-      setError("Please enter your password.");
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters.");
       return;
     }
 
     try {
-      const result: EndUserLoginResult = await loginM.mutateAsync({ email, password });
-      if (result.redirect) {
-        // Top-level nav al host del API: la cookie de sesión viaja y el AS reanuda.
-        window.location.href = result.redirect;
-        return;
-      }
-      // Sin continue: aterrizamos en el portal del usuario final.
-      router.push(`/p/${encodeURIComponent(slug)}/account`);
+      await registerM.mutateAsync({ email, password, displayName, username });
+      setDone(email);
     } catch (err) {
-      if (err instanceof NexusApiError && err.code === "email_not_verified") {
-        setEmailNotVerified(email);
-        return;
-      }
       if (err instanceof NexusApiError) {
+        if (err.status === 409 || err.code === "email_exists") {
+          setError("An account with this email already exists. Try signing in.");
+          return;
+        }
+        if (err.status === 404) {
+          setError("Sign-up is not available for this project.");
+          return;
+        }
+        if (err.status === 400) {
+          setError(err.message);
+          return;
+        }
         setError(err.message);
       } else {
         setError("Could not connect to the server.");
@@ -87,14 +92,46 @@ function EndUserLoginScreen({ slug }: { slug: string }) {
     }
   }
 
+  if (done) {
+    return (
+      <AuthShell mode="register">
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={SPRING_SNAPPY}
+          className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-5"
+        >
+          <CheckCircle2 className="text-emerald-600 dark:text-emerald-400" />
+          <h2 className="mt-3 text-lg font-semibold text-foreground">
+            Check your email
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            We sent a verification link to{" "}
+            <span className="font-medium text-foreground">{done}</span>. Click it to
+            activate your account.
+          </p>
+        </motion.div>
+        <Link
+          href={{
+            pathname: `/p/${encodeURIComponent(slug)}/login`,
+            query: continueUrl ? { continue: continueUrl } : {},
+          }}
+          className="mt-6 block text-center text-sm font-medium text-violet-600 hover:underline dark:text-violet-400"
+        >
+          Back to sign in
+        </Link>
+      </AuthShell>
+    );
+  }
+
   return (
-    <AuthShell mode="login">
+    <AuthShell mode="register">
       <motion.header variants={fadeUp} initial="hidden" animate="show">
         <h1 className="text-3xl font-bold tracking-tight text-foreground">
-          Sign in
+          Create your account
         </h1>
         <p className="mt-1.5 text-sm text-muted-foreground">
-          Access your account for{" "}
+          Sign up for{" "}
           <span className="font-medium text-foreground">{slug}</span>.
         </p>
       </motion.header>
@@ -109,31 +146,6 @@ function EndUserLoginScreen({ slug }: { slug: string }) {
         >
           <ShieldAlert size={16} className="shrink-0" />
           <span>{error}</span>
-        </motion.div>
-      ) : null}
-
-      {emailNotVerified ? (
-        <motion.div
-          role="status"
-          initial={{ opacity: 0, y: -4 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={SPRING_SNAPPY}
-          className="mt-5 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-300"
-        >
-          <div className="flex items-center gap-2 font-medium">
-            <CheckCircle2 size={16} className="shrink-0" />
-            Verify your email
-          </div>
-          <p className="mt-1 text-amber-700/80 dark:text-amber-300/80">
-            We sent a verification link to{" "}
-            <span className="font-medium">{emailNotVerified}</span>. Confirm it to sign in.
-          </p>
-          <Link
-            href={`/p/${encodeURIComponent(slug)}/verify-email?email=${encodeURIComponent(emailNotVerified)}`}
-            className="mt-2 inline-block font-medium text-amber-700 underline-offset-2 hover:underline dark:text-amber-300"
-          >
-            Resend verification link
-          </Link>
         </motion.div>
       ) : null}
 
@@ -152,7 +164,21 @@ function EndUserLoginScreen({ slug }: { slug: string }) {
             inputMode="email"
             autoFocus
             required
-            disabled={loginM.isPending}
+            disabled={registerM.isPending}
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="displayName" className="text-sm font-medium">
+            Display name <span className="text-muted-foreground">(optional)</span>
+          </Label>
+          <Input
+            id="displayName"
+            name="displayName"
+            className="h-12 bg-white px-3 focus-visible:ring-violet-500/30 dark:bg-input/30"
+            placeholder="Your name"
+            autoComplete="name"
+            disabled={registerM.isPending}
           />
         </div>
 
@@ -166,10 +192,11 @@ function EndUserLoginScreen({ slug }: { slug: string }) {
               name="password"
               type={showPassword ? "text" : "password"}
               className="h-12 bg-white px-3 pr-11 focus-visible:ring-violet-500/30 dark:bg-input/30"
-              placeholder="Enter your password"
-              autoComplete="current-password"
+              placeholder="At least 8 characters"
+              autoComplete="new-password"
               required
-              disabled={loginM.isPending}
+              minLength={8}
+              disabled={registerM.isPending}
             />
             <button
               type="button"
@@ -184,31 +211,25 @@ function EndUserLoginScreen({ slug }: { slug: string }) {
           </div>
         </div>
 
-        <div className="flex justify-end py-1">
-          <Link
-            href={`/p/${encodeURIComponent(slug)}/password-reset`}
-            className="text-sm font-medium text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400"
-          >
-            Forgot password?
-          </Link>
-        </div>
-
         <Button
           type="submit"
           className="h-12 w-full rounded-xl bg-violet-600 text-white hover:bg-violet-700 dark:bg-violet-500 dark:hover:bg-violet-600"
-          disabled={loginM.isPending}
+          disabled={registerM.isPending}
         >
-          {loginM.isPending ? "Signing in…" : "Sign in"}
+          {registerM.isPending ? "Creating account…" : "Create account"}
         </Button>
       </form>
 
       <p className="mt-6 text-center text-sm text-muted-foreground">
-        New here?{" "}
+        Already have an account?{" "}
         <Link
-          href={`/p/${encodeURIComponent(slug)}/register`}
+          href={{
+            pathname: `/p/${encodeURIComponent(slug)}/login`,
+            query: continueUrl ? { continue: continueUrl } : {},
+          }}
           className="font-medium text-violet-600 hover:text-violet-700 hover:underline dark:text-violet-400 dark:hover:text-violet-300"
         >
-          Create an account
+          Sign in
         </Link>
       </p>
     </AuthShell>
