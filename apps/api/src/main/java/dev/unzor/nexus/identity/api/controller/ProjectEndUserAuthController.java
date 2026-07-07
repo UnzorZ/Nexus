@@ -4,6 +4,7 @@ import dev.unzor.nexus.identity.api.dto.ProjectUserDetails;
 import dev.unzor.nexus.identity.application.context.ProjectAuthenticationContext;
 import dev.unzor.nexus.identity.application.service.ProjectSlugResolver;
 import dev.unzor.nexus.identity.domain.exception.EmailNotVerifiedException;
+import dev.unzor.nexus.identity.domain.exception.MfaRequiredException;
 import dev.unzor.nexus.identity.infrastructure.security.ProjectSessionAuthenticator;
 import dev.unzor.nexus.identity.infrastructure.security.ProjectUserPrincipal;
 import dev.unzor.nexus.identity.persistence.repository.ProjectUserRepository;
@@ -56,6 +57,9 @@ class ProjectEndUserAuthController {
     record LoginRequest(String email, String password, String continueUrl) {
     }
 
+    record LoginMfaRequest(String code, String continueUrl) {
+    }
+
     @PostMapping("/login")
     ResponseEntity<Map<String, String>> login(
             @PathVariable String projectSlug,
@@ -69,8 +73,35 @@ class ProjectEndUserAuthController {
                     context.projectId(), request.email(), request.password(), servletRequest, servletResponse);
         } catch (EmailNotVerifiedException e) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", "email_not_verified"));
+        } catch (MfaRequiredException e) {
+            // 200 (no-error) para que el SPA cambie al paso TOTP. La sesión lleva ya el
+            // ticket MFA pendiente (anónima para SAS). El frontend reenvía continue.
+            return ResponseEntity.ok(Map.of("code", "mfa_required"));
         } catch (BadCredentialsException | UsernameNotFoundException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("code", "invalid_credentials"));
+        }
+        String redirect = authorizeResumeTarget(request.continueUrl(), context.projectSlug(), servletRequest);
+        return ResponseEntity.ok(redirect == null ? Map.of() : Map.of("redirect", redirect));
+    }
+
+    /**
+     * Completa el login MFA: verifica el código TOTP (o recovery) contra el ticket
+     * pendiente fijado por {@code /login}. Si valida, establece la sesión con ambos
+     * factores y devuelve el mismo shape {@code {redirect}} que consume el frontend.
+     */
+    @PostMapping("/login/mfa")
+    ResponseEntity<Map<String, String>> loginMfa(
+            @PathVariable String projectSlug,
+            @RequestBody LoginMfaRequest request,
+            HttpServletRequest servletRequest,
+            HttpServletResponse servletResponse
+    ) {
+        ProjectAuthenticationContext context = resolve(projectSlug);
+        try {
+            sessionAuthenticator.completeMfaAuthentication(
+                    context.projectId(), request.code(), servletRequest, servletResponse);
+        } catch (BadCredentialsException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("code", "invalid_code"));
         }
         String redirect = authorizeResumeTarget(request.continueUrl(), context.projectSlug(), servletRequest);
         return ResponseEntity.ok(redirect == null ? Map.of() : Map.of("redirect", redirect));
