@@ -71,12 +71,36 @@ class ProjectUserRolesServiceTests {
     void setRolesWithEmptyListClearsAssignments() {
         UUID projectId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
+        UUID adminId = UUID.randomUUID();
+        // The user currently holds 'admin' — clearing to [] is a real change.
+        when(userRoleRepository.findAllByProjectIdAndUserId(projectId, userId))
+                .thenReturn(List.of(new ProjectUserRole(projectId, userId, adminId)));
 
         service.setRoles(projectId, userId, List.of(), UUID.randomUUID());
 
         verify(userRoleRepository).deleteByProjectIdAndUserId(projectId, userId);
         verify(userRoleRepository, never()).save(any(ProjectUserRole.class));
         verify(eventPublisher).publishEvent(any(ProjectUserAuthoritiesChanged.class));
+    }
+
+    @Test
+    void setRolesIsNoOpWhenUnchangedSkipsMutationAndBump() {
+        UUID projectId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID adminId = UUID.randomUUID();
+        ProjectRole admin = withId(new ProjectRole(projectId, "admin", "Admin", null), adminId);
+        when(roleRepository.findByProjectIdAndId(projectId, adminId)).thenReturn(Optional.of(admin));
+        // The user already holds exactly [admin] — re-PUTting [admin] is idempotent.
+        when(userRoleRepository.findAllByProjectIdAndUserId(projectId, userId))
+                .thenReturn(List.of(new ProjectUserRole(projectId, userId, adminId)));
+
+        List<RoleDetails> result = service.setRoles(projectId, userId, List.of(adminId), UUID.randomUUID());
+
+        assertThat(result).extracting(RoleDetails::key).containsExactly("admin");
+        verify(userRoleRepository, never()).deleteByProjectIdAndUserId(projectId, userId);
+        verify(userRoleRepository, never()).save(any(ProjectUserRole.class));
+        verify(eventPublisher, never()).publishEvent(any(ProjectUserAuthoritiesChanged.class));
+        verify(eventPublisher, never()).publishEvent(any(AuditEvent.class));
     }
 
     @Test

@@ -101,6 +101,16 @@ public class ProjectUserRolesService {
                             "Role " + roleId + " not found in project " + projectId + ".")));
         }
 
+        // No-op: si el conjunto solicitado es idéntico al actual, no mutamos ni
+        // publicamos el bump — un PUT idempotente no debe invalidar tokens del
+        // usuario (authz_version) ni generar ruido de auditoría.
+        Set<UUID> current = userRoleRepository.findAllByProjectIdAndUserId(projectId, userId).stream()
+                .map(ProjectUserRole::getRoleId)
+                .collect(Collectors.toSet());
+        if (current.equals(Set.copyOf(unique))) {
+            return roleDetailsFor(roles);
+        }
+
         userRoleRepository.deleteByProjectIdAndUserId(projectId, userId);
         for (UUID roleId : unique) {
             userRoleRepository.save(new ProjectUserRole(projectId, userId, roleId));
