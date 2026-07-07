@@ -85,6 +85,7 @@ class ProjectRegistrationController {
             return "identity/project-register";
         }
         model.addAttribute("projectSlug", context.projectSlug());
+        model.addAttribute("csrf", csrfToken);
         model.addAttribute("done", true);
         model.addAttribute("email", email.trim());
         return "identity/project-register";
