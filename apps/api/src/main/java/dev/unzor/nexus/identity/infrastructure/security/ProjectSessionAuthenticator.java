@@ -3,6 +3,7 @@ package dev.unzor.nexus.identity.infrastructure.security;
 import dev.unzor.nexus.identity.application.configuration.IdentityLoginProperties;
 import dev.unzor.nexus.identity.application.service.RecordProjectUserLoginService;
 import dev.unzor.nexus.identity.domain.entity.ProjectUser;
+import dev.unzor.nexus.identity.domain.exception.EmailNotVerifiedException;
 import dev.unzor.nexus.identity.persistence.repository.ProjectUserRepository;
 import dev.unzor.nexus.shared.audit.AuditEvent;
 import dev.unzor.nexus.shared.security.NexusSessionAttributes;
@@ -116,10 +117,6 @@ public class ProjectSessionAuthenticator {
         }
 
         Instant now = Instant.now();
-        if (!user.canAuthenticate()) {
-            publishFailure(projectId, user.getId(), user.getEmail());
-            throw new BadCredentialsException(GENERIC_ERROR);
-        }
         if (user.isLocked(now)) {
             // Bloqueo temporal por intentos fallidos: mismo mensaje genérico para no
             // revelar que la cuenta existe ni que está bloqueada (anti-enumeración).
@@ -128,6 +125,16 @@ public class ProjectSessionAuthenticator {
         }
         if (!passwordEncoder.matches(rawPassword, principal.getPassword())) {
             recordFailedLoginBestEffort(user, now);
+            publishFailure(projectId, user.getId(), user.getEmail());
+            throw new BadCredentialsException(GENERIC_ERROR);
+        }
+        // Contraseña correcta → identidad confirmada. Si el email aún no está verificado
+        // se le indica (sin riesgo de enumeración: ya probó la contraseña correcta).
+        if (!user.isEmailVerified()) {
+            throw new EmailNotVerifiedException(projectId, user.getEmail());
+        }
+        if (!user.canAuthenticate()) {
+            // SUSPENDED / DISABLED: mismo mensaje genérico para no revelar la causa.
             publishFailure(projectId, user.getId(), user.getEmail());
             throw new BadCredentialsException(GENERIC_ERROR);
         }

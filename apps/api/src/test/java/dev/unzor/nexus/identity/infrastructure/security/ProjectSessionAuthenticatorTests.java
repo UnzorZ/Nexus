@@ -3,6 +3,7 @@ package dev.unzor.nexus.identity.infrastructure.security;
 import dev.unzor.nexus.identity.application.configuration.IdentityLoginProperties;
 import dev.unzor.nexus.identity.application.service.RecordProjectUserLoginService;
 import dev.unzor.nexus.identity.domain.entity.ProjectUser;
+import dev.unzor.nexus.identity.domain.exception.EmailNotVerifiedException;
 import dev.unzor.nexus.identity.persistence.repository.ProjectUserRepository;
 import dev.unzor.nexus.shared.audit.AuditEvent;
 import org.junit.jupiter.api.BeforeEach;
@@ -131,6 +132,23 @@ class ProjectSessionAuthenticatorTests {
 
         verify(recordLoginService, never()).recordLogin(any(), any());
         assertAudited("project_user.login_failed", user.getId());
+    }
+
+    @Test
+    void unverifiedUserWithCorrectPasswordThrowsEmailNotVerified() {
+        // PENDING_VERIFICATION + contraseña correcta → EmailNotVerifiedException (tras
+        // confirmar la contraseña, sin riesgo de enumeración). No registra login.
+        UUID projectId = UUID.randomUUID();
+        ProjectUser user = pendingUser(projectId, "neo@example.com", "secret123");
+        when(userDetailsService.loadProjectUser(projectId, "neo@example.com"))
+                .thenReturn(ProjectUserPrincipal.from(user, AUTHORITIES));
+        when(repository.findByProjectIdAndId(projectId, user.getId())).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> authenticator.authenticate(
+                projectId, "neo@example.com", "secret123", request, response))
+                .isInstanceOf(EmailNotVerifiedException.class);
+
+        verify(recordLoginService, never()).recordLogin(any(), any());
     }
 
     @Test
@@ -266,6 +284,13 @@ class ProjectSessionAuthenticatorTests {
     private static ProjectUser suspendedUser(UUID projectId, String email, String password) {
         ProjectUser user = activeUser(projectId, email, password);
         user.suspend();
+        return user;
+    }
+
+    private static ProjectUser pendingUser(UUID projectId, String email, String password) {
+        // Sin verifyEmail → queda PENDING_VERIFICATION, emailVerifiedAt null.
+        ProjectUser user = new ProjectUser(projectId, email, new BCryptPasswordEncoder().encode(password), email);
+        org.springframework.test.util.ReflectionTestUtils.setField(user, "id", UUID.randomUUID());
         return user;
     }
 }
