@@ -19,8 +19,16 @@ export const apiRoutes = {
     session: {
       csrf: (projectSlug: string) => apiUrl(`/api/p/${slug(projectSlug)}/csrf`),
       login: (projectSlug: string) => apiUrl(`/api/p/${slug(projectSlug)}/login`),
+      loginMfa: (projectSlug: string) => apiUrl(`/api/p/${slug(projectSlug)}/login/mfa`),
       me: (projectSlug: string) => apiUrl(`/api/p/${slug(projectSlug)}/me`),
       logout: (projectSlug: string) => apiUrl(`/api/p/${slug(projectSlug)}/logout`),
+    },
+    mfa: {
+      enroll: (projectSlug: string) => apiUrl(`/api/p/${slug(projectSlug)}/mfa/enroll`),
+      enrollVerify: (projectSlug: string) =>
+        apiUrl(`/api/p/${slug(projectSlug)}/mfa/enroll/verify`),
+      disable: (projectSlug: string) => apiUrl(`/api/p/${slug(projectSlug)}/mfa/disable`),
+      status: (projectSlug: string) => apiUrl(`/api/p/${slug(projectSlug)}/mfa/status`),
     },
     register: (projectSlug: string) => apiUrl(`/api/p/${slug(projectSlug)}/register`),
     verifyEmail: (projectSlug: string) => apiUrl(`/api/p/${slug(projectSlug)}/verify-email`),

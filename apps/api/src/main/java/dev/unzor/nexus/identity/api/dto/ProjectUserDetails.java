@@ -16,6 +16,7 @@ public record ProjectUserDetails(
         String username,
         String displayName,
         String status,
+        boolean mfaEnabled,
         Instant emailVerifiedAt,
         Instant lastLoginAt,
         Instant createdAt
@@ -28,6 +29,7 @@ public record ProjectUserDetails(
                 user.getUsername(),
                 user.getDisplayName(),
                 user.getStatus().name(),
+                user.isMfaEnabled(),
                 user.getEmailVerifiedAt(),
                 user.getLastLoginAt(),
                 user.getCreatedAt()

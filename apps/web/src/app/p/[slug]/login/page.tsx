@@ -7,7 +7,11 @@ import { useMutation } from "@tanstack/react-query";
 import { motion } from "motion/react";
 import { CheckCircle2, Eye, EyeOff, ShieldAlert } from "lucide-react";
 import { NexusApiError } from "@/lib/api/client";
-import { EndUserLoginResult, loginEndUser } from "@/features/end-user/api";
+import {
+  EndUserLoginResult,
+  loginEndUser,
+  verifyEndUserMfa,
+} from "@/features/end-user/api";
 import { fadeUp, SPRING_SNAPPY } from "@/components/dashboard/anim";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,10 +45,14 @@ function EndUserLoginScreen({ slug }: { slug: string }) {
   const [error, setError] = useState<string | null>(null);
   const [emailNotVerified, setEmailNotVerified] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [step, setStep] = useState<"password" | "mfa">("password");
 
   const loginM = useMutation({
     mutationFn: (input: { email: string; password: string }) =>
       loginEndUser(slug, { ...input, continueUrl }),
+  });
+  const mfaM = useMutation({
+    mutationFn: (code: string) => verifyEndUserMfa(slug, code, continueUrl),
   });
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -67,6 +75,12 @@ function EndUserLoginScreen({ slug }: { slug: string }) {
 
     try {
       const result: EndUserLoginResult = await loginM.mutateAsync({ email, password });
+      if (result.code === "mfa_required") {
+        // Contraseña válida pero MFA activa: pasar al paso del código TOTP.
+        setError(null);
+        setStep("mfa");
+        return;
+      }
       if (result.redirect) {
         // Top-level nav al host del API: la cookie de sesión viaja y el AS reanuda.
         window.location.href = result.redirect;
@@ -87,15 +101,37 @@ function EndUserLoginScreen({ slug }: { slug: string }) {
     }
   }
 
+  async function handleMfaSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    const formData = new FormData(event.currentTarget);
+    const code = String(formData.get("code") ?? "").trim();
+    if (!code) {
+      setError("Enter your 6-digit code or a recovery code.");
+      return;
+    }
+    try {
+      const result: EndUserLoginResult = await mfaM.mutateAsync(code);
+      if (result.redirect) {
+        window.location.href = result.redirect;
+        return;
+      }
+      router.push(`/p/${encodeURIComponent(slug)}/account`);
+    } catch (err) {
+      setError(err instanceof NexusApiError ? err.message : "Could not connect to the server.");
+    }
+  }
+
   return (
     <AuthShell mode="login">
       <motion.header variants={fadeUp} initial="hidden" animate="show">
         <h1 className="text-3xl font-bold tracking-tight text-foreground">
-          Sign in
+          {step === "mfa" ? "Two-factor code" : "Sign in"}
         </h1>
         <p className="mt-1.5 text-sm text-muted-foreground">
-          Access your account for{" "}
-          <span className="font-medium text-foreground">{slug}</span>.
+          {step === "mfa"
+            ? "Enter the 6-digit code from your authenticator app, or a recovery code."
+            : <>Access your account for{" "}<span className="font-medium text-foreground">{slug}</span>.</>}
         </p>
       </motion.header>
 
@@ -137,6 +173,7 @@ function EndUserLoginScreen({ slug }: { slug: string }) {
         </motion.div>
       ) : null}
 
+      {step === "password" ? (
       <form className="mt-7 space-y-4" onSubmit={handleSubmit}>
         <div className="space-y-1.5">
           <Label htmlFor="email" className="text-sm font-medium">
@@ -201,6 +238,49 @@ function EndUserLoginScreen({ slug }: { slug: string }) {
           {loginM.isPending ? "Signing in…" : "Sign in"}
         </Button>
       </form>
+      ) : (
+      <form className="mt-7 space-y-4" onSubmit={handleMfaSubmit}>
+        <div className="space-y-1.5">
+          <Label htmlFor="code" className="text-sm font-medium">
+            Authentication code
+          </Label>
+          <Input
+            id="code"
+            name="code"
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            className="h-12 bg-white px-3 text-center text-lg tracking-[0.4em] focus-visible:ring-violet-500/30 dark:bg-input/30"
+            placeholder="000000"
+            autoFocus
+            required
+            disabled={mfaM.isPending}
+          />
+          <p className="text-xs text-muted-foreground">
+            Enter the 6-digit code from your authenticator app, or paste a recovery code.
+          </p>
+        </div>
+
+        <Button
+          type="submit"
+          className="h-12 w-full rounded-xl bg-violet-600 text-white hover:bg-violet-700 dark:bg-violet-500 dark:hover:bg-violet-600"
+          disabled={mfaM.isPending}
+        >
+          {mfaM.isPending ? "Verifying…" : "Verify"}
+        </Button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setStep("password");
+            setError(null);
+          }}
+          className="block w-full text-center text-sm font-medium text-muted-foreground hover:text-foreground"
+        >
+          ← Use a different account
+        </button>
+      </form>
+      )}
 
       <p className="mt-6 text-center text-sm text-muted-foreground">
         New here?{" "}

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Suspense, use, useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { CheckCircle2, LogOut } from "lucide-react";
+import { CheckCircle2, LogOut, ShieldCheck } from "lucide-react";
 import { logoutEndUser, ProjectUserDetails } from "@/features/end-user/api";
 import { fetchEndUserMe } from "@/features/end-user/api";
 import { fadeUp, SPRING_SNAPPY } from "@/components/dashboard/anim";
@@ -105,10 +105,22 @@ function EndUserAccountScreen({
               <dd className="font-medium text-foreground">{me.username}</dd>
             </div>
           ) : null}
+          <div className="flex justify-between">
+            <dt className="text-muted-foreground">Two-factor</dt>
+            <dd className="font-medium text-foreground">
+              {me.mfaEnabled ? "On" : "Off"}
+            </dd>
+          </div>
         </dl>
       </motion.div>
 
-      <div className="mt-6">
+      <div className="mt-6 space-y-2.5">
+        <Button asChild variant="outline" className="h-11 w-full">
+          <Link href={`/p/${encodeURIComponent(slug)}/account/security`}>
+            <ShieldCheck size={16} />
+            Two-factor authentication
+          </Link>
+        </Button>
         <Button
           variant="outline"
           className="h-11 w-full"
