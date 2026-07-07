@@ -36,9 +36,10 @@ class MatrixBypassCheckTest {
                 .content("{\"email\":\"" + email + "\",\"password\":\"plain-password\",\"displayName\":\"Tester\"}"))
                 .andExpect(status().isCreated());
         csrf = csrf();
-        MvcResult login = mockMvc.perform(post("/panel/login").cookie(csrf).header("X-XSRF-TOKEN", csrf.getValue())
-                .header("User-Agent", "test").param("username", email).param("password", "plain-password"))
-                .andExpect(status().is3xxRedirection()).andReturn();
+        MvcResult login = mockMvc.perform(post("/api/panel/v1/session/login").cookie(csrf).header("X-XSRF-TOKEN", csrf.getValue())
+                .header("User-Agent", "test").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"email\":\"" + email + "\",\"password\":\"plain-password\"}"))
+                .andExpect(status().isOk()).andReturn();
         Cookie session = login.getResponse().getCookie("JSESSIONID");
         MvcResult created = mockMvc.perform(post("/api/panel/v1/projects").contentType(MediaType.APPLICATION_JSON)
                 .header("X-XSRF-TOKEN", csrf.getValue()).cookie(csrf, session)

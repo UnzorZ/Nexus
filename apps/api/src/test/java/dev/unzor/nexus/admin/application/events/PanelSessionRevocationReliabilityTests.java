@@ -171,13 +171,13 @@ class PanelSessionRevocationReliabilityTests {
         Cookie csrfCookie = csrf.getResponse().getCookie("XSRF-TOKEN");
         String token = csrfCookie.getValue();
 
-        MvcResult loginResult = mockMvc.perform(post("/panel/login")
+        MvcResult loginResult = mockMvc.perform(post("/api/panel/v1/session/login")
                         .cookie(csrfCookie)
                         .header("X-XSRF-TOKEN", token)
                         .header("User-Agent", "Mozilla/5.0 (Test Runner)")
-                        .param("username", email)
-                        .param("password", "plain-password"))
-                .andExpect(status().is3xxRedirection())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\""+email+"\",\"password\":\"plain-password\"}"))
+                        .andExpect(status().isOk())
                 .andReturn();
 
         Cookie session = loginResult.getResponse().getCookie("JSESSIONID");

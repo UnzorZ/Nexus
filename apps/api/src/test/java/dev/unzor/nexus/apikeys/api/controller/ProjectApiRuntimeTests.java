@@ -177,13 +177,13 @@ class ProjectApiRuntimeTests {
 
     private LoginSession login(String email) throws Exception {
         Cookie csrfCookie = fetchCsrfCookie();
-        MvcResult loginResult = mockMvc.perform(post("/panel/login")
+        MvcResult loginResult = mockMvc.perform(post("/api/panel/v1/session/login")
                         .cookie(csrfCookie)
                         .header("X-XSRF-TOKEN", csrfCookie.getValue())
                         .header("User-Agent", "Mozilla/5.0 (Test Runner)")
-                        .param("username", email)
-                        .param("password", "plain-password"))
-                .andExpect(status().is3xxRedirection())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\""+email+"\",\"password\":\"plain-password\"}"))
+                        .andExpect(status().isOk())
                 .andReturn();
         Cookie sessionCookie = cookieByName(loginResult, "JSESSIONID");
         if (sessionCookie == null) {
