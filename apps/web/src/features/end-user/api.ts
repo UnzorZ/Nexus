@@ -12,11 +12,14 @@ export type ProjectUserDetails = {
   emailVerifiedAt: string | null;
   lastLoginAt: string | null;
   createdAt: string;
+  mfaEnabled: boolean;
 };
 
 export type EndUserLoginResult = {
   /** URL absoluta del API a la que navegar tras el login (reanuda /oauth2/authorize). */
   redirect?: string;
+  /** Presente cuando la contraseña es válida pero falta el segundo factor (MFA). */
+  code?: string;
 };
 
 /**
@@ -162,4 +165,109 @@ export async function confirmEndUserPasswordReset(
       errorMessage: "No se pudo actualizar la contraseña.",
     },
   );
+}
+
+// ── MFA TOTP ───────────────────────────────────────────────────────────────────
+
+export type EndUserMfaEnrollment = {
+  secret: string;
+  otpauthUri: string;
+};
+
+export type EndUserMfaStatus = {
+  enabled: boolean;
+  recoveryCodesRemaining: number;
+};
+
+/** Verifica el segundo factor (TOTP o recovery) y completa el login MFA. */
+export async function verifyEndUserMfa(
+  projectSlug: string,
+  code: string,
+  continueUrl?: string,
+): Promise<EndUserLoginResult> {
+  const csrfToken = await ensureCsrfToken(
+    apiRoutes.endUser.session.csrf(projectSlug),
+  );
+  return apiClient.post<EndUserLoginResult>(
+    apiRoutes.endUser.session.loginMfa(projectSlug),
+    { code, continueUrl },
+    {
+      headers: { [CSRF_HEADER_NAME]: csrfToken },
+      redirect: "manual",
+      errorMessage: "Código incorrecto.",
+    },
+  );
+}
+
+export async function fetchEndUserMfaStatus(
+  projectSlug: string,
+): Promise<EndUserMfaStatus> {
+  return apiClient.get<EndUserMfaStatus>(
+    apiRoutes.endUser.mfa.status(projectSlug),
+    { redirect: "manual", errorMessage: "No se pudo cargar el estado MFA." },
+  );
+}
+
+export async function beginEndUserMfaEnrollment(
+  projectSlug: string,
+): Promise<EndUserMfaEnrollment> {
+  const csrfToken = await ensureCsrfToken(
+    apiRoutes.endUser.session.csrf(projectSlug),
+  );
+  return apiClient.post<EndUserMfaEnrollment>(
+    apiRoutes.endUser.mfa.enroll(projectSlug),
+    undefined,
+    {
+      headers: { [CSRF_HEADER_NAME]: csrfToken },
+      redirect: "manual",
+      errorMessage: "No se pudo iniciar la inscripción MFA.",
+    },
+  );
+}
+
+export async function confirmEndUserMfaEnrollment(
+  projectSlug: string,
+  code: string,
+): Promise<string[]> {
+  const csrfToken = await ensureCsrfToken(
+    apiRoutes.endUser.session.csrf(projectSlug),
+  );
+  const result = await apiClient.post<{ recoveryCodes: string[] }>(
+    apiRoutes.endUser.mfa.enrollVerify(projectSlug),
+    { code },
+    {
+      headers: { [CSRF_HEADER_NAME]: csrfToken },
+      redirect: "manual",
+      errorMessage: "Código incorrecto.",
+    },
+  );
+  return result.recoveryCodes;
+}
+
+export async function disableEndUserMfa(
+  projectSlug: string,
+  code: string,
+): Promise<void> {
+  const csrfToken = await ensureCsrfToken(
+    apiRoutes.endUser.session.csrf(projectSlug),
+  );
+  try {
+    await apiClient.post<null>(
+      apiRoutes.endUser.mfa.disable(projectSlug),
+      { code },
+      {
+        headers: { [CSRF_HEADER_NAME]: csrfToken },
+        redirect: "manual",
+        errorMessage: "No se pudo desactivar la MFA.",
+      },
+    );
+  } catch (error) {
+    if (error instanceof NexusApiError && error.status === 400) {
+      throw new NexusApiError("Código incorrecto.", {
+        status: error.status,
+        code: "invalid_code",
+      });
+    }
+    throw error;
+  }
 }
