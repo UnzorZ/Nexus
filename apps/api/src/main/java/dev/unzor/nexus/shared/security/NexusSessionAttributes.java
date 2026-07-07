@@ -24,6 +24,18 @@ public final class NexusSessionAttributes {
     public static final String PROJECT_USER_ID = "nexus.projectUserId";
 
     /**
+     * Atributo de sesión que fija {@code ProjectSessionAuthenticator} cuando la
+     * contraseña es correcta pero el usuario tiene MFA TOTP activa: guarda un ticket
+     * efímero (interno de identity) con el usuario, el instante de verificación de la
+     * contraseña y la expiración. <b>Crítico:</b> durante esta ventana NO se persiste
+     * ningún {@code SecurityContext} autenticado, de modo que el Authorization Server
+     * no puede reanudar {@code /oauth2/authorize} (la sesión sigue anónima para SAS);
+     * sólo {@code POST /api/p/{slug}/login/mfa}, al verificar el TOTP, establece el
+     * contexto completo.
+     */
+    public static final String MFA_PENDING = "nexus.mfaPending";
+
+    /**
      * Prefijo del valor de índice bajo el que se agrupan las sesiones de un
      * {@code ProjectUser}. Distinto del {@code accountId} del panel para que ambas
      * familias no colisionen en el mismo índice {@code PRINCIPAL_NAME} de Redis.
