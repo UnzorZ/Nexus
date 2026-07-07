@@ -9,8 +9,8 @@ boundaries, one Next.js dashboard, PostgreSQL as the durable database, and Redis
 for revokable sessions and bounded ephemeral state.
 
 > Status: active development. The project is useful for local exploration, but
-> production deployment still needs a real secrets/keystore setup, an explicit
-> license, and the usual operational hardening.
+> production deployment still needs a real secrets/keystore setup and the usual
+> operational hardening. Licensed under [AGPL-3.0](#license).
 
 ## What Nexus Provides
 
@@ -100,6 +100,27 @@ In another shell, from the repository root:
 
 The host-run frontend reads `apps/web/.env.local`, not the repository-root
 `.env`.
+
+## Self-Hosting (Production)
+
+`compose.prod.yaml` builds production images for the API and the dashboard and wires
+them to PostgreSQL and Redis. It fails fast until real secrets are provided.
+
+```bash
+cp .env.example .env        # fill in real secrets + a JWT keystore path
+docker compose -f compose.prod.yaml up -d --build
+```
+
+Required to boot (the API aborts otherwise — see `IdentityStartupGuard` and
+`VaultCrypto`):
+
+- a real JWT signing keystore (`NEXUS_OAUTH_JWK_KEYSTORE_LOCATION`, mounted into the
+  container);
+- a real OAuth bootstrap client secret and a real Vault master key;
+- managed or locked-down PostgreSQL and Redis.
+
+Infrastructure metrics are exposed at `GET /actuator/prometheus` (see the
+[threat model](docs/threat-model.md) for hardening guidance).
 
 ## Configuration
 
@@ -209,5 +230,12 @@ Before running Nexus outside local development:
 
 ## License
 
-No license has been selected yet. Until a license is added, treat the code as
-source-available for review, not as broadly licensed open source.
+Nexus is licensed under the [GNU Affero General Public License v3.0](LICENSE).
+
+AGPL-3.0 is a strong copyleft license: you may use, study, modify, and redistribute
+the software, **including** when you make it available over a network (e.g. as a
+hosted service). Modifications and derivative works that you expose as a network
+service must be offered to their users under the same AGPL-3.0 terms, including
+access to the corresponding source code. See `LICENSE` for the full text and
+[https://www.gnu.org/licenses/agpl-3.0.html](https://www.gnu.org/licenses/agpl-3.0.html)
+for a quick summary.

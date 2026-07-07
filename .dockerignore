@@ -1,0 +1,37 @@
+# Shared build-context ignore for both apps/api/Dockerfile and apps/web/Dockerfile
+# (both use the repository root as their build context).
+
+# VCS + editor metadata
+.git
+.github
+.idea
+.vscode
+*.iml
+*.iws
+*.ipr
+
+# Build artifacts (do not bake stale/local builds into the image)
+**/build/
+**/.next/
+**/out/
+**/dist/
+.gradle
+**/.turbo/
+
+# Dependencies are installed inside the image (npm ci / gradle resolves them)
+**/node_modules/
+
+# Local env + secrets — NEVER bake into images
+.env
+.env.*
+apps/web/.env.local
+apps/web/.env*.local
+
+# Local-only artifacts
+apps/web/tmp/
+docs/plans/
+.playwright-mcp/
+.agents/
+nexus-logo.png
+.DS_Store
+HELP.md

@@ -1,0 +1,110 @@
+# Production-ish stack for self-hosting Nexus.
+#
+# Unlike the dev compose.yaml (which runs the Next.js dev server and relies on a host
+# `./gradlew bootRun`), this file builds production images for BOTH the API and the web
+# dashboard and wires them to PostgreSQL + Redis.
+#
+# Usage:
+#   cp .env.example .env     # then fill in REAL secrets
+#   docker compose -f compose.prod.yaml up -d --build
+#
+# The API runs with SPRING_PROFILES_ACTIVE=prod. IdentityStartupGuard and VaultCrypto
+# abort startup if the dev JWK keystore or the dev vault master key are still in use,
+# so the stack refuses to boot until real secrets are provided. The `${VAR:?msg}`
+# syntax below makes `docker compose` itself fail fast if a required secret is unset.
+
+name: nexus-prod
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-nexus}
+      POSTGRES_USER: ${POSTGRES_DB_USER:-nexus}
+      POSTGRES_PASSWORD: ${POSTGRES_DB_PASSWORD:?set POSTGRES_DB_PASSWORD in .env}
+    volumes:
+      - nexus-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_DB_USER:-nexus} -d ${POSTGRES_DB:-nexus}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  redis:
+    image: redis:8.8.0-alpine
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+      - --maxmemory
+      - 128mb
+      - --maxmemory-policy
+      - noeviction
+      - --notify-keyspace-events
+      - Egx
+    volumes:
+      - nexus-redis-data:/data
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    image: nexus-api:local
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      # Never let Spring Boot manage the dev compose stack in production.
+      SPRING_DOCKER_COMPOSE_ENABLED: "false"
+      NEXUS_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-nexus}
+      NEXUS_DATASOURCE_USERNAME: ${POSTGRES_DB_USER:-nexus}
+      NEXUS_DATASOURCE_PASSWORD: ${POSTGRES_DB_PASSWORD:?set POSTGRES_DB_PASSWORD in .env}
+      NEXUS_REDIS_URL: redis://redis:6379
+      NEXUS_FRONTEND_BASE_URL: ${NEXUS_FRONTEND_BASE_URL:-http://localhost:3000}
+      NEXUS_ALLOWED_DEV_ORIGINS: ${NEXUS_ALLOWED_DEV_ORIGINS:-}
+      NEXUS_OAUTH_BOOTSTRAP_CLIENT_SECRET: ${NEXUS_OAUTH_BOOTSTRAP_CLIENT_SECRET:?set a real OAuth client secret}
+      NEXUS_OAUTH_JWK_KEYSTORE_LOCATION: ${NEXUS_OAUTH_JWK_KEYSTORE_LOCATION:?mount a real JWT keystore and set its path}
+      NEXUS_OAUTH_JWK_KEYSTORE_PASSWORD: ${NEXUS_OAUTH_JWK_KEYSTORE_PASSWORD:?set the keystore password}
+      NEXUS_OAUTH_JWK_KEY_ALIAS: ${NEXUS_OAUTH_JWK_KEY_ALIAS:-nexus-key}
+      NEXUS_OAUTH_JWK_KEY_PASSWORD: ${NEXUS_OAUTH_JWK_KEY_PASSWORD:?set the key password}
+      NEXUS_VAULT_MASTER_KEY: ${NEXUS_VAULT_MASTER_KEY:?set a real vault master key}
+    # Mount your production JWT keystore read-only, e.g.:
+    # volumes:
+    #   - ./jwt-keystore.p12:/etc/nexus/jwt-keystore.p12:ro
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        # Baked into the bundle at build time (NEXT_PUBLIC_* are not runtime-overridable).
+        NEXT_PUBLIC_NEXUS_API_BASE_URL: ${NEXT_PUBLIC_NEXUS_API_BASE_URL:-http://localhost:8080}
+    image: nexus-web:local
+    depends_on:
+      api: { condition: service_healthy }
+    environment:
+      NEXT_PUBLIC_NEXUS_API_BASE_URL: ${NEXT_PUBLIC_NEXUS_API_BASE_URL:-http://localhost:8080}
+      NEXUS_FRONTEND_BASE_URL: ${NEXUS_FRONTEND_BASE_URL:-http://localhost:3000}
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+volumes:
+  nexus-postgres-data:
+  nexus-redis-data:
