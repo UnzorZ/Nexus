@@ -23,7 +23,9 @@ class ProjectSecurityConfiguration {
                                 "/p/*/logout",
                                 "/p/*/register",
                                 "/p/*/verify-email",
-                                "/p/*/verify-email/**").permitAll()
+                                "/p/*/verify-email/**",
+                                "/p/*/password-reset",
+                                "/p/*/password-reset/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(exceptions -> exceptions
