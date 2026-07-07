@@ -81,6 +81,20 @@ public class ProjectUser {
     @Column(name = "authz_version", nullable = false)
     private long authzVersion;
 
+    // Tokens de verificación de email / reseteo de contraseña: hash SHA-256 hex (no
+    // plaintext), single-use (se anulan al consumir), con expiración propia.
+    @Column(name = "email_verification_token_hash", length = 64)
+    private String emailVerificationTokenHash;
+
+    @Column(name = "email_verification_expires_at")
+    private Instant emailVerificationExpiresAt;
+
+    @Column(name = "password_reset_token_hash", length = 64)
+    private String passwordResetTokenHash;
+
+    @Column(name = "password_reset_expires_at")
+    private Instant passwordResetExpiresAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -206,6 +220,46 @@ public class ProjectUser {
      */
     public void incrementAuthzVersion() {
         authzVersion++;
+    }
+
+    /**
+     * Emite un token de verificación de email: guarda su hash (SHA-256) y la
+     * expiración. No altera el estado ({@link ProjectUserStatus}).
+     */
+    public void issueEmailVerification(String tokenHash, Instant expiresAt) {
+        this.emailVerificationTokenHash = Objects.requireNonNull(tokenHash, "tokenHash");
+        this.emailVerificationExpiresAt = Objects.requireNonNull(expiresAt, "expiresAt");
+    }
+
+    /**
+     * Consume el token de verificación: verifica el email (flip PENDING→ACTIVE) y
+     * anula el token para que sea single-use (un replay ya no matchea).
+     */
+    public void consumeEmailVerification(Instant verifiedAt) {
+        this.emailVerificationTokenHash = null;
+        this.emailVerificationExpiresAt = null;
+        verifyEmail(verifiedAt);
+    }
+
+    public boolean isEmailVerified() {
+        return emailVerifiedAt != null;
+    }
+
+    /**
+     * Emite un token de reseteo de contraseña: guarda su hash y la expiración.
+     */
+    public void issuePasswordReset(String tokenHash, Instant expiresAt) {
+        this.passwordResetTokenHash = Objects.requireNonNull(tokenHash, "tokenHash");
+        this.passwordResetExpiresAt = Objects.requireNonNull(expiresAt, "expiresAt");
+    }
+
+    /**
+     * Consume el token de reseteo (single-use): lo anula. La contraseña la fija el
+     * servicio llamador vía {@link #updatePassword}.
+     */
+    public void consumePasswordReset() {
+        this.passwordResetTokenHash = null;
+        this.passwordResetExpiresAt = null;
     }
 
     @PrePersist

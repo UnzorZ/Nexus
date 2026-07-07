@@ -38,5 +38,17 @@ public interface ProjectUserRepository extends Repository<ProjectUser, UUID> {
 
     boolean existsByProjectIdAndId(UUID projectId, UUID userId);
 
+    /**
+     * Búsqueda por token de verificación de email, acotada al proyecto. El token es
+     * un secreto único (no permite enumeración); el projectId refuerza el aislamiento
+     * entre realms. {@code null} si no hay token pendiente o ya fue consumido.
+     */
+    Optional<ProjectUser> findByProjectIdAndEmailVerificationTokenHash(UUID projectId, String tokenHash);
+
+    /**
+     * Búsqueda por token de reseteo de contraseña, acotada al proyecto.
+     */
+    Optional<ProjectUser> findByProjectIdAndPasswordResetTokenHash(UUID projectId, String tokenHash);
+
     void delete(ProjectUser user);
 }
