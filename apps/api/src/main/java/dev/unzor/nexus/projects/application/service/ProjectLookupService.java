@@ -35,4 +35,13 @@ public class ProjectLookupService {
         return requireById(projectId).getSlug();
     }
 
+    /**
+     * Si el proyecto tiene habilitado el registro público (self-signup). Expone solo
+     * el primitivo para que otros módulos no dependan de la entidad {@link Project}.
+     */
+    @Transactional(readOnly = true)
+    public boolean isPublicRegistrationEnabled(UUID projectId) {
+        return requireById(projectId).isPublicRegistrationEnabled();
+    }
+
 }

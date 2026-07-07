@@ -2,6 +2,7 @@ package dev.unzor.nexus.identity.api.controller;
 
 import dev.unzor.nexus.identity.application.context.ProjectAuthenticationContext;
 import dev.unzor.nexus.identity.application.service.ProjectSlugResolver;
+import dev.unzor.nexus.identity.domain.exception.EmailNotVerifiedException;
 import dev.unzor.nexus.identity.infrastructure.security.ProjectSessionAuthenticator;
 import dev.unzor.nexus.projects.domain.exception.ProjectNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -74,6 +75,15 @@ class ProjectLoginController {
         try {
             sessionAuthenticator.authenticate(context.projectId(), email, password, request, response);
             return "redirect:" + safePostLoginTarget(continueUrl, context.projectSlug());
+        } catch (EmailNotVerifiedException e) {
+            // Contraseña correcta pero email sin verificar: se indica (sin enumeración,
+            // la identidad ya está confirmada) y se ofrece reenviar el enlace.
+            model.addAttribute("projectSlug", context.projectSlug());
+            model.addAttribute("projectId", context.projectId());
+            model.addAttribute("csrf", csrfToken);
+            model.addAttribute("email", e.email());
+            model.addAttribute("emailNotVerified", true);
+            return "identity/project-login";
         } catch (BadCredentialsException | UsernameNotFoundException e) {
             model.addAttribute("projectSlug", context.projectSlug());
             model.addAttribute("projectId", context.projectId());
