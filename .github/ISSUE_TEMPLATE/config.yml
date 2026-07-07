@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/UnzorZ/Nexus/security/advisories/new
+    about: Do not open a public issue for security bugs — use private vulnerability reporting (see SECURITY.md).
+  - name: Questions / discussions
+    url: https://github.com/UnzorZ/Nexus/discussions
+    about: Ask questions and discuss ideas in GitHub Discussions.

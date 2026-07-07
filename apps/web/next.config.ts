@@ -18,6 +18,13 @@ const allowedDevOrigins = (
   });
 
 const nextConfig: NextConfig = {
+  // Produce a self-contained .next/standalone server.js for the production Docker
+  // image (apps/web/Dockerfile). public/ and .next/static are copied next to it.
+  output: "standalone",
+  // Next auto-detects the repository root as the workspace root and would nest the
+  // standalone output under .next/standalone/<repo>/apps/web/. Pin the tracing root
+  // to this app dir so server.js lands flat at .next/standalone/server.js.
+  outputFileTracingRoot: __dirname,
   allowedDevOrigins,
 };
 
