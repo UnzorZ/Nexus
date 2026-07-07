@@ -37,8 +37,12 @@ public class SecurityConfiguration {
      * Coincide solo con {@code /internal/**} y {@code /actuator/**}. Desactiva CSRF en
      * esas rutas para permitir llamadas programáticas (por ejemplo {@code curl} o probes).
      * <ul>
-     *   <li>{@code /internal/**} y {@code /actuator/health/**} (incluye liveness y readiness) → acceso público</li>
+     *   <li>{@code /internal/**}, {@code /actuator/health/**} (liveness/readiness) y {@code /actuator/prometheus} → acceso público</li>
      *   <li>Resto de {@code /actuator/**} → requiere HTTP Basic</li>
+     * <p>Nota de hardening: {@code /actuator/prometheus} se expone sin credenciales para
+     * facilitar el scrape desde una red de confianza. En producción tras un edge público,
+     * restringirlo (reverse-proxy allowlist, {@code management.server.port} separado, o
+     * retirarlo de los permitAll para volver a exigir HTTP Basic).
      * </ul>
      */
     @Bean
@@ -51,7 +55,8 @@ public class SecurityConfiguration {
                         .requestMatchers(
                                 "/internal/**",
                                 "/actuator/health",
-                                "/actuator/health/**").permitAll()
+                                "/actuator/health/**",
+                                "/actuator/prometheus").permitAll()
                         .requestMatchers("/actuator/**").authenticated())
                 .httpBasic(Customizer.withDefaults())
                 .build();
