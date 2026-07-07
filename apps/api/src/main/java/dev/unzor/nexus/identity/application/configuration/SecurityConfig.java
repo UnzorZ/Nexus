@@ -6,6 +6,8 @@ import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
 import dev.unzor.nexus.identity.application.observability.NexusOAuthJwkState;
+import dev.unzor.nexus.identity.application.service.AuthzVersionIntrospectionAuthenticationProvider;
+import dev.unzor.nexus.identity.persistence.repository.ProjectUserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
@@ -19,8 +21,10 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.OAuth2AuthorizationServerConfiguration;
+import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.config.annotation.web.configurers.oauth2.server.authorization.OAuth2AuthorizationServerConfigurer;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
 import org.springframework.security.oauth2.server.authorization.settings.AuthorizationServerSettings;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
@@ -62,7 +66,9 @@ public class SecurityConfig {
     @Order(1)
     public SecurityFilterChain authorizationServerSecurityFilterChain(
             HttpSecurity http,
-            ProjectOauthAuthenticationEntryPoint htmlEntryPoint
+            ProjectOauthAuthenticationEntryPoint htmlEntryPoint,
+            OAuth2AuthorizationService authorizationService,
+            ProjectUserRepository projectUserRepository
     ) throws Exception {
         OAuth2AuthorizationServerConfigurer authorizationServerConfigurer =
                 new OAuth2AuthorizationServerConfigurer();
@@ -74,6 +80,14 @@ public class SecurityConfig {
                                 // Pantalla de consentimiento con branding (B3): SAS redirige aquí
                                 // cuando un cliente requiere consentimiento. Ver ConsentController.
                                 .authorizationEndpoint(ae -> ae.consentPage("/oauth2/consent"))
+                                // Introspection con enforcement de authz_version (#22): un token
+                                // cuya versión stale (tras un cambio de rol) introspecta como
+                                // inactivo. Ver AuthzVersionIntrospectionAuthenticationProvider.
+                                .tokenIntrospectionEndpoint(ti -> ti.authenticationProviders(providers -> {
+                                    AuthenticationProvider defaultProvider = providers.get(0);
+                                    providers.set(0, new AuthzVersionIntrospectionAuthenticationProvider(
+                                            defaultProvider, authorizationService, projectUserRepository));
+                                }))
                                 .oidc(Customizer.withDefaults())
                 )
                 .authorizeHttpRequests(authorize ->
