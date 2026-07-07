@@ -3,10 +3,13 @@ package dev.unzor.nexus.identity.application.service;
 import dev.unzor.nexus.identity.application.context.ProjectAuthenticationContext;
 import dev.unzor.nexus.identity.infrastructure.security.ProjectUserPrincipal;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.FactorGrantedAuthority;
 import org.springframework.security.oauth2.server.authorization.token.JwtEncodingContext;
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenCustomizer;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -56,6 +59,23 @@ public class ProjectIdTokenCustomizer implements OAuth2TokenCustomizer<JwtEncodi
 
         context.getClaims().claim("project_id", projectId.toString());
         context.getClaims().claim("authz_version", pup.authzVersion());
+
+        // amr: refleja el segundo factor cuando el login completó MFA TOTP (M5).
+        if (hasTotpFactor(principalAuth)) {
+            context.getClaims().claim("amr", List.of("pwd", "otp"));
+        }
+    }
+
+    private static boolean hasTotpFactor(Authentication auth) {
+        if (auth == null || auth.getAuthorities() == null) {
+            return false;
+        }
+        for (GrantedAuthority a : auth.getAuthorities()) {
+            if (a instanceof FactorGrantedAuthority f && "FACTOR_TOTP".equals(f.getAuthority())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Extrae el slug del issuer {@code {origin}/p/{slug}} (o de una URL con ese sufijo). */

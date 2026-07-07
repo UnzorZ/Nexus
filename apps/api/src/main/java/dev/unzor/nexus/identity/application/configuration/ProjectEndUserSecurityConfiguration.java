@@ -57,6 +57,7 @@ class ProjectEndUserSecurityConfiguration {
                         .requestMatchers(HttpMethod.GET, "/api/p/*/csrf").permitAll()
                         .requestMatchers(HttpMethod.POST,
                                 "/api/p/*/login",
+                                "/api/p/*/login/mfa",
                                 "/api/p/*/register",
                                 "/api/p/*/verify-email",
                                 "/api/p/*/verify-email/resend",
