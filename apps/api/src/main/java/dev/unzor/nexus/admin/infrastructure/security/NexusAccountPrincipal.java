@@ -22,10 +22,9 @@ import java.util.UUID;
  * (incluido el {@code SecurityContext} que referencia al principal) mediante
  * serialización JDK. Implementa además {@link CredentialsContainer} para que
  * {@link #eraseCredentials()} elimine el hash de la contraseña: nunca se conserva el
- * hash dentro del principal serializado que se almacena en Redis. El
- * {@code PanelAuthenticationSuccessHandler} invoca {@code eraseCredentials()} tras un
- * login correcto, antes de que la sesión se persista. Nunca se persisten entidades JPA
- * en sesión.</p>
+ * hash dentro del principal serializado que se almacena en Redis. El login JSON del panel
+ * ({@code PanelSessionController}) invoca {@code eraseCredentials()} tras autenticar,
+ * antes de que la sesión se persista. Nunca se persisten entidades JPA en sesión.</p>
  *
  * <p>Es una clase (no un {@code record}) porque {@code eraseCredentials()} debe poder
  * mutar la contraseña a {@code null}.</p>
@@ -109,10 +108,10 @@ public final class NexusAccountPrincipal implements UserDetails, CredentialsCont
 
     /**
      * Elimina la contraseña del principal. Spring Security invoca este método en los
-     * puntos habituales (p. ej. tras ciertas autenticaciones); el
-     * {@code PanelAuthenticationSuccessHandler} también lo invoca de forma explícita
-     * antes de persistir la sesión en Redis, de modo que el hash nunca se serializa en
-     * el {@code SecurityContext} almacenado.
+     * puntos habituales (p. ej. tras ciertas autenticaciones); el login JSON del panel
+     * ({@code PanelSessionController}) también lo invoca de forma explícita antes de
+     * persistir la sesión en Redis, de modo que el hash nunca se serializa en el
+     * {@code SecurityContext} almacenado.
      */
     @Override
     public void eraseCredentials() {
