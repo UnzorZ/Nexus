@@ -9,9 +9,8 @@ import org.springframework.stereotype.Component;
 import java.util.UUID;
 
 /**
- * Inicializa los atributos de dominio de la sesión del panel tras un login
- * correcto, tanto en el flujo de formulario ({@code /panel/login}) como en el
- * JSON ({@code /api/panel/v1/session/login}).
+ * Inicializa los atributos de dominio de la sesión del panel tras un login JSON
+ * correcto ({@code POST /api/panel/v1/session/login}).
  *
  * <p>Centraliza el borrado del hash de contraseña del principal (antes de que el
  * {@code SecurityContext} se persista en Redis) y la población de los atributos

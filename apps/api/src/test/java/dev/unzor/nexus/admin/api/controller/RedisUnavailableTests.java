@@ -81,11 +81,11 @@ class RedisUnavailableTests {
                 .body("{\"email\":\"" + email + "\",\"password\":\"plain-password\",\"displayName\":\"Owner\"}")
                 .retrieve().onStatus(s -> true, (req, res) -> { }).toBodilessEntity();
 
-        ResponseEntity<Void> login = client.method(HttpMethod.POST).uri("/panel/login")
-                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+        ResponseEntity<Void> login = client.method(HttpMethod.POST).uri("/api/panel/v1/session/login")
+                .contentType(MediaType.APPLICATION_JSON)
                 .header("X-XSRF-TOKEN", xsrf)
                 .header(HttpHeaders.COOKIE, cookieHeader(csrf, "XSRF-TOKEN"))
-                .body("username=" + email + "&password=plain-password")
+                .body("{\"email\":\"" + email + "\",\"password\":\"plain-password\"}")
                 .retrieve().onStatus(s -> true, (req, res) -> { }).toBodilessEntity();
         String jsessionId = extractCookie(login, "JSESSIONID");
         assertThat(jsessionId).as("JSESSIONID issued by login").isNotNull();
