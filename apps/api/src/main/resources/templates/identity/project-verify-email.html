@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Email verified — Nexus</title>
+    <link rel="stylesheet" th:href="@{/identity/login.css}">
+</head>
+<body>
+<main class="authentication-panel">
+    <div class="authentication-panel__inner">
+        <header class="login-header">
+            <h2 th:if="${verified}">Email verified</h2>
+            <h2 th:if="${invalid}">Verification link invalid</h2>
+            <p>Project realm <code th:text="${projectSlug}">slug</code></p>
+        </header>
+
+        <div class="alert alert--info" th:if="${verified}" role="status">
+            <span>Your email is verified — you can now sign in.</span>
+        </div>
+
+        <div class="alert alert--error" th:if="${invalid}" role="alert">
+            <span>This verification link is invalid or has expired. Request a new one.</span>
+        </div>
+
+        <p><a th:href="@{/p/{slug}/login(slug=${projectSlug})}">Go to sign in</a></p>
+    </div>
+</main>
+</body>
+</html>
