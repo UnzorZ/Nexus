@@ -95,6 +95,15 @@ public class ProjectUser {
     @Column(name = "password_reset_expires_at")
     private Instant passwordResetExpiresAt;
 
+    // M5 TOTP MFA: secret compartido CIFRADO AES-256-GCM (reversible: hace falta el
+    // plaintext para computar los códigos). totp_enabled_at != null => MFA activa y
+    // el login exigirá el segundo factor.
+    @Column(name = "totp_secret_enc")
+    private String totpSecretEnc;
+
+    @Column(name = "totp_enabled_at")
+    private Instant totpEnabledAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -243,6 +252,37 @@ public class ProjectUser {
 
     public boolean isEmailVerified() {
         return emailVerifiedAt != null;
+    }
+
+    /**
+     * MFA activa: hay un secret TOTP inscrito y verificado (totp_enabled_at != null).
+     * El login exigirá el segundo factor (paso step-up).
+     */
+    public boolean isMfaEnabled() {
+        return totpEnabledAt != null;
+    }
+
+    /**
+     * Guarda el secret TOTP cifrado durante la inscripción (aún no activa hasta
+     * {@link #enableTotp}).
+     */
+    public void storeTotpSecret(String encryptedSecret) {
+        this.totpSecretEnc = Objects.requireNonNull(encryptedSecret, "encryptedSecret");
+    }
+
+    /**
+     * Activa la MFA tras verificar el primer código TOTP correcto.
+     */
+    public void enableTotp(Instant enabledAt) {
+        this.totpEnabledAt = Objects.requireNonNull(enabledAt, "enabledAt");
+    }
+
+    /**
+     * Desactiva la MFA y borra el secret (re-inscripción posible más adelante).
+     */
+    public void disableTotp() {
+        this.totpSecretEnc = null;
+        this.totpEnabledAt = null;
     }
 
     /**

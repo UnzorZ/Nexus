@@ -131,7 +131,7 @@ class ProjectUsersControllerTests {
 
     private static ProjectUserDetails details() {
         return new ProjectUserDetails(
-                UUID.randomUUID(), "x@example.com", "neo", "Neo", "ACTIVE",
+                UUID.randomUUID(), "x@example.com", "neo", "Neo", "ACTIVE", false,
                 Instant.parse("2026-01-01T00:00:00Z"), null, Instant.parse("2026-01-01T00:00:00Z"));
     }
 }

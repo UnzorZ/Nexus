@@ -43,13 +43,15 @@ class ProjectSessionAuthenticatorTests {
 
     private final ProjectUserUserDetailsService userDetailsService = mock(ProjectUserUserDetailsService.class);
     private final ProjectUserRepository repository = mock(ProjectUserRepository.class);
+    private final dev.unzor.nexus.identity.persistence.repository.ProjectUserRecoveryCodeRepository recoveryCodeRepository = mock(dev.unzor.nexus.identity.persistence.repository.ProjectUserRecoveryCodeRepository.class);
     private final RecordProjectUserLoginService recordLoginService = mock(RecordProjectUserLoginService.class);
     private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
     private final IdentityLoginProperties loginProperties = new IdentityLoginProperties(5, Duration.ofMinutes(15));
+    private final dev.unzor.nexus.identity.application.service.TotpCrypto totpCrypto = mock(dev.unzor.nexus.identity.application.service.TotpCrypto.class);
 
     private final ProjectSessionAuthenticator authenticator = new ProjectSessionAuthenticator(
-            userDetailsService, repository, encoder, recordLoginService, eventPublisher, loginProperties);
+            userDetailsService, repository, recoveryCodeRepository, encoder, recordLoginService, eventPublisher, loginProperties, totpCrypto);
 
     private MockHttpServletRequest request;
     private MockHttpServletResponse response;
@@ -104,7 +106,7 @@ class ProjectSessionAuthenticatorTests {
         // igualar tiempos (anti-enumeración). Lo verificamos vía un spy del encoder.
         BCryptPasswordEncoder spyEncoder = spy(new BCryptPasswordEncoder());
         ProjectSessionAuthenticator authenticatorWithSpy = new ProjectSessionAuthenticator(
-                userDetailsService, repository, spyEncoder, recordLoginService, eventPublisher, loginProperties);
+                userDetailsService, repository, recoveryCodeRepository, spyEncoder, recordLoginService, eventPublisher, loginProperties, totpCrypto);
         UUID projectId = UUID.randomUUID();
         when(userDetailsService.loadProjectUser(projectId, "ghost@example.com"))
                 .thenThrow(new UsernameNotFoundException("not found"));
@@ -212,8 +214,8 @@ class ProjectSessionAuthenticatorTests {
     @Test
     void lockoutExpiresAndCorrectPasswordWorksAgain() {
         ProjectSessionAuthenticator shortLockAuth = new ProjectSessionAuthenticator(
-                userDetailsService, repository, encoder, recordLoginService, eventPublisher,
-                new IdentityLoginProperties(2, Duration.ofMillis(1)));
+                userDetailsService, repository, recoveryCodeRepository, encoder, recordLoginService, eventPublisher,
+                new IdentityLoginProperties(2, Duration.ofMillis(1)), totpCrypto);
         UUID projectId = UUID.randomUUID();
         ProjectUser user = activeUser(projectId, "neo@example.com", "secret123");
         when(userDetailsService.loadProjectUser(projectId, "neo@example.com"))
