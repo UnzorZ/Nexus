@@ -7,7 +7,7 @@ import dev.unzor.nexus.admin.infrastructure.security.PanelSessionInitializer;
 import dev.unzor.nexus.admin.infrastructure.security.PanelContinueUrlValidator;
 import dev.unzor.nexus.admin.infrastructure.security.NexusAccountAuthorityResolver;
 import dev.unzor.nexus.admin.infrastructure.security.NexusAccountUserDetailsService;
-import dev.unzor.nexus.admin.infrastructure.security.SameSiteCsrfCookieFilter;
+import dev.unzor.nexus.shared.security.SameSiteCsrfCookieFilter;
 import dev.unzor.nexus.admin.persistence.repository.NexusAccountRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;

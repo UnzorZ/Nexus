@@ -1,4 +1,4 @@
-package dev.unzor.nexus.admin.infrastructure.security;
+package dev.unzor.nexus.shared.security;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
