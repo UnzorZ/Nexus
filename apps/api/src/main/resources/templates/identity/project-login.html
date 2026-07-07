@@ -55,6 +55,7 @@
             </div>
 
             <button type="submit" class="sign-in-button">Sign in</button>
+            <p><a th:href="@{/p/{slug}/password-reset(slug=${projectSlug})}">Forgot password?</a></p>
         </form>
 
         <form class="login-form" th:if="${emailNotVerified}"
