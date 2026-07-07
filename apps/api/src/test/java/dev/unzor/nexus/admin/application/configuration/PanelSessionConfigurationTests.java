@@ -72,12 +72,12 @@ class PanelSessionConfigurationTests {
                         .content("{\"email\":\"" + email + "\",\"password\":\"plain-password\",\"displayName\":\"Owner\"}"))
                 .andExpect(status().isCreated());
 
-        MvcResult login = mockMvc.perform(post("/panel/login")
+        MvcResult login = mockMvc.perform(post("/api/panel/v1/session/login")
                         .cookie(csrfCookie)
                         .header("X-XSRF-TOKEN", token)
-                        .param("username", email)
-                        .param("password", "plain-password"))
-                .andExpect(status().is3xxRedirection())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\""+email+"\",\"password\":\"plain-password\"}"))
+                        .andExpect(status().isOk())
                 .andReturn();
 
         Cookie sessionCookie = login.getResponse().getCookie("NEXUSID");
@@ -113,12 +113,12 @@ class PanelSessionConfigurationTests {
                         .content("{\"email\":\"" + email + "\",\"password\":\"plain-password\",\"displayName\":\"Owner\"}"))
                 .andExpect(status().isCreated());
 
-        MvcResult login = mockMvc.perform(post("/panel/login")
+        MvcResult login = mockMvc.perform(post("/api/panel/v1/session/login")
                         .cookie(csrfCookie)
                         .header("X-XSRF-TOKEN", token)
-                        .param("username", email)
-                        .param("password", "plain-password"))
-                .andExpect(status().is3xxRedirection())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\""+email+"\",\"password\":\"plain-password\"}"))
+                        .andExpect(status().isOk())
                 .andReturn();
 
         // The Set-Cookie header for the session must use the configured name, Secure and Max-Age.

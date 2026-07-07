@@ -18,7 +18,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -31,12 +31,6 @@ class PanelSecurityTests {
 
     @Autowired
     private NexusAccountRepository accountRepository;
-
-    @Test
-    void panelLoginPageIsPublic() throws Exception {
-        mockMvc.perform(get("/panel/login"))
-                .andExpect(status().isOk());
-    }
 
     @Test
     void panelApiWithoutSessionReturnsUnauthorizedWithoutRedirect() throws Exception {
@@ -77,18 +71,18 @@ class PanelSecurityTests {
     }
 
     @Test
-    void successfulLoginWithoutContinueRedirectsToFrontendDashboard() throws Exception {
+    void successfulJsonLoginReturnsOkAndAccount() throws Exception {
         String email = "login-success-" + UUID.randomUUID() + "@example.com";
         registerAccount(email);
         CsrfTokens csrf = fetchCsrf();
 
-        mockMvc.perform(post("/panel/login")
+        mockMvc.perform(post("/api/panel/v1/session/login")
                         .cookie(csrf.cookie())
                         .header("X-XSRF-TOKEN", csrf.token())
-                        .param("username", email)
-                        .param("password", "plain-password"))
-                .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("http://localhost:3000/dashboard"));
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"" + email + "\",\"password\":\"plain-password\"}"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(email)));
     }
 
     @Test
@@ -104,39 +98,17 @@ class PanelSecurityTests {
     }
 
     @Test
-    void failedLoginPreservesSafeContinueParameter() throws Exception {
-        CsrfTokens csrf = fetchCsrf();
-        String continueUrl = "http://localhost:3000/dashboard";
-
-        mockMvc.perform(post("/panel/login")
-                        .cookie(csrf.cookie())
-                        .header("X-XSRF-TOKEN", csrf.token())
-                        .param("username", "missing@example.com")
-                        .param("password", "wrong-password")
-                        .param("continue", continueUrl))
-                .andExpect(status().is3xxRedirection())
-                .andExpect(result -> {
-                    String location = result.getResponse().getHeader("Location");
-                    assertThat(location)
-                            .contains("error=true")
-                            .contains("continue=");
-                });
-    }
-
-    @Test
-    void successfulLoginIgnoresMaliciousContinueParameter() throws Exception {
-        String email = "login-safe-" + UUID.randomUUID() + "@example.com";
+    void jsonLoginWithWrongPasswordReturnsUnauthorized() throws Exception {
+        String email = "login-wrong-" + UUID.randomUUID() + "@example.com";
         registerAccount(email);
         CsrfTokens csrf = fetchCsrf();
 
-        mockMvc.perform(post("/panel/login")
+        mockMvc.perform(post("/api/panel/v1/session/login")
                         .cookie(csrf.cookie())
                         .header("X-XSRF-TOKEN", csrf.token())
-                        .param("username", email)
-                        .param("password", "plain-password")
-                        .param("continue", "https://evil.example/phish"))
-                .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("http://localhost:3000/dashboard"));
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"" + email + "\",\"password\":\"wrong-password\"}"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -201,12 +173,12 @@ class PanelSecurityTests {
 
     private MvcResult loginAndReturn(String email) throws Exception {
         CsrfTokens csrf = fetchCsrf();
-        return mockMvc.perform(post("/panel/login")
+        return mockMvc.perform(post("/api/panel/v1/session/login")
                         .cookie(csrf.cookie())
                         .header("X-XSRF-TOKEN", csrf.token())
-                        .param("username", email)
-                        .param("password", "plain-password"))
-                .andExpect(status().is3xxRedirection())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\""+email+"\",\"password\":\"plain-password\"}"))
+                        .andExpect(status().isOk())
                 .andReturn();
     }
 

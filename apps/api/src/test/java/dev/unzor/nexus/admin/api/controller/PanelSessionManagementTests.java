@@ -287,13 +287,13 @@ class PanelSessionManagementTests {
     private LoginSession login(String email) throws Exception {
         CsrfTokens csrf = fetchCsrf();
 
-        MvcResult loginResult = mockMvc.perform(post("/panel/login")
+        MvcResult loginResult = mockMvc.perform(post("/api/panel/v1/session/login")
                         .cookie(csrf.cookie())
                         .header("X-XSRF-TOKEN", csrf.token())
                         .header("User-Agent", "Mozilla/5.0 (Test Runner) Nexus/1.0")
-                        .param("username", email)
-                        .param("password", "plain-password"))
-                .andExpect(status().is3xxRedirection())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\""+email+"\",\"password\":\"plain-password\"}"))
+                        .andExpect(status().isOk())
                 .andReturn();
 
         Cookie sessionCookie = cookieByName(loginResult, "JSESSIONID");

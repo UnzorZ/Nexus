@@ -13,6 +13,15 @@
 export const queryKeys = {
   me: () => ["me"] as const,
 
+  /**
+   * Claves del usuario final (sesión por proyecto). Se anidan bajo
+   * `["end-user", slug, ...]`, separadas del panel, para que la invalidación de uno no
+   * afecte al otro.
+   */
+  endUser: {
+    me: (projectSlug: string) => ["end-user", projectSlug, "me"] as const,
+  },
+
   projects: {
     all: () => ["projects"] as const,
     detail: (projectId: string) => ["projects", projectId] as const,
