@@ -227,7 +227,7 @@ foránea cuando se cree la tabla propietaria `projects`.
 
 ## Trabajo pendiente
 
-- rate-limiting en los endpoints públicos de auth + backups gestionados (Track B / M6).
+- (nada: rate-limiting per-IP + backups de PostgreSQL entregados en M6).
 
 ## Implementado
 
@@ -247,6 +247,7 @@ foránea cuando se cree la tabla propietaria `projects`.
 - **TOTP MFA end-user** (step-up + inscripción + recovery codes; `amr: [pwd, otp]`, M5);
 - **consent** branded vía redirect a Next.js y **gestión de sesiones** end-user (list/revoke);
 - normalización de emails en registro.
+- **rate-limiting** per-IP (bucket4j) en endpoints de auth pública + **backups** PostgreSQL (`scripts/backup-db.sh` + runbook) (M6).
 
 ### Bootstrap público de la instancia
 

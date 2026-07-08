@@ -323,11 +323,12 @@ testImplementation 'org.springframework.boot:spring-boot-starter-security-oauth2
 - [x] **TOTP MFA** end-user (step-up + inscripción + recovery codes; `amr: [pwd, otp]`) (M5).
 - [x] **Consent** branded vía redirect a Next.js + **gestión de sesiones** end-user (list/revoke) (M4 + sesiones).
 - [x] Panel Nexus con `NexusAccount` (login JSON + sesión HTTP + CSRF + MFA TOTP propia).
+- [x] **Rate-limiting** per-IP (bucket4j) en endpoints de auth pública + **backups** PostgreSQL (`scripts/backup-db.sh` + runbook) (M6).
 - [x] Health-check interno del módulo.
 
 ### 🔲 Pendiente
 
-- [ ] Rate-limiting en endpoints de auth pública + backups (Track B / M6).
+- Sin pendientes relevantes tras M6 (rate-limiting + backups entregados).
 
 ---
 
