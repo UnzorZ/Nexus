@@ -4,6 +4,7 @@ import dev.unzor.nexus.identity.domain.exception.OauthClientIdAlreadyExistsExcep
 import dev.unzor.nexus.identity.domain.exception.OauthClientNotFoundException;
 import dev.unzor.nexus.identity.domain.exception.ProjectUserEmailAlreadyExistsException;
 import dev.unzor.nexus.identity.domain.exception.ProjectUserNotFoundException;
+import dev.unzor.nexus.identity.domain.exception.SessionNotFoundException;
 import dev.unzor.nexus.projects.domain.exception.ProjectAccessDeniedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -26,6 +27,14 @@ class IdentityExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, "Project user not found.");
         problem.setTitle("Not found");
         problem.setProperty("code", "resource_not_found");
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
+    }
+
+    @ExceptionHandler(SessionNotFoundException.class)
+    ResponseEntity<ProblemDetail> handleSessionNotFound(SessionNotFoundException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, "Session not found.");
+        problem.setTitle("Not found");
+        problem.setProperty("code", "session_not_found");
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
     }
 

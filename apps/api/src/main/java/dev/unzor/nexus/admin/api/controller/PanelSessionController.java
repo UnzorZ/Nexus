@@ -1,14 +1,14 @@
 package dev.unzor.nexus.admin.api.controller;
 
 import dev.unzor.nexus.admin.api.dto.NexusAccountDetails;
-import dev.unzor.nexus.admin.api.dto.SessionSummary;
 import dev.unzor.nexus.admin.api.requests.LoginRequest;
-import dev.unzor.nexus.admin.application.configuration.PanelSessionConfiguration;
 import dev.unzor.nexus.admin.application.service.GetNexusAccountService;
 import dev.unzor.nexus.admin.application.service.PanelSessionService;
 import dev.unzor.nexus.admin.application.service.RecordLoginService;
 import dev.unzor.nexus.admin.infrastructure.security.NexusAccountPrincipal;
 import dev.unzor.nexus.admin.infrastructure.security.PanelSessionInitializer;
+import dev.unzor.nexus.shared.security.NexusSessionAttributes;
+import dev.unzor.nexus.shared.security.SessionSummary;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
@@ -204,7 +204,7 @@ class PanelSessionController {
         if (session == null) {
             return null;
         }
-        Object value = session.getAttribute(PanelSessionConfiguration.SESSION_PUBLIC_ID);
+        Object value = session.getAttribute(NexusSessionAttributes.SESSION_PUBLIC_ID);
         return value instanceof String text ? UUID.fromString(text) : null;
     }
 

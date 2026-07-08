@@ -24,6 +24,25 @@ public final class NexusSessionAttributes {
     public static final String PROJECT_USER_ID = "nexus.projectUserId";
 
     /**
+     * Identificador público de gestión de una sesión, distinto del {@code JSESSIONID}
+     * interno de Spring Session y del ID interno de Redis. Lo fijan tanto el login del
+     * panel como el login de usuario final; se usa para listar y revocar sesiones sin
+     * exponer identificadores internos.
+     */
+    public static final String SESSION_PUBLIC_ID = "nexus.sessionPublicId";
+
+    /**
+     * Cabecera {@code User-Agent} truncada, almacenada a efectos informativos en el
+     * listado de sesiones.
+     */
+    public static final String USER_AGENT = "nexus.userAgent";
+
+    /**
+     * Longitud máxima del {@code User-Agent} almacenado en sesión.
+     */
+    public static final int USER_AGENT_MAX_LENGTH = 256;
+
+    /**
      * Atributo de sesión que fija {@code ProjectSessionAuthenticator} cuando la
      * contraseña es correcta pero el usuario tiene MFA TOTP activa: guarda un ticket
      * efímero (interno de identity) con el usuario, el instante de verificación de la
@@ -47,5 +66,19 @@ public final class NexusSessionAttributes {
      */
     public static String projectUserIndexValue(UUID userId) {
         return PROJECT_USER_INDEX_PREFIX + userId;
+    }
+
+    /**
+     * Trunca el {@code User-Agent} a la longitud máxima permitida; {@code null} se
+     * normaliza a cadena vacía. Compartido por el login del panel y el de usuario final
+     * para que ambas superficies almacenen el agente de la misma forma.
+     */
+    public static String truncateUserAgent(String userAgent) {
+        if (userAgent == null) {
+            return "";
+        }
+        return userAgent.length() <= USER_AGENT_MAX_LENGTH
+                ? userAgent
+                : userAgent.substring(0, USER_AGENT_MAX_LENGTH);
     }
 }

@@ -1,8 +1,9 @@
 package dev.unzor.nexus.admin.application.service;
 
-import dev.unzor.nexus.admin.api.dto.SessionSummary;
 import dev.unzor.nexus.admin.application.configuration.PanelSessionConfiguration;
 import dev.unzor.nexus.admin.domain.exception.SessionNotFoundException;
+import dev.unzor.nexus.shared.security.NexusSessionAttributes;
+import dev.unzor.nexus.shared.security.SessionSummary;
 import org.springframework.session.FindByIndexNameSessionRepository;
 import org.springframework.session.Session;
 import org.springframework.session.data.redis.RedisIndexedSessionRepository;
@@ -95,12 +96,12 @@ public class PanelSessionService {
     }
 
     private static boolean matchesPublicId(Session session, UUID publicSessionId) {
-        String value = session.getAttribute(PanelSessionConfiguration.SESSION_PUBLIC_ID);
+        String value = session.getAttribute(NexusSessionAttributes.SESSION_PUBLIC_ID);
         return value != null && value.equals(publicSessionId.toString());
     }
 
     private static SessionSummary toSummary(Session session, UUID currentSessionPublicId) {
-        String publicIdValue = session.getAttribute(PanelSessionConfiguration.SESSION_PUBLIC_ID);
+        String publicIdValue = session.getAttribute(NexusSessionAttributes.SESSION_PUBLIC_ID);
         UUID publicId = publicIdValue != null ? UUID.fromString(publicIdValue) : null;
         int maxInactive = session.getMaxInactiveInterval() != null
                 ? (int) session.getMaxInactiveInterval().toSeconds()
@@ -114,7 +115,7 @@ public class PanelSessionService {
         return new SessionSummary(
                 publicId,
                 currentSessionPublicId != null && currentSessionPublicId.equals(publicId),
-                session.getAttribute(PanelSessionConfiguration.USER_AGENT),
+                session.getAttribute(NexusSessionAttributes.USER_AGENT),
                 createdAt,
                 lastAccessedAt,
                 expiresAt,

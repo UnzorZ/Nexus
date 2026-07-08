@@ -271,3 +271,55 @@ export async function disableEndUserMfa(
     throw error;
   }
 }
+
+// ── Sesiones ────────────────────────────────────────────────────────────────────
+
+export type EndUserSessionSummary = {
+  id: string;
+  current: boolean;
+  userAgent: string | null;
+  createdAt: string;
+  lastAccessedAt: string;
+  expiresAt: string | null;
+  maxInactiveIntervalSeconds: number;
+};
+
+/** Lista las sesiones activas del usuario final (la actual primero). */
+export async function fetchEndUserSessions(
+  projectSlug: string,
+): Promise<EndUserSessionSummary[]> {
+  return apiClient.get<EndUserSessionSummary[]>(
+    apiRoutes.endUser.sessions.root(projectSlug),
+    { redirect: "manual", errorMessage: "No se pudo cargar la lista de sesiones." },
+  );
+}
+
+/** Revoca una sesión concreta por su identificador público. */
+export async function revokeEndUserSession(
+  projectSlug: string,
+  sessionId: string,
+): Promise<void> {
+  const csrfToken = await ensureCsrfToken(
+    apiRoutes.endUser.session.csrf(projectSlug),
+  );
+  await apiClient.delete<null>(apiRoutes.endUser.sessions.byId(projectSlug, sessionId), {
+    headers: { [CSRF_HEADER_NAME]: csrfToken },
+    redirect: "manual",
+    errorMessage: "No se pudo revocar la sesión.",
+  });
+}
+
+/** Revoca todas las sesiones del usuario final, incluida la actual. */
+export async function revokeAllEndUserSessions(
+  projectSlug: string,
+): Promise<void> {
+  const csrfToken = await ensureCsrfToken(
+    apiRoutes.endUser.session.csrf(projectSlug),
+  );
+  await apiClient.delete<null>(apiRoutes.endUser.sessions.root(projectSlug), {
+    headers: { [CSRF_HEADER_NAME]: csrfToken },
+    redirect: "manual",
+    errorMessage: "No se pudieron revocar las sesiones.",
+  });
+}
+
