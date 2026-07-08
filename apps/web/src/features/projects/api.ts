@@ -36,11 +36,6 @@ export type UpdateProjectPayload = {
   publicBaseUrl: string | null;
 };
 
-// Re-exportado desde la capa de API para mantener los imports existentes
-// (`from "@/features/projects/api"`); la implementación ahora vive centralizada
-// en `lib/api/errors.ts`.
-export { parseFieldErrors } from "@/lib/api/errors";
-
 export async function fetchProjects(): Promise<ProjectSummary[]> {
   return apiClient.get<ProjectSummary[]>(apiRoutes.panel.projects.root, {
     redirect: "manual",

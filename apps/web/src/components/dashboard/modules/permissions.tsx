@@ -9,7 +9,6 @@ import {
   StatTile,
   StatusBadge,
 } from "@/components/dashboard/shared";
-import { RelatedLinks } from "@/components/dashboard/modules/ModuleShell";
 import { tint } from "@/components/dashboard/anim";
 
 export function PermissionsModule() {
@@ -23,13 +22,6 @@ export function PermissionsModule() {
           <StatTile Icon={ShieldCheckIcon} iconBg={tint.red.bg} iconColor={tint.red.text} label="Default" value="Deny" hint="Fail-closed" />
         </div>
       </Panel>
-
-      <RelatedLinks
-        links={[
-          { href: "/dashboard/permissions", label: "Permission catalog", hint: "18 declared across sources" },
-          { href: "/dashboard/roles", label: "Roles", hint: "5 roles with wildcard permissions" },
-        ]}
-      />
 
       <Panel
         title="Declaration & snapshots"

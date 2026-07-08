@@ -7,9 +7,7 @@ import {
   disableOauthClient,
   fetchOauthClients,
   rotateOauthClient,
-  updateOauthClient,
   type CreateOauthClientPayload,
-  type UpdateOauthClientPayload,
 } from "./api";
 import { queryKeys } from "@/lib/api/queryKeys";
 import { withCsrf } from "@/lib/api/csrf";
@@ -28,16 +26,6 @@ export function useCreateOauthClient(projectId: string) {
   return useMutation({
     mutationFn: (payload: CreateOauthClientPayload) =>
       withCsrf((token) => createOauthClient(projectId, payload, token)),
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: queryKeys.projects.oauthClients(projectId) }),
-  });
-}
-
-export function useUpdateOauthClient(projectId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (vars: { id: string; payload: UpdateOauthClientPayload }) =>
-      withCsrf((token) => updateOauthClient(projectId, vars.id, vars.payload, token)),
     onSuccess: () =>
       qc.invalidateQueries({ queryKey: queryKeys.projects.oauthClients(projectId) }),
   });

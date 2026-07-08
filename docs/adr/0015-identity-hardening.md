@@ -46,20 +46,23 @@ multi-issuer server. Before identity can run in production, two classes of gap r
    secrets) are unaffected.
 
 4. **Branded consent page.** `authorizationEndpoint.consentPage("/oauth2/consent")` +
-   `ConsentController` + `templates/identity/project-consent.html`. **Multi-issuer note:**
-   SAS resolves the consent redirect as `{scheme}://{host}{consentPage}` and does **not**
-   preserve the `/p/{slug}` segment, so the consent form must POST back to
-   `/p/{slug}/oauth2/authorize` (not the global `/oauth2/authorize`) for the issuer to
-   resolve to the correct project realm. `ConsentController` reconstructs the slug from the
-   `client_id` (project client → `ProjectOauthClientRepository.findByClientId` →
-   `ProjectLookupService.requireSlug`); the global bootstrap client posts to
-   `/oauth2/authorize`. Only clients with `consent_required=true` trigger it (opt-in per
-   client; the bootstrap client requires consent by default).
+   `ConsentController`. Since the Thymeleaf removal the controller does **not** render
+   HTML: it 302-redirects to the Next.js consent page
+   (`{frontend base}/p/{slug}/oauth2/consent?client_id&scope&state&action=<abs authorize>&_csrf=<token>`),
+   forwarding the masked CSRF token so the AS-chain CSRF config stays untouched.
+   **Multi-issuer note:** SAS resolves the consent redirect as
+   `{scheme}://{host}{consentPage}` and does **not** preserve the `/p/{slug}` segment, so
+   the consent form must POST back to `/p/{slug}/oauth2/authorize` (not the global
+   `/oauth2/authorize`) for the issuer to resolve to the correct project realm.
+   `ConsentController` reconstructs the slug from the `client_id` (project client →
+   `ProjectOauthClientRepository.findByClientId` → `ProjectLookupService.requireSlug`);
+   the global bootstrap client posts to `/oauth2/authorize`. Only clients with
+   `consent_required=true` trigger it (opt-in per client; the bootstrap client requires
+   consent by default).
 
-5. **SP-initiated logout.** `GET/POST /p/{slug}/logout` invalidates the session, clears the
-   `SecurityContext`, and renders a branded signed-out page (`project-signed-out.html`).
-   `/p/*/logout` is `permitAll` so the signed-out page is reachable without a session; the
-   POST is still CSRF-protected.
+5. **End-user logout.** `POST /api/p/{slug}/logout` (JSON) invalidates the session and
+   clears the `SecurityContext`; the Next.js portal renders the signed-out UI. The POST is
+   CSRF-protected (the portal fetches `/api/p/{slug}/csrf` first).
 
 6. **RP-initiated logout + introspection: rely on SAS defaults, verify by test.**
    `.oidc(withDefaults())` already exposes the OIDC `end_session_endpoint`

@@ -1478,26 +1478,39 @@ with Next.js dashboard hosted separately or built as static assets if the chosen
 
 ### 20.2 Required Environment Variables
 
-```text
-NEXUS_PUBLIC_URL
-NEXUS_DATABASE_URL
-NEXUS_DATABASE_USERNAME
-NEXUS_DATABASE_PASSWORD
-NEXUS_ADMIN_BOOTSTRAP_EMAIL
-NEXUS_ADMIN_BOOTSTRAP_PASSWORD
-NEXUS_TOKEN_SIGNING_KEY_PATH
-NEXUS_API_KEY_PEPPER
-NEXUS_COOKIE_SECRET
-```
-
-Future module variables:
+These are the variables the API actually consumes (see `apps/api/src/main/resources/application*.properties`; `.env.example` documents each). Secrets marked ⚠ must be overridden from the dev default outside dev profiles (fail-closed otherwise).
 
 ```text
-NEXUS_SMTP_HOST
-NEXUS_SMTP_PASSWORD
-NEXUS_VAULT_MASTER_KEY
-NEXUS_STORAGE_PATH
+# Database / Redis
+NEXUS_DATASOURCE_URL            # jdbc:postgresql://...
+NEXUS_DATASOURCE_USERNAME
+NEXUS_DATASOURCE_PASSWORD
+NEXUS_REDIS_URL                 # redis://...
+
+# OAuth / OIDC signing keys (PKCS12 keystore; ⚠ override dev keystore in prod)
+NEXUS_OAUTH_JWK_KEYSTORE_LOCATION
+NEXUS_OAUTH_JWK_KEYSTORE_PASSWORD
+NEXUS_OAUTH_JWK_KEY_ALIAS
+NEXUS_OAUTH_JWK_KEY_PASSWORD
+NEXUS_OAUTH_BOOTSTRAP_CLIENT_SECRET   # technical bootstrap client
+
+# Vault (⚠ override dev master key in prod)
+NEXUS_VAULT_MASTER_KEY          # derives AES key for TOTP secret + vault encryption
+
+# Frontend / external API base (OAuth redirects, email links)
+NEXUS_API_EXTERNAL_BASE_URL     # absolute base of the API as reachable externally
+NEXUS_FRONTEND_BASE_URL         # Next.js dashboard base
+
+# Spring Session (Redis-backed, shared panel + end-user)
+NEXUS_SESSION_TIMEOUT
+NEXUS_SESSION_COOKIE_NAME / _PATH / _HTTP_ONLY / _SAME_SITE / _SECURE / _MAX_AGE
+NEXUS_SESSION_REVOCATION_RESUBMIT_INTERVAL / _BATCH_SIZE / _MAX_IN_FLIGHT / _MIN_AGE
+
+# SMTP (transactional email: verify/reset/MFA notices, offline-notify)
+NEXUS_SMTP_HOST / _PORT / _USERNAME / _PASSWORD / _FROM ...
 ```
+
+The first registered account becomes `instanceAdmin` automatically (open registration bootstrap); there are no `NEXUS_ADMIN_BOOTSTRAP_*` credentials. JWT signing keys come from the PKCS12 keystore (not a `*_KEY_PATH`), API-key hashing uses the vault master key (not a separate pepper), and CSRF uses the standard `XSRF-TOKEN` double-submit cookie (no `NEXUS_COOKIE_SECRET`).
 
 ### 20.3 Operational Requirements
 
