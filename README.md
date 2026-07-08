@@ -1,73 +1,136 @@
+<div align="center">
+
+<img src="nexus-logo.png" alt="Nexus" width="160"/>
+
 # Nexus
 
-Nexus is a self-hosted control plane for projects: API keys, project-scoped
-identity, permissions, module activation, audit logs, notifications, encrypted
-secrets, configuration, metrics, and runtime registry/heartbeat.
+**A self-hosted control plane for multi-tenant apps: project-scoped OAuth2/OIDC, permissions, API keys, audit, and encrypted secrets — in one modular monolith.**
 
-It is built as a modular monolith: one Spring Boot backend with strong module
-boundaries, one Next.js dashboard, PostgreSQL as the durable database, and Redis
-for revokable sessions and bounded ephemeral state.
+[![CI](https://github.com/UnzorZ/Nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/UnzorZ/Nexus/actions/workflows/ci.yml)
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
+![Java](https://img.shields.io/badge/Java-21-orange.svg)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.0.6-6DB33F.svg)
+![Next.js](https://img.shields.io/badge/Next.js-16-black.svg)
 
-> Status: active development. The project is useful for local exploration, but
-> production deployment still needs a real secrets/keystore setup and the usual
-> operational hardening. Licensed under [AGPL-3.0](#license).
+</div>
+
+Nexus is the identity, authorization, and operational backbone for a family of
+project-scoped applications. Each **project** is its own tenant: its own users,
+OAuth/OIDC realm (with its own issuer), roles & permissions, API keys, audit
+trail, encrypted secrets, and runtime registry. You run it on your own
+infrastructure; your apps integrate over standard OAuth2/OIDC.
+
+It ships as a **modular monolith**: one Spring Boot backend with strict module
+boundaries (Spring Modulith), one Next.js dashboard, PostgreSQL as the source of
+truth, and Redis for revocable sessions and bounded ephemeral state.
+
+> **Status:** active development. Useful for local exploration and self-hosting
+> today; production deployments still need real secrets/keystore setup and the
+> usual operational hardening (see [Self-Hosting](#self-hosting-production)).
+
+---
+
+## Who is this for
+
+- **Teams running several apps/services** that want shared, project-scoped
+  identity, API keys, and permissions **without** adopting a hosted IdP.
+- **Self-hosters** who want a control plane they fully own (data, keys, audit)
+  under a strong copyleft license.
+- **Builders** who want a reference for how to issue **per-tenant OAuth2/OIDC**
+  and **embed fine-grained permissions in access tokens**.
+
+## Why Nexus
+
+- **Per-project OAuth/OIDC issuer** — every project is its own issuer at
+  `{origin}/p/{slug}`, with its own JWKS, authorize/token/userinfo, consent, and
+  RP-initiated logout (ADR-0016).
+- **Permissions baked into the token** — the access token carries the user's
+  effective permission keys (wildcards verbatim) so a resource server can
+  authorize **locally from the JWT**, with `authz_version`-based revocation via
+  introspection (ADR-0003).
+- **Strong module isolation** — `projects`, `identity`, `permissions`, `api-keys`,
+  `audit`, `vault`, `notify`, `heartbeat`, `modules`… each with its own boundary,
+  communicating through `shared` events (not direct imports).
+- **Fail-closed by default** — production secrets are required; dev keystores and
+  dev vault keys are rejected outside dev/test profiles.
+
+## Architecture
+
+```mermaid
+graph TB
+  subgraph Browser
+    UI["Next.js dashboard :3000<br/>(panel + project console)"]
+  end
+  RP["Relying Party / Resource Server<br/>examples/spring-client-app"]
+  subgraph API["Spring Boot API :8080 (Spring Modulith)"]
+    direction TB
+    PANEL["Panel surface — NexusAccount sessions + CSRF"]
+    AS["OAuth2/OIDC Authorization Server<br/>per-project issuer /p/{slug}"]
+    MODS["projects · identity · permissions · api-keys<br/>audit · vault · notify · heartbeat · modules"]
+  end
+  PG[("PostgreSQL")]
+  RD[("Redis<br/>sessions · CSRF · ephemeral")]
+  UI -->|HTTPS + CORS + CSRF| PANEL
+  RP -->|"authorization-code + PKCE<br/>local JWT validation"| AS
+  PANEL --> MODS
+  AS --> MODS
+  MODS --> PG
+  MODs -.->|sessions / ephemeral| RD
+```
 
 ## What Nexus Provides
 
-- **Control-plane accounts**: Nexus accounts, instance administration, panel
+- **Control-plane accounts** — Nexus accounts, instance administration, panel
   login, CSRF, Redis-backed sessions, and session revocation.
-- **Projects**: project registry, memberships, ownership, and project status.
-- **API keys**: project-identifying keys, hashed secrets, scopes, runtime
+- **Projects** — registry, memberships, ownership, and project status.
+- **API keys** — project-identifying keys, hashed secrets, scopes, runtime
   authentication, and instance-token handshakes for high-frequency calls.
-- **Permissions**: project permission catalog, roles, direct assignments,
-  wildcard resolution, checks, and snapshots.
-- **Identity**: project users, per-project OAuth/OIDC realms, OAuth clients,
-  JWT/JWKS, consent, logout, and persisted authorizations.
-- **Modules**: per-project module enablement and request gating.
-- **Audit**: central audit trail for sensitive actions.
-- **Registry**: app registration and heartbeat/liveness tracking.
-- **Notify**: templates, project/instance SMTP settings, and email delivery.
-- **Vault**: encrypted project secrets with project-level master key support.
-- **Config and metrics**: project configuration values and append-only metrics.
+- **Permissions** — per-project permission catalog, roles, assignments, wildcard
+  resolution, checks, and snapshots.
+- **Identity** — project users, per-project OAuth/OIDC realms, OAuth clients,
+  JWT/JWKS, MFA (TOTP), consent, logout, and persisted authorizations.
+- **Modules** — per-project module enablement and request gating.
+- **Audit** — central audit trail for sensitive actions.
+- **Registry** — app registration and heartbeat/liveness tracking.
+- **Notify** — templates, project/instance SMTP settings, and email delivery.
+- **Vault** — encrypted project secrets with project-level master-key support.
+- **Config & metrics** — project configuration values and append-only metrics.
 
 ## Repository Layout
 
 ```text
 .
 ├── apps/
-│   ├── api/   # Spring Boot backend
+│   ├── api/   # Spring Boot backend (Gradle: :apps:nexus-api)
 │   └── web/   # Next.js dashboard
 ├── docs/
-│   ├── adr/
-│   ├── auth/
-│   ├── deployment/
-│   └── modules/
+│   ├── adr/              # architecture decision records
+│   ├── auth/             # identity & account model
+│   ├── deployment/       # backups, jwt-signing-keys, redis, production
+│   ├── modules/          # per-module docs
+│   └── nexus-technical-spec.md
 ├── examples/
-├── gradle/
-├── compose.yaml
-├── settings.gradle
-└── AGENTS.md
+│   └── spring-client-app/   # reference OIDC client + resource server (Boot 4)
+├── compose.yaml            # dev: postgres + redis + next dev
+├── compose.prod.yaml       # prod: builds API + dashboard images, fails fast on dev secrets
+└── settings.gradle
 ```
-
-The backend Gradle project is named `:apps:nexus-api` in
-`settings.gradle`.
 
 ## Requirements
 
 - Java 21
 - Docker + Docker Compose
-- Node.js 22 if running the dashboard outside Docker
-- npm if running the dashboard outside Docker
+- Node.js 22 (only if running the dashboard outside Docker)
 
 ## Quick Start
 
 From the repository root:
 
 ```bash
-# Starts PostgreSQL, Redis, and the Next.js dev container.
+# PostgreSQL + Redis + the Next.js dev container
 docker compose up -d
 
-# Starts the Spring Boot API.
+# Spring Boot API
 ./gradlew :apps:nexus-api:bootRun
 ```
 
@@ -78,64 +141,60 @@ Open:
 - Readiness: http://localhost:8080/actuator/health/readiness
 - OpenAPI UI: http://localhost:8080/swagger-ui.html
 
-The first registered Nexus account becomes the initial instance admin.
+**First run:** the first Nexus account you register becomes the initial instance
+admin. From the dashboard, create a **project**, then explore its surfaces:
+**Members · Roles · Permissions · API keys · OAuth clients · Audit**. To see the
+OAuth/permissions flow end-to-end, follow the
+[reference client + resource-server app](examples/spring-client-app/README.md).
 
-### Local Frontend Instead Of Docker
-
-If you prefer running Next.js directly on the host:
+### Local frontend instead of Docker
 
 ```bash
 docker compose up -d postgres redis
-
-cd apps/web
-npm install
-npm run dev
-```
-
-In another shell, from the repository root:
-
-```bash
+cd apps/web && npm install && npm run dev   # :3000
+# in another shell, from the repo root:
 ./gradlew :apps:nexus-api:bootRun
 ```
 
-The host-run frontend reads `apps/web/.env.local`, not the repository-root
-`.env`.
+The host-run frontend reads `apps/web/.env.local`, not the repository-root `.env`.
 
 ## Self-Hosting (Production)
 
-`compose.prod.yaml` builds production images for the API and the dashboard and wires
-them to PostgreSQL and Redis. It fails fast until real secrets are provided.
+`compose.prod.yaml` builds production images for the API and the dashboard and
+wires them to PostgreSQL and Redis. It **fails fast** until real secrets are
+provided.
 
 ```bash
-cp .env.example .env        # fill in real secrets + a JWT keystore path
+cp .env.example .env        # fill in REAL secrets + a JWT keystore path
 docker compose -f compose.prod.yaml up -d --build
 ```
 
-Required to boot (the API aborts otherwise — see `IdentityStartupGuard` and
-`VaultCrypto`):
+Required to boot (the API aborts otherwise — `IdentityStartupGuard`, `VaultCrypto`):
 
-- a real JWT signing keystore (`NEXUS_OAUTH_JWK_KEYSTORE_LOCATION`, mounted into the
-  container);
+- a real JWT signing keystore (`NEXUS_OAUTH_JWK_KEYSTORE_LOCATION`, mounted into the container);
 - a real OAuth bootstrap client secret and a real Vault master key;
 - managed or locked-down PostgreSQL and Redis.
 
-Infrastructure metrics are exposed at `GET /actuator/prometheus` (see the
-[threat model](docs/threat-model.md) for hardening guidance).
+See the **[production runbook](docs/deployment/production.md)** for the full
+checklist (secrets, monitoring, backups, upgrades) and
+[JWT signing keys](docs/deployment/jwt-signing-keys.md),
+[Redis](docs/deployment/redis.md),
+[PostgreSQL backups](docs/deployment/backups.md).
 
 ## Configuration
 
-Local defaults are intentionally convenient:
+Local defaults are intentionally convenient (dev only — rejected outside
+dev/test profiles):
 
-- PostgreSQL: `nexus / nexus / nexus`
-- Redis: `redis://localhost:6379`
-- OAuth bootstrap client secret: `changeme-local-dev`
-- JWT signing keystore: `classpath:keystore/dev-jwk.p12`
-- Vault master key: `nexus-dev-vault-master-key-do-not-use-in-prod`
+| Setting | Dev default |
+|---|---|
+| PostgreSQL | `nexus / nexus / nexus` |
+| Redis | `redis://localhost:6379` |
+| OAuth bootstrap client secret | `changeme-local-dev` |
+| JWT signing keystore | `classpath:keystore/dev-jwk.p12` |
+| Vault master key | `nexus-dev-vault-master-key-do-not-use-in-prod` |
 
-These values are for local development only. The backend fails closed outside
-explicit dev/test profiles when development identity or vault secrets are used.
-
-Production-like deployments should set at least:
+Production should set at least:
 
 ```bash
 NEXUS_DATASOURCE_URL=jdbc:postgresql://...
@@ -145,25 +204,17 @@ NEXUS_REDIS_URL=redis://...
 NEXUS_FRONTEND_BASE_URL=https://...
 NEXUS_OAUTH_BOOTSTRAP_CLIENT_SECRET=...
 NEXUS_OAUTH_JWK_KEYSTORE_LOCATION=file:/etc/nexus/jwt-keystore.p12
-NEXUS_OAUTH_JWK_KEYSTORE_PASSWORD=...
-NEXUS_OAUTH_JWK_KEY_ALIAS=...
-NEXUS_OAUTH_JWK_KEY_PASSWORD=...
+NEXUS_OAUTH_JWK_KEYSTORE_PASSWORD=... ; NEXUS_OAUTH_JWK_KEY_ALIAS=... ; NEXUS_OAUTH_JWK_KEY_PASSWORD=...
 NEXUS_VAULT_MASTER_KEY=...
 ```
 
-See [JWT signing keys](docs/deployment/jwt-signing-keys.md) and
-[Redis](docs/deployment/redis.md) for more detail.
+Infrastructure metrics are exposed at `GET /actuator/prometheus` (see the
+[threat model](docs/threat-model.md) for hardening guidance).
 
 ## Remote Development
 
-Remote browser testing over HTTPS tunnels needs different cookie and CORS
-settings. Use the `remote-dev` Spring profile and expose both the backend and
-frontend with HTTPS tunnel URLs.
-
-The full zrok runbook lives in [AGENTS.md](AGENTS.md), under
-`Remote development over zrok (HTTPS tunnels)`.
-
-The essential backend shape is:
+Remote browser testing over HTTPS tunnels needs different cookie/CORS settings.
+Use the `remote-dev` Spring profile and expose backend + frontend over HTTPS:
 
 ```bash
 SPRING_PROFILES_ACTIVE=remote-dev \
@@ -173,51 +224,22 @@ SPRING_DOCKER_COMPOSE_LIFECYCLE_MANAGEMENT=START_ONLY \
 ./gradlew :apps:nexus-api:bootRun
 ```
 
-## Tests And Quality
+The full zrok runbook lives in [AGENTS.md](AGENTS.md) under *Remote development
+over zrok*.
 
-Backend:
-
-```bash
-./gradlew :apps:nexus-api:test
-./gradlew build
-```
-
-Frontend:
+## Tests & Quality
 
 ```bash
-cd apps/web
-npm run lint
-npm run build
+./gradlew :apps:nexus-api:test          # backend (Testcontainers — needs Docker)
+cd examples/spring-client-app && ./gradlew build   # reference app
+cd apps/web && npm run lint && npm run build        # dashboard
 ```
-
-Some backend tests use Testcontainers. Keep Docker running when executing the
-full suite.
-
-## Architecture Notes
-
-- Nexus is a **modular monolith** using Spring Modulith.
-- PostgreSQL is the durable source of truth.
-- Redis is shared, bounded ephemeral infrastructure for sessions and related
-  security state.
-- API keys identify projects, not human users.
-- Nexus accounts and project users are intentionally separate identities.
-- Authorization is fail-closed by default.
-- API key secrets and user passwords are never stored in plain text.
-
-Useful starting points:
-
-- [Technical spec](docs/nexus-technical-spec.md)
-- [ADR-0001: Nexus is the source of truth](docs/adr/0001-nexus-source-of-truth.md)
-- [ADR-0002: Modular monolith with Spring Modulith](docs/adr/0002-modular-monolith-with-spring-modulith.md)
-- [Accounts and project users](docs/auth/accounts-and-project-users.md)
-- [Identity module](docs/modules/identity.md)
 
 ## Security Notes
 
-This repository includes development-only secrets and keystores so the project
-can boot locally without extra setup. They are deliberately named as dev
-defaults and are rejected outside explicit development/test profiles where
-appropriate.
+This repository includes development-only secrets and a dev keystore so the
+project boots locally without extra setup. They are deliberately named as dev
+defaults and rejected outside explicit development/test profiles.
 
 Before running Nexus outside local development:
 
@@ -228,14 +250,32 @@ Before running Nexus outside local development:
 - configure HTTPS, secure cookies, and production CORS;
 - review module exposure and API key scopes.
 
+Vulnerability reporting: see [SECURITY.md](SECURITY.md).
+
+## Going Deeper
+
+- [Technical spec](docs/nexus-technical-spec.md) · [Threat model](docs/threat-model.md)
+- [ADR-0001: Nexus is the source of truth](docs/adr/0001-nexus-source-of-truth.md) ·
+  [ADR-0002: Modular monolith](docs/adr/0002-modular-monolith-with-spring-modulith.md)
+- [Accounts vs. project users](docs/auth/accounts-and-project-users.md) ·
+  [Identity module](docs/modules/identity.md) ·
+  [Production deployment](docs/deployment/production.md)
+- [Reference client + resource server](examples/spring-client-app/README.md)
+
+## Contributing
+
+Contributions are welcome under AGPL-3.0 — see [CONTRIBUTING.md](CONTRIBUTING.md)
+(setup, module-boundary rules, the Spring Modulith gotchas) and the
+[Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## License
 
 Nexus is licensed under the [GNU Affero General Public License v3.0](LICENSE).
 
-AGPL-3.0 is a strong copyleft license: you may use, study, modify, and redistribute
-the software, **including** when you make it available over a network (e.g. as a
-hosted service). Modifications and derivative works that you expose as a network
-service must be offered to their users under the same AGPL-3.0 terms, including
-access to the corresponding source code. See `LICENSE` for the full text and
-[https://www.gnu.org/licenses/agpl-3.0.html](https://www.gnu.org/licenses/agpl-3.0.html)
-for a quick summary.
+AGPL-3.0 is a strong copyleft license: you may use, study, modify, and
+redistribute the software, **including** when you make it available over a
+network (e.g. as a hosted service). Modifications and derivative works that you
+expose as a network service must be offered to their users under the same
+AGPL-3.0 terms, including access to the corresponding source code. See `LICENSE`
+for the full text and
+[https://www.gnu.org/licenses/agpl-3.0.html](https://www.gnu.org/licenses/agpl-3.0.html).
