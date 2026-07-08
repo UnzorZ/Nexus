@@ -10,8 +10,12 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.ObjectMapper;
 
+import java.io.IOException;
+import java.io.OutputStream;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -36,13 +40,17 @@ public class AuditQueryService {
 
     static final int DEFAULT_SIZE = 50;
     static final int MAX_SIZE = 100;
+    private static final int EXPORT_SLICE_SIZE = 1000;
     private static final String ACTOR_ACCOUNT = "NEXUS_ACCOUNT";
 
     private final AuditLogRepository repository;
     private final AccountDirectory accountDirectory;
+    private final ObjectMapper objectMapper;
 
-    public AuditQueryService(AuditLogRepository repository, AccountDirectory accountDirectory) {
+    public AuditQueryService(AuditLogRepository repository, AccountDirectory accountDirectory,
+                             ObjectMapper objectMapper) {
         this.repository = repository;
+        this.objectMapper = objectMapper;
         this.accountDirectory = accountDirectory;
     }
 
@@ -65,6 +73,41 @@ public class AuditQueryService {
                     account != null ? account.email() : null,
                     account != null ? account.instanceAdmin() : null);
         });
+    }
+
+    /**
+     * Retención: borra las entradas anteriores al {@code cutoff}. Devuelve cuántas
+     * filas se eliminaron (para logging del job). Ejecutado por el job programado de
+     * retención; el borrado es global (todas las entradas, sin distinguir proyecto),
+     * ya que es una preocupación de tamaño de la tabla, no de aislamiento.
+     */
+    @Transactional
+    public long purgeOlderThan(Instant cutoff) {
+        return repository.deleteOlderThan(cutoff);
+    }
+
+    /**
+     * Exporta el log de un proyecto como NDJSON (un objeto JSON por línea, más
+     * recientes primero) escribiendo directamente al {@link OutputStream} de la
+     * respuesta. Pagina internamente ({@link #EXPORT_SLICE_SIZE}) para acotar
+     * memoria; el {@code since} opcional acota por fecha. Cada línea es un
+     * {@link AuditEventView} sin enriquecer (registro crudo y portable).
+     */
+    @Transactional(readOnly = true)
+    public void exportForProject(UUID projectId, Instant since, OutputStream out) throws IOException {
+        int page = 0;
+        List<AuditLogEntry> slice;
+        do {
+            slice = since == null
+                    ? repository.findExportSliceByProject(projectId, PageRequest.of(page, EXPORT_SLICE_SIZE))
+                    : repository.findExportSliceByProjectAndSince(projectId, since, PageRequest.of(page, EXPORT_SLICE_SIZE));
+            for (AuditLogEntry entry : slice) {
+                out.write(objectMapper.writeValueAsBytes(AuditEventView.from(entry)));
+                out.write('\n');
+            }
+            page++;
+        } while (slice.size() == EXPORT_SLICE_SIZE);
+        out.flush();
     }
 
     /** IDs de cuenta de los actores NEXUS_ACCOUNT de la página (para resolver en una sola consulta). */
