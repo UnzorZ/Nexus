@@ -1208,7 +1208,8 @@ JWT claims:
   "iat": 1769996400,
   "scope": "openid profile",
   "project_id": "prj_123",
-  "authz_version": 42
+  "authz_version": 42,
+  "permissions": ["orders.*", "orders.read"]
 }
 ```
 
@@ -1216,7 +1217,15 @@ Rules:
 
 - Tokens must never cross project boundaries.
 - Project ID must be included as a claim.
-- Permissions should not be fully embedded by default; use snapshot API for fresh authorization.
+- The user's effective permission keys are embedded as the `permissions` claim
+  (wildcards `orders.*` / `*` verbatim, ADR-0003) in the access token, ID token
+  and `/userinfo`, so a resource server can authorize locally from the JWT.
+  This is an **optimistic** snapshot: a role change does not reach a
+  locally-validating consumer until the token's `exp` (access tokens are
+  short-lived, 10 min — see §15.2 / ADR-0016). For revocation-sensitive
+  decisions, validate via `/oauth2/introspect` (it enforces `authz_version`) or
+  call the permission snapshot/check API for authoritative authorization. The
+  snapshot/check API remains the source of truth for fresh decisions.
 - Roles may optionally be included later, but Nexus remains the permission source of truth.
 
 ### 15.4 Auth Flow MVP

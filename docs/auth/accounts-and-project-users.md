@@ -162,6 +162,16 @@ distintos en proyectos distintos.
 `authzVersion` debe incrementarse cada vez que cambien los roles, permisos
 directos u otra información que altere los permisos efectivos del usuario.
 
+El access token (y el ID token + `/userinfo`) incluye el claim `permissions`
+con las claves de permiso efectivas del usuario (comodines `orders.*` / `*`
+verbatim, ADR-0003), lo que permite a un resource server autorizar en local del
+JWT. Ese snapshot es **optimista**: un cambio de rol no llega a quien valida el
+JWT localmente hasta que el token expira (`exp`, 10 min). `authzVersion` es el
+contrato de revocación: incrementarlo invalida el token ante introspection
+(`active:false`); los resource servers que validan en local honran el snapshot
+de `permissions` hasta `exp`. Para decisiones sensibles a revocación, usar
+introspection o el API de snapshot/check.
+
 ### ProjectUserStatus
 
 Archivo:
