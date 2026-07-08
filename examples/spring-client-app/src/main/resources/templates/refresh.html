@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Refresh-token demo — Nexus reference app</title>
+    <style>
+        body { font: 14px/1.5 system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+        code { background: #f4f4f5; padding: .1rem .3rem; border-radius: 4px; word-break: break-all; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { text-align: left; padding: .35rem .5rem; border-bottom: 1px solid #eee; vertical-align: top; }
+        th { width: 30%; color: #555; }
+        a { color: #4f46e5; }
+    </style>
+</head>
+<body>
+<h1>Refresh-token demo</h1>
+<p>
+    The Spring Security OAuth2 client keeps a refresh token for your session. When
+    the access token nears expiry it is renewed automatically using that refresh
+    token (Nexus issues refresh tokens — ADR-0016 §5). Reload this page after the
+    token's expiry to see a freshly minted access token.
+</p>
+
+<table>
+    <tr>
+        <th>Access token (truncated)</th>
+        <td><code th:text="${#strings.substring(accessTokenValue, 0, 40) + '…'}">…</code></td>
+    </tr>
+    <tr>
+        <th>Access token expires at</th>
+        <td><code th:text="${accessTokenExpiresAt}">-</code></td>
+    </tr>
+    <tr>
+        <th>Now</th>
+        <td><code th:text="${now}">-</code></td>
+    </tr>
+    <tr>
+        <th>Refresh token present</th>
+        <td><code th:text="${hasRefreshToken}">-</code></td>
+    </tr>
+</table>
+
+<p><a href="/">← back home</a></p>
+</body>
+</html>
