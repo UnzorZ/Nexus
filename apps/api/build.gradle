@@ -32,6 +32,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-authorization-server'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'com.bucket4j:bucket4j-core:8.10.1'
     implementation 'org.flywaydb:flyway-database-postgresql'
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.2'
     implementation 'org.springframework.modulith:spring-modulith-starter-core'
@@ -70,6 +71,12 @@ dependencyManagement {
 
 tasks.named('test') {
     useJUnitPlatform()
+    // Rate limiting is a network-level concern. Disable it in the test JVM so the
+    // shared integration-test context (a single RateLimitBucketStore singleton,
+    // keyed by the loopback IP) isn't throttled once the suite exceeds the first
+    // N auth calls. Rate-limit logic is covered by RateLimitFilterTest /
+    // RateLimitBucketStoreTest; the real behavior is verified by the runtime smoke.
+    systemProperty 'nexus.ratelimit.enabled', 'false'
 }
 
 tasks.named('bootRun') {
