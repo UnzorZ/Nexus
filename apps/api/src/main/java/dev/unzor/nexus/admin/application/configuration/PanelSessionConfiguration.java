@@ -49,23 +49,10 @@ public class PanelSessionConfiguration {
      */
     public static final String ACCOUNT_ID = "nexus.accountId";
 
-    /**
-     * Identificador público de la sesión, distinto del {@code JSESSIONID} interno de
-     * Spring Session y del ID interno de Redis. Se usa para la gestión de sesiones
-     * (listado y revocación) sin exponer identificadores internos.
-     */
-    public static final String SESSION_PUBLIC_ID = "nexus.sessionPublicId";
-
-    /**
-     * Cabecera {@code User-Agent} truncada, almacenada a efectos informativos en el
-     * listado de sesiones.
-     */
-    public static final String USER_AGENT = "nexus.userAgent";
-
-    /**
-     * Longitud máxima del {@code User-Agent} almacenado en sesión.
-     */
-    public static final int USER_AGENT_MAX_LENGTH = 256;
+    // Los identificadores públicos de sesión ({@code nexus.sessionPublicId},
+    // {@code nexus.userAgent} y su longitud máxima) viven ahora en
+    // {@link dev.unzor.nexus.shared.security.NexusSessionAttributes}, compartidos con
+    // el portal de usuario final.
 
     /**
      * Aplica el intervalo de inactividad máximo del repositorio desde

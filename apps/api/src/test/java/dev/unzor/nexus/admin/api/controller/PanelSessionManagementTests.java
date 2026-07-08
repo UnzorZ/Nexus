@@ -5,6 +5,7 @@ import tools.jackson.databind.ObjectMapper;
 import dev.unzor.nexus.TestcontainersConfiguration;
 import dev.unzor.nexus.admin.application.configuration.PanelSessionConfiguration;
 import dev.unzor.nexus.admin.persistence.repository.NexusAccountRepository;
+import dev.unzor.nexus.shared.security.NexusSessionAttributes;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -129,7 +130,7 @@ class PanelSessionManagementTests {
 
         var created = writer.createSession();
         created.setAttribute(PanelSessionConfiguration.ACCOUNT_ID, account.getId().toString());
-        created.setAttribute(PanelSessionConfiguration.SESSION_PUBLIC_ID, UUID.randomUUID().toString());
+        created.setAttribute(NexusSessionAttributes.SESSION_PUBLIC_ID, UUID.randomUUID().toString());
         writer.save(created);
 
         RedisIndexedSessionRepository reader = new RedisIndexedSessionRepository(operations);

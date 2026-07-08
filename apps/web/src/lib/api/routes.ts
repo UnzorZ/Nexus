@@ -30,6 +30,11 @@ export const apiRoutes = {
       disable: (projectSlug: string) => apiUrl(`/api/p/${slug(projectSlug)}/mfa/disable`),
       status: (projectSlug: string) => apiUrl(`/api/p/${slug(projectSlug)}/mfa/status`),
     },
+    sessions: {
+      root: (projectSlug: string) => apiUrl(`/api/p/${slug(projectSlug)}/sessions`),
+      byId: (projectSlug: string, sessionId: string) =>
+        apiUrl(`/api/p/${slug(projectSlug)}/sessions/${encodeURIComponent(sessionId)}`),
+    },
     register: (projectSlug: string) => apiUrl(`/api/p/${slug(projectSlug)}/register`),
     verifyEmail: (projectSlug: string) => apiUrl(`/api/p/${slug(projectSlug)}/verify-email`),
     resendVerification: (projectSlug: string) =>

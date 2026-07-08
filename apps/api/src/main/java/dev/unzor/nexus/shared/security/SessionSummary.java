@@ -1,15 +1,16 @@
-package dev.unzor.nexus.admin.api.dto;
+package dev.unzor.nexus.shared.security;
 
 import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Vista inmutable y segura de una sesión del panel.
+ * Vista inmutable y segura de una sesión, compartida por el panel (cuenta Nexus) y el
+ * portal de usuario final (ProjectUser).
  *
  * <p>El identificador expuesto ({@code id}) es el identificador público de gestión
- * ({@code nexus.sessionPublicId}), nunca el ID interno de Spring Session ni el valor de
- * la cookie {@code JSESSIONID}. El instante de expiración se calcula como
- * {@code lastAccessedAt + maxInactiveIntervalSeconds}.</p>
+ * ({@link NexusSessionAttributes#SESSION_PUBLIC_ID}), nunca el ID interno de Spring
+ * Session ni el valor de la cookie {@code JSESSIONID}. El instante de expiración se
+ * calcula como {@code lastAccessedAt + maxInactiveIntervalSeconds}.</p>
  *
  * @param id identificador público de gestión de la sesión
  * @param current si es la sesión con la que se hizo la petición actual
