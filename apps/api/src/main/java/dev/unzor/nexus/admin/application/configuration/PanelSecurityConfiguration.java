@@ -83,6 +83,7 @@ class PanelSecurityConfiguration {
                         .requestMatchers(HttpMethod.GET, "/api/panel/v1/csrf").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/panel/v1/accounts").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/panel/v1/session/login").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/panel/v1/session/login/mfa").permitAll()
                         .anyRequest().authenticated()
                 )
                 .authenticationProvider(authenticationProvider)

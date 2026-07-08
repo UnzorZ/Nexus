@@ -2,10 +2,13 @@ package dev.unzor.nexus.identity.application.service;
 
 import dev.unzor.nexus.identity.domain.entity.ProjectUser;
 import dev.unzor.nexus.identity.domain.entity.ProjectUserRecoveryCode;
-import dev.unzor.nexus.identity.infrastructure.IdentityTokens;
 import dev.unzor.nexus.identity.persistence.repository.ProjectUserRecoveryCodeRepository;
 import dev.unzor.nexus.identity.persistence.repository.ProjectUserRepository;
 import dev.unzor.nexus.shared.audit.OutboundTransactionalEmail;
+import dev.unzor.nexus.shared.security.Base32;
+import dev.unzor.nexus.shared.security.SecureHashes;
+import dev.unzor.nexus.shared.security.TotpCrypto;
+import dev.unzor.nexus.shared.security.TotpGenerator;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,7 +28,7 @@ import java.util.UUID;
  *   <li>{@link #disable} — verifica un código (TOTP o recovery) y desactiva + borra.</li>
  * </ul>
  * El secret se cifra (reversible) vía {@link TotpCrypto}; los recovery codes se hashean
- * (single-use) vía {@link IdentityTokens#hash}.
+ * (single-use) vía {@link SecureHashes#sha256Hex}.
  */
 @Service
 @Transactional
@@ -151,7 +154,7 @@ public class ProjectUserMfaService {
         if (code == null || code.isBlank()) {
             return false;
         }
-        return recoveryCodeRepository.findByCodeHashAndConsumedAtIsNull(IdentityTokens.hash(code.trim()))
+        return recoveryCodeRepository.findByCodeHashAndConsumedAtIsNull(SecureHashes.sha256Hex(code.trim()))
                 .map(rc -> { rc.consume(now); recoveryCodeRepository.save(rc); return true; })
                 .orElse(false);
     }
@@ -164,7 +167,7 @@ public class ProjectUserMfaService {
             random.nextBytes(bytes);
             String code = Base32.encode(bytes);
             plaintext.add(code);
-            entities.add(new ProjectUserRecoveryCode(userId, IdentityTokens.hash(code), now));
+            entities.add(new ProjectUserRecoveryCode(userId, SecureHashes.sha256Hex(code), now));
         }
         recoveryCodeRepository.saveAll(entities);
         return plaintext;

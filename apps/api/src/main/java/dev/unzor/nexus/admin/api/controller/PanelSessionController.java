@@ -5,23 +5,21 @@ import dev.unzor.nexus.admin.api.requests.LoginRequest;
 import dev.unzor.nexus.admin.application.service.GetNexusAccountService;
 import dev.unzor.nexus.admin.application.service.PanelSessionService;
 import dev.unzor.nexus.admin.application.service.RecordLoginService;
+import dev.unzor.nexus.admin.domain.exception.MfaRequiredException;
 import dev.unzor.nexus.admin.infrastructure.security.NexusAccountPrincipal;
-import dev.unzor.nexus.admin.infrastructure.security.PanelSessionInitializer;
+import dev.unzor.nexus.admin.infrastructure.security.PanelSessionAuthenticator;
 import dev.unzor.nexus.shared.security.NexusSessionAttributes;
 import dev.unzor.nexus.shared.security.SessionSummary;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.web.authentication.logout.SecurityContextLogoutHandler;
-import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -33,6 +31,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.springframework.http.HttpStatus.NO_CONTENT;
@@ -44,23 +43,19 @@ class PanelSessionController {
     private final GetNexusAccountService getNexusAccountService;
     private final PanelSessionService panelSessionService;
     private final RecordLoginService recordLoginService;
-    private final PanelSessionInitializer sessionInitializer;
-    private final AuthenticationManager authenticationManager;
+    private final PanelSessionAuthenticator sessionAuthenticator;
     private final SecurityContextLogoutHandler logoutHandler = new SecurityContextLogoutHandler();
-    private final HttpSessionSecurityContextRepository securityContextRepository = new HttpSessionSecurityContextRepository();
 
     PanelSessionController(
             GetNexusAccountService getNexusAccountService,
             PanelSessionService panelSessionService,
             RecordLoginService recordLoginService,
-            PanelSessionInitializer sessionInitializer,
-            @Qualifier("panelAuthenticationManager") AuthenticationManager authenticationManager
+            PanelSessionAuthenticator sessionAuthenticator
     ) {
         this.getNexusAccountService = getNexusAccountService;
         this.panelSessionService = panelSessionService;
         this.recordLoginService = recordLoginService;
-        this.sessionInitializer = sessionInitializer;
-        this.authenticationManager = authenticationManager;
+        this.sessionAuthenticator = sessionAuthenticator;
         logoutHandler.setClearAuthentication(true);
         logoutHandler.setInvalidateHttpSession(true);
     }
@@ -76,46 +71,51 @@ class PanelSessionController {
      * previamente obtenida de {@code GET /api/panel/v1/csrf}.
      */
     @PostMapping("/session/login")
-    @ResponseStatus(HttpStatus.OK)
-    NexusAccountDetails login(
+    ResponseEntity<?> login(
             @Valid @RequestBody LoginRequest request,
             HttpServletRequest servletRequest,
             HttpServletResponse servletResponse
     ) {
-        UsernamePasswordAuthenticationToken token =
-                new UsernamePasswordAuthenticationToken(request.email(), request.password());
-
         Authentication authenticated;
         try {
-            authenticated = authenticationManager.authenticate(token);
-        } catch (BadCredentialsException e) {
-            throw new BadCredentialsException("Invalid email or password.");
+            authenticated = sessionAuthenticator.authenticate(
+                    request.email(), request.password(), servletRequest, servletResponse);
+        } catch (MfaRequiredException e) {
+            // 200 (no-error) para que el SPA cambie al paso TOTP. La sesión lleva ya el
+            // ticket MFA pendiente del panel (sigue anónima hasta verificar el TOTP).
+            return ResponseEntity.ok(Map.of("code", "mfa_required"));
         }
-
-        // Defensa contra session fixation: rotar el id de sesión tras autenticar.
-        // El login JSON es un endpoint manual y no pasa por el
-        // SessionAuthenticationStrategy que Spring aplica al form-login (que rota el
-        // JSESSIONID por defecto); sin esta rotación, autenticar sobre una sesión
-        // preexistente dejaría el contexto autenticado ligado al mismo id anónimo.
-        // changeSessionId exige que la petición tenga una sesión "current", así que
-        // la aseguramos primero (igual que Spring en
-        // ChangeSessionIdAuthenticationStrategy): se carga de la cookie o se crea, y
-        // luego se rota. Los atributos (token CSRF, metadatos de sesión) migran al
-        // nuevo id, así que nada se pierde.
-        servletRequest.getSession();
-        servletRequest.changeSessionId();
-
-        // Persistir SecurityContext en la sesión HTTP
-        var securityContext = org.springframework.security.core.context.SecurityContextHolder.createEmptyContext();
-        securityContext.setAuthentication(authenticated);
-        securityContextRepository.saveContext(securityContext, servletRequest, servletResponse);
-
-        sessionInitializer.initialize(servletRequest, authenticated);
-
+        // BadCredentialsException (usuario/contraseña incorrectos) se propaga:
+        // AdminExceptionHandler la mapea a 401 invalid_credentials.
         NexusAccountPrincipal principal = (NexusAccountPrincipal) authenticated.getPrincipal();
         recordLoginService.recordLogin(principal.accountId());
+        return ResponseEntity.ok(getNexusAccountService.getById(principal.accountId()));
+    }
 
-        return getNexusAccountService.getById(principal.accountId());
+    record LoginMfaRequest(String code) {
+    }
+
+    /**
+     * Completa el login MFA del panel: verifica el código TOTP (o recovery) contra el
+     * ticket pendiente fijado por {@code /session/login}. Si valida, establece la sesión
+     * con ambos factores y devuelve la cuenta; si no, 401 {@code invalid_code}.
+     */
+    @PostMapping("/session/login/mfa")
+    ResponseEntity<?> loginMfa(
+            @RequestBody LoginMfaRequest request,
+            HttpServletRequest servletRequest,
+            HttpServletResponse servletResponse
+    ) {
+        Authentication authenticated;
+        try {
+            authenticated = sessionAuthenticator.completeMfaAuthentication(
+                    request.code(), servletRequest, servletResponse);
+        } catch (BadCredentialsException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("code", "invalid_code"));
+        }
+        NexusAccountPrincipal principal = (NexusAccountPrincipal) authenticated.getPrincipal();
+        recordLoginService.recordLogin(principal.accountId());
+        return ResponseEntity.ok(getNexusAccountService.getById(principal.accountId()));
     }
 
     /**
