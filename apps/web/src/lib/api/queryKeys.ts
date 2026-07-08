@@ -39,8 +39,6 @@ export const queryKeys = {
     permissions: (projectId: string) =>
       ["projects", projectId, "permissions"] as const,
     modules: (projectId: string) => ["projects", projectId, "modules"] as const,
-    module: (projectId: string, moduleKey: string) =>
-      ["projects", projectId, "modules", moduleKey] as const,
     apiKeys: (projectId: string) =>
       ["projects", projectId, "api-keys"] as const,
     heartbeats: (projectId: string) =>

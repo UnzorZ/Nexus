@@ -227,20 +227,25 @@ foránea cuando se cree la tabla propietaria `projects`.
 
 ## Trabajo pendiente
 
-- invitaciones y cambios de estado avanzados de cuenta;
-- carga de `ProjectUser` con contexto obligatorio de proyecto y login funcional;
-- validación que impida retirar el último `OWNER` activo;
-- issuer OAuth dinámico por proyecto, discovery y JWKS por realm;
-- pruebas E2E del panel con frontend y API en dominios distintos.
+- rate-limiting en los endpoints públicos de auth + backups gestionados (Track B / M6).
 
 ## Implementado
 
 - repositorios JPA para `NexusAccount`, `ProjectMembership` y `ProjectUser`;
 - indicador persistente `instanceAdmin` (bootstrap en la primera cuenta);
 - registro de `NexusAccount` con CSRF (`POST /api/panel/v1/accounts`);
-- `NexusAccountUserDetailsService` solo en la cadena del panel (`/panel/login`);
-- sesión HTTP del panel, logout API (`POST /api/panel/v1/session/logout`) y CSRF;
+- `NexusAccountUserDetailsService` solo en la cadena del panel;
+- login JSON del panel (`POST /api/panel/v1/session/login` [+ `/login/mfa`]),
+  sesión HTTP, logout API y CSRF — el form-login Thymeleaf `/panel/login` fue eliminado;
+- **MFA TOTP del panel** (`NexusAccount`: inscripción + step-up + recovery codes);
 - persistencia JDBC de clientes OAuth, autorizaciones y consentimientos;
+- **multi-issuer OAuth por proyecto** (`CompositeRegisteredClientRepository`,
+  `ProjectOauthClientsService`; ADR-0016);
+- **login funcional de `ProjectUser`** con contexto obligatorio de proyecto
+  (`ProjectSessionAuthenticator`), verificación de email, registro dual y reseteo
+  de contraseña self-service (M2/M3);
+- **TOTP MFA end-user** (step-up + inscripción + recovery codes; `amr: [pwd, otp]`, M5);
+- **consent** branded vía redirect a Next.js y **gestión de sesiones** end-user (list/revoke);
 - normalización de emails en registro.
 
 ### Bootstrap público de la instancia

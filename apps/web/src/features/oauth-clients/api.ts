@@ -41,14 +41,6 @@ export type CreateOauthClientPayload = {
   consentRequired: boolean;
 };
 
-export type UpdateOauthClientPayload = {
-  name: string;
-  redirectUris: string[];
-  postLogoutRedirectUris?: string[];
-  scopes?: string[];
-  status: OauthClientStatus;
-};
-
 export async function fetchOauthClients(
   projectId: string,
 ): Promise<OauthClientSummary[]> {
@@ -73,23 +65,6 @@ export async function createOauthClient(
       headers: { [CSRF_HEADER_NAME]: csrfToken },
       redirect: "manual",
       errorMessage: "No se pudo crear el cliente OAuth.",
-    },
-  );
-}
-
-export async function updateOauthClient(
-  projectId: string,
-  id: string,
-  payload: UpdateOauthClientPayload,
-  csrfToken: string,
-): Promise<OauthClientSummary> {
-  return apiClient.patch<OauthClientSummary>(
-    apiRoutes.panel.projects.oauthClients.byId(projectId, id),
-    payload,
-    {
-      headers: { [CSRF_HEADER_NAME]: csrfToken },
-      redirect: "manual",
-      errorMessage: "No se pudo actualizar el cliente OAuth.",
     },
   );
 }

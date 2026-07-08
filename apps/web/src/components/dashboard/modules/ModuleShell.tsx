@@ -1,9 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import Link from "next/link";
 import { motion } from "motion/react";
-import { ArrowBigRightIcon } from "@/components/ui/arrow-big-right";
 import { BookTextIcon } from "@/components/ui/book-text";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -140,48 +138,6 @@ function DisabledBanner({ name }: { name: string }) {
         </p>
       </div>
     </div>
-  );
-}
-
-/** A panel of links to other dashboard surfaces (used by hub modules). */
-export function RelatedLinks({
-  title = "Related surfaces",
-  description = "Managed on their dedicated pages.",
-  links,
-}: {
-  title?: string;
-  description?: string;
-  links: {
-    href: string;
-    label: string;
-    hint?: string;
-  }[];
-}) {
-  return (
-    <Panel title={title} description={description}>
-      <ul className="flex flex-col gap-1">
-        {links.map((link) => (
-          <li key={link.href}>
-            <Link
-              href={link.href}
-              className="-mx-2 flex items-center justify-between gap-3 rounded-md px-2 py-2 transition-colors hover:bg-muted"
-            >
-              <div className="flex min-w-0 flex-col">
-                <span className="text-sm font-medium text-foreground">
-                  {link.label}
-                </span>
-                {link.hint ? (
-                  <span className="text-xs text-muted-foreground">
-                    {link.hint}
-                  </span>
-                ) : null}
-              </div>
-              <ArrowBigRightIcon size={14} className="shrink-0 text-muted-foreground" />
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </Panel>
   );
 }
 

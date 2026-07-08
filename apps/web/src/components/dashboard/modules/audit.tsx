@@ -7,7 +7,6 @@ import {
   StatTile,
   StatusBadge,
 } from "@/components/dashboard/shared";
-import { RelatedLinks } from "@/components/dashboard/modules/ModuleShell";
 import { tint } from "@/components/dashboard/anim";
 
 const audited = [
@@ -30,12 +29,6 @@ export function AuditModule() {
           <StatTile Icon={ClipboardCheckIcon} iconBg={tint.indigo.bg} iconColor={tint.indigo.text} label="Storage" value="Postgres" hint="Append-only" />
         </div>
       </Panel>
-
-      <RelatedLinks
-        links={[
-          { href: "/dashboard/audit", label: "Audit log", hint: "Browse & filter the full event trail" },
-        ]}
-      />
 
       <Panel title="Policy" description="What gets recorded and for how long.">
         <div className="flex flex-col gap-3">

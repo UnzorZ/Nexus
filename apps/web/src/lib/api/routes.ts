@@ -46,15 +46,11 @@ export const apiRoutes = {
   panel: {
     accounts: {
       root: apiUrl("/api/panel/v1/accounts"),
-      byId: (accountId: string) =>
-        apiUrl(`/api/panel/v1/accounts/${encodeURIComponent(accountId)}`),
     },
     session: {
       csrf: apiUrl("/api/panel/v1/csrf"),
       loginJson: apiUrl("/api/panel/v1/session/login"),
       loginMfa: apiUrl("/api/panel/v1/session/login/mfa"),
-      login: apiUrl("/panel/login"),
-      frontendLogin: "/login",
       logout: apiUrl("/api/panel/v1/session/logout"),
       me: apiUrl("/api/panel/v1/me"),
     },

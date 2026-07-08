@@ -11,7 +11,6 @@ import {
   StatTile,
   StatusBadge,
 } from "@/components/dashboard/shared";
-import { RelatedLinks } from "@/components/dashboard/modules/ModuleShell";
 import { tint } from "@/components/dashboard/anim";
 
 export function IdentityModule() {
@@ -25,13 +24,6 @@ export function IdentityModule() {
           <StatTile Icon={Users} iconBg={tint.violet.bg} iconColor={tint.violet.text} label="MFA users" value="61" hint="Enrolled" />
         </div>
       </Panel>
-
-      <RelatedLinks
-        links={[
-          { href: "/dashboard/users", label: "Project users", hint: "248 users in this project realm" },
-          { href: "/dashboard/oauth-clients", label: "OAuth clients", hint: "2 clients — demo-web, demo-backend" },
-        ]}
-      />
 
       <Panel
         title="Issuer"

@@ -45,11 +45,10 @@ public class CreateNexusAccountService {
     }
 
     /**
-     * Crea una cuenta nueva y la activa de inmediato para permitir el inicio de
-     * sesión mientras no exista verificación de email por correo.
-     * <p>
-     * TODO: agregar verificacion de email y activar la cuenta solo después de que el usuario confirme su correo.
-     * </p>
+     * Crea una cuenta nueva y la activa de inmediato. Las cuentas del panel son
+     * auto/provisionadas por el operador (o el bootstrap del primer admin) y nacen
+     * activas; la verificación de email es una superficie del portal de usuario final
+     * (ProjectUser, M2), no de las cuentas Nexus.
      */
     @Transactional
     public NexusAccountDetails create(CreateNexusAccountRequest request) {

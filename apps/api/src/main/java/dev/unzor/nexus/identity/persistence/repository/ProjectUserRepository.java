@@ -36,8 +36,6 @@ public interface ProjectUserRepository extends Repository<ProjectUser, UUID> {
 
     List<ProjectUser> findAllByProjectId(UUID projectId);
 
-    boolean existsByProjectIdAndId(UUID projectId, UUID userId);
-
     /**
      * Búsqueda por token de verificación de email, acotada al proyecto. El token es
      * un secreto único (no permite enumeración); el projectId refuerza el aislamiento
