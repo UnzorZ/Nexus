@@ -41,7 +41,7 @@ What we are protecting:
 
 | Threat (STRIDE) | How Nexus mitigates it | Where |
 |---|---|---|
-| **Credential stuffing / brute force** | Per-user failed-login lockout (configurable attempts + duration); dummy-password bcrypt to equalize timing | `ProjectSessionAuthenticator`, `IdentityLoginProperties` |
+| **Credential stuffing / brute force** | Per-IP token-bucket rate limiting on public auth endpoints (login/MFA/token/register/verify/reset) evaluated before the security chain; plus per-user failed-login lockout and dummy-password bcrypt timing equalization | `RateLimitFilter`, `ProjectSessionAuthenticator`, `IdentityLoginProperties` |
 | **Account enumeration (login)** | Every login failure collapses to one generic message + timing equalization | `ProjectSessionAuthenticator` |
 | **Account enumeration (password reset / verify)** | Request endpoints always return success; tokens are hashed at rest; verify/reset only reveal state after the secret (token) is proven | Track A flows (`password-reset`, `verify-email`) |
 | **Token theft / staleness after role change** | `authz_version` stamped on tokens; introspection returns `active:false` when stale or user deleted | `AuthzVersionIntrospectionAuthenticationProvider` |
@@ -58,13 +58,16 @@ What we are protecting:
 - `/actuator/prometheus` is public by default to ease scraping from a trusted network.
   Public deployments should restrict it (reverse-proxy allowlist, separate
   `management.server.port`, or remove it from `permitAll` to restore HTTP Basic).
-- No app-level request rate limiting yet (only per-user lockout). Planned: bucket-based
-  rate limiting on public auth endpoints (Track B).
+- Per-IP rate limiting covers public auth endpoints (login/MFA/token/register/verify/
+  reset). Other endpoints (introspection, userinfo, the panel data API) are not limited
+  at the app level — rely on the per-user lockout and a front proxy's connection
+  limits there. Tune or disable via `nexus.ratelimit.*`.
 - Locally-validated JWTs (resource servers that do not introspect) honor `authz_version`
   only until token `exp`. A future resource-server + Redis denylist covers per-request
   enforcement.
-- Backups: the operator is responsible for PostgreSQL backups (`scripts/backup-db.sh`
-  + runbook, planned). No managed backup is bundled.
+- Backups: a reference `scripts/backup-db.sh` + runbook (`docs/deployment/backups.md`)
+  are provided, but the operator is still responsible for scheduling them, testing
+  restores, and keeping off-host copies. No managed backup is bundled.
 
 ## Operational Assumptions for Self-Hosters
 
