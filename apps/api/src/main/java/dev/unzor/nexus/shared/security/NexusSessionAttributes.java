@@ -55,6 +55,17 @@ public final class NexusSessionAttributes {
     public static final String MFA_PENDING = "nexus.mfaPending";
 
     /**
+     * Atributo de sesión análogo a {@link #MFA_PENDING} pero para el login del panel
+     * (cuenta Nexus): fija un ticket efímero (interno de admin) con la cuenta y la
+     * expiración cuando la contraseña es correcta pero la cuenta tiene MFA TOTP activa.
+     * Igual que {@link #MFA_PENDING}, durante esta ventana NO se persiste ningún
+     * {@code SecurityContext} autenticado; sólo {@code POST /api/panel/v1/session/login/mfa}
+     * lo establece al verificar el TOTP. Atributo distinto del de usuario final para que
+     * ambas superficies (panel vs portal) no compartan tipo bajo la misma clave.
+     */
+    public static final String PANEL_MFA_PENDING = "nexus.panelMfaPending";
+
+    /**
      * Prefijo del valor de índice bajo el que se agrupan las sesiones de un
      * {@code ProjectUser}. Distinto del {@code accountId} del panel para que ambas
      * familias no colisionen en el mismo índice {@code PRINCIPAL_NAME} de Redis.

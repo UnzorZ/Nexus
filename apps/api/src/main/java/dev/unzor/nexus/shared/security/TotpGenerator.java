@@ -1,4 +1,4 @@
-package dev.unzor.nexus.identity.application.service;
+package dev.unzor.nexus.shared.security;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -10,6 +10,10 @@ import java.security.SecureRandom;
  * Genera y verifica códigos TOTP (RFC 6238) con HmacSHA1, sin dependencias externas.
  * Es el algoritmo estándar de las apps de autenticador (Google Authenticator, etc.):
  * 6 dígitos, ventana de 30 s.
+ *
+ * <p>Vive en {@code shared.security} (interfaz nombrada {@code Security}, ya expuesta) para
+ * que tanto el portal de usuario final (identity) como el panel (admin) lo reutilicen sin
+ * duplicar el algoritmo ni crear una nueva interfaz nombrada de Modulith.</p>
  *
  * <p>Los vectores de test del apéndice B del RFC usan 8 dígitos; por eso
  * {@link #generate(byte[], long, int)} admite un parámetro de dígitos para validar

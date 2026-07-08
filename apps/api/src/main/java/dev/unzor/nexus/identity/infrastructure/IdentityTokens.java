@@ -1,8 +1,7 @@
 package dev.unzor.nexus.identity.infrastructure;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
+import dev.unzor.nexus.shared.security.SecureHashes;
+
 import java.security.SecureRandom;
 import java.util.Base64;
 
@@ -27,19 +26,12 @@ public final class IdentityTokens {
         return URL_ENCODER.encodeToString(bytes);
     }
 
-    /** Hash SHA-256 hex del token en claro (para almacenamiento / lookup). */
+    /**
+     * Hash SHA-256 hex del token en claro (para almacenamiento / lookup). Delega en el
+     * util compartido {@link SecureHashes#sha256Hex}.
+     */
     public static String hash(String rawToken) {
-        try {
-            MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
-            byte[] digest = sha256.digest(rawToken.getBytes(StandardCharsets.UTF_8));
-            StringBuilder hex = new StringBuilder(digest.length * 2);
-            for (byte b : digest) {
-                hex.append(Character.forDigit((b >> 4) & 0xF, 16))
-                        .append(Character.forDigit(b & 0xF, 16));
-            }
-            return hex.toString();
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 not available", e);
-        }
+        return SecureHashes.sha256Hex(rawToken);
     }
 }
+

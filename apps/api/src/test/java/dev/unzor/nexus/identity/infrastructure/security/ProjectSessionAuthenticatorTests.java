@@ -48,7 +48,7 @@ class ProjectSessionAuthenticatorTests {
     private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
     private final IdentityLoginProperties loginProperties = new IdentityLoginProperties(5, Duration.ofMinutes(15));
-    private final dev.unzor.nexus.identity.application.service.TotpCrypto totpCrypto = mock(dev.unzor.nexus.identity.application.service.TotpCrypto.class);
+    private final dev.unzor.nexus.shared.security.TotpCrypto totpCrypto = mock(dev.unzor.nexus.shared.security.TotpCrypto.class);
 
     private final ProjectSessionAuthenticator authenticator = new ProjectSessionAuthenticator(
             userDetailsService, repository, recoveryCodeRepository, encoder, recordLoginService, eventPublisher, loginProperties, totpCrypto);
