@@ -113,6 +113,10 @@ instance admin), and create your first project.
 - **Rate limiting:** app-level per-IP buckets guard public auth endpoints
   (`nexus.ratelimit.*`). Tune or disable as needed; rely on a front proxy's
   connection limits elsewhere.
+- **Audit log growth:** the `audit_log` table is auto-purged daily to
+  `nexus.audit.retention.retention-days` (default 90; `<=0` disables). Project
+  members can also stream an NDJSON export from the panel
+  (`GET /api/panel/v1/projects/{id}/audit/export`).
 
 ## 6. Backups & restore
 
