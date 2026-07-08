@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Suspense, use, useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { CheckCircle2, LogOut, ShieldCheck } from "lucide-react";
+import { CheckCircle2, LogOut, MonitorSmartphone, ShieldCheck } from "lucide-react";
 import { logoutEndUser, ProjectUserDetails } from "@/features/end-user/api";
 import { fetchEndUserMe } from "@/features/end-user/api";
 import { fadeUp, SPRING_SNAPPY } from "@/components/dashboard/anim";
@@ -119,6 +119,12 @@ function EndUserAccountScreen({
           <Link href={`/p/${encodeURIComponent(slug)}/account/security`}>
             <ShieldCheck size={16} />
             Two-factor authentication
+          </Link>
+        </Button>
+        <Button asChild variant="outline" className="h-11 w-full">
+          <Link href={`/p/${encodeURIComponent(slug)}/account/sessions`}>
+            <MonitorSmartphone size={16} />
+            Sessions
           </Link>
         </Button>
         <Button

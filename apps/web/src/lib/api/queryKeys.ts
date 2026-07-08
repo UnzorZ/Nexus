@@ -22,6 +22,8 @@ export const queryKeys = {
     me: (projectSlug: string) => ["end-user", projectSlug, "me"] as const,
     mfaStatus: (projectSlug: string) =>
       ["end-user", projectSlug, "mfa", "status"] as const,
+    sessions: (projectSlug: string) =>
+      ["end-user", projectSlug, "sessions"] as const,
   },
 
   projects: {

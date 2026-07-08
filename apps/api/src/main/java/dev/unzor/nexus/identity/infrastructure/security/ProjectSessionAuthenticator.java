@@ -254,6 +254,14 @@ public class ProjectSessionAuthenticator {
         request.changeSessionId();
         request.getSession().setAttribute(
                 NexusSessionAttributes.PROJECT_USER_ID, user.getId().toString());
+        // Identificadores de gestión de sesión (listado/revocación desde el portal de
+        // usuario final), espejo del panel. Sin public id no se puede revocar por id ni
+        // marcar la sesión "actual"; por eso se fijan en cada login.
+        request.getSession().setAttribute(
+                NexusSessionAttributes.SESSION_PUBLIC_ID, UUID.randomUUID().toString());
+        request.getSession().setAttribute(
+                NexusSessionAttributes.USER_AGENT,
+                NexusSessionAttributes.truncateUserAgent(request.getHeader("User-Agent")));
 
         ProjectUserPrincipal sessionPrincipal = principal.withoutCredentials();
         // Spring Security 7.0 deriva auth_time del id_token a partir del issuedAt de un

@@ -1,6 +1,7 @@
 package dev.unzor.nexus.admin.infrastructure.security;
 
 import dev.unzor.nexus.admin.application.configuration.PanelSessionConfiguration;
+import dev.unzor.nexus.shared.security.NexusSessionAttributes;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.security.core.Authentication;
@@ -27,17 +28,11 @@ public class PanelSessionInitializer {
         }
         principal.eraseCredentials();
         session.setAttribute(PanelSessionConfiguration.ACCOUNT_ID, principal.accountId().toString());
-        session.setAttribute(PanelSessionConfiguration.SESSION_PUBLIC_ID, UUID.randomUUID().toString());
+        session.setAttribute(NexusSessionAttributes.SESSION_PUBLIC_ID, UUID.randomUUID().toString());
         session.setAttribute(
-                PanelSessionConfiguration.USER_AGENT,
-                truncate(request.getHeader("User-Agent"), PanelSessionConfiguration.USER_AGENT_MAX_LENGTH)
+                NexusSessionAttributes.USER_AGENT,
+                NexusSessionAttributes.truncateUserAgent(request.getHeader("User-Agent"))
         );
     }
-
-    private static String truncate(String value, int maxLength) {
-        if (value == null) {
-            return "";
-        }
-        return value.length() <= maxLength ? value : value.substring(0, maxLength);
-    }
 }
+
