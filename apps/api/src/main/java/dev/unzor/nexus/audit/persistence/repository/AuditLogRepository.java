@@ -3,11 +3,13 @@ package dev.unzor.nexus.audit.persistence.repository;
 import dev.unzor.nexus.audit.domain.entity.AuditLogEntry;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -34,4 +36,31 @@ public interface AuditLogRepository extends Repository<AuditLogEntry, UUID> {
     Page<AuditLogEntry> findByProjectAndSince(@Param("projectId") UUID projectId,
                                               @Param("since") Instant since,
                                               Pageable pageable);
+
+    /**
+     * Purga de retención: borra las entradas anteriores al {@code cutoff}. Bulk JPQL
+     * ({@link Modifying}); el borrado se ejecuta en la tx del servicio que lo invoca.
+     * Postgres aplica bloqueos a nivel de fila (no de tabla), por lo que un barrido
+     * diario (típicamente 1 día de eventos) es seguro; para un backlog enorme en el
+     * primer arranque, el operador puede aumentar progresivamente {@code retentionDays}.
+     */
+    @Modifying(clearAutomatically = true)
+    @Query("DELETE FROM AuditLogEntry e WHERE e.occurredAt < :cutoff")
+    long deleteOlderThan(@Param("cutoff") Instant cutoff);
+
+    /**
+     * Export NDJSON por proyecto: devuelve {@link List} (no {@link Page}) con
+     * {@link Pageable} para que Spring Data NO ejecute la consulta de COUNT. El
+     * servicio pagina hasta que un slice viene con menos filas que el tamaño.
+     */
+    @Query("SELECT e FROM AuditLogEntry e WHERE e.projectId = :projectId "
+            + "ORDER BY e.occurredAt DESC, e.id DESC")
+    List<AuditLogEntry> findExportSliceByProject(@Param("projectId") UUID projectId, Pageable pageable);
+
+    @Query("SELECT e FROM AuditLogEntry e "
+            + "WHERE e.projectId = :projectId AND e.occurredAt >= :since "
+            + "ORDER BY e.occurredAt DESC, e.id DESC")
+    List<AuditLogEntry> findExportSliceByProjectAndSince(@Param("projectId") UUID projectId,
+                                                         @Param("since") Instant since,
+                                                         Pageable pageable);
 }
