@@ -324,11 +324,12 @@ testImplementation 'org.springframework.boot:spring-boot-starter-security-oauth2
 - [x] **Consent** branded vía redirect a Next.js + **gestión de sesiones** end-user (list/revoke) (M4 + sesiones).
 - [x] Panel Nexus con `NexusAccount` (login JSON + sesión HTTP + CSRF + MFA TOTP propia).
 - [x] **Rate-limiting** per-IP (bucket4j) en endpoints de auth pública + **backups** PostgreSQL (`scripts/backup-db.sh` + runbook) (M6).
+- [x] **Claim `permissions`** en access token, ID token y `/userinfo` (claves de permiso efectivas, comodines `orders.*` / `*` verbatim, ADR-0003) vía `ProjectIdTokenCustomizer` + `userInfoMapper`; permite autorizar en local del JWT. App de referencia resource-server en `examples/spring-client-app` (M7).
 - [x] Health-check interno del módulo.
 
 ### 🔲 Pendiente
 
-- Sin pendientes relevantes tras M6 (rate-limiting + backups entregados).
+- Sin pendientes relevantes tras M7 (claim `permissions` + app de referencia resource-server entregados).
 
 ---
 

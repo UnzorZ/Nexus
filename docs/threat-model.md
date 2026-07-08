@@ -63,8 +63,15 @@ What we are protecting:
   at the app level — rely on the per-user lockout and a front proxy's connection
   limits there. Tune or disable via `nexus.ratelimit.*`.
 - Locally-validated JWTs (resource servers that do not introspect) honor `authz_version`
-  only until token `exp`. A future resource-server + Redis denylist covers per-request
-  enforcement.
+  only until token `exp`. Since access tokens now carry the user's `permissions` claim
+  verbatim (an optimistic snapshot baked into the JWT), a role revocation does **not**
+  reach such a consumer until the token expires (access tokens are short-lived, 10 min).
+  For revocation-sensitive endpoints, validate via `/oauth2/introspect` — it enforces
+  `authz_version` and returns `active:false` for stale tokens — or call the permission
+  snapshot/check API. The reference resource-server app
+  ([`examples/spring-client-app`](../examples/spring-client-app)) demonstrates both modes
+  (`NEXUS_RS_MODE=jwt` local validation vs `introspect`). A future resource-server +
+  Redis denylist would cover per-request enforcement without per-request introspection.
 - Backups: a reference `scripts/backup-db.sh` + runbook (`docs/deployment/backups.md`)
   are provided, but the operator is still responsible for scheduling them, testing
   restores, and keeping off-host copies. No managed backup is bundled.

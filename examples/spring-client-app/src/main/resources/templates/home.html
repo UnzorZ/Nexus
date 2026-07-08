@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Nexus reference app</title>
+    <style>
+        body { font: 14px/1.5 system-ui, sans-serif; max-width: 920px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+        h1 { font-size: 1.4rem; }
+        h2 { font-size: 1.1rem; margin-top: 2rem; border-bottom: 1px solid #ddd; padding-bottom: .3rem; }
+        code { background: #f4f4f5; padding: .1rem .3rem; border-radius: 4px; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { text-align: left; padding: .35rem .5rem; border-bottom: 1px solid #eee; vertical-align: top; }
+        th { width: 30%; color: #555; font-weight: 600; }
+        ul { padding-left: 1.1rem; }
+        .pill { display: inline-block; background: #6366f1; color: #fff; border-radius: 999px; padding: .1rem .6rem; font-size: .8rem; margin: .1rem; }
+        a { color: #4f46e5; }
+        nav a { margin-right: 1rem; }
+    </style>
+</head>
+<body>
+<h1>Nexus reference client + resource-server app</h1>
+<p>You are signed in. This page shows the claims Nexus put in your ID token.</p>
+
+<nav>
+    <a href="/api/me">GET /api/me</a>
+    <a href="/api/orders">GET /api/orders <code>(orders.read)</code></a>
+    <a href="/api/inventory/SKU-1">GET /api/inventory/{sku} <code>(inventory.read)</code></a>
+    <a href="/refresh">refresh-token demo</a>
+    <a href="/logout">log out (RP-initiated)</a>
+</nav>
+
+<h2>ID-token claims</h2>
+<table>
+    <tr th:each="entry : ${claims}">
+        <th th:text="${entry.key}">claim</th>
+        <td><code th:text="${entry.value}">value</code></td>
+    </tr>
+</table>
+
+<h2>Effective permissions <code>permissions</code> claim (verbatim, incl. wildcards)</h2>
+<div th:if="${permissions}">
+    <span class="pill" th:each="p : ${permissions}" th:text="${p}">perm</span>
+</div>
+<p th:if="${permissions == null}"><em>none</em></p>
+
+<h2>/userinfo claims</h2>
+<table>
+    <tr th:each="entry : ${userinfo}">
+        <th th:text="${entry.key}">claim</th>
+        <td><code th:text="${entry.value}">value</code></td>
+    </tr>
+</table>
+
+<p style="margin-top:2rem;color:#666;font-size:.85rem">
+    Authorization on <code>/api/**</code> is enforced via the
+    <code>permissions</code> claim with glob-matching (spec §14.3). See
+    <code>PermissionService</code> / <code>PermissionMatcher</code>.
+</p>
+</body>
+</html>
