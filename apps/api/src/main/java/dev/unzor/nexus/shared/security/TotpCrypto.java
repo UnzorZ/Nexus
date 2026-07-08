@@ -1,4 +1,4 @@
-package dev.unzor.nexus.identity.application.service;
+package dev.unzor.nexus.shared.security;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
@@ -16,12 +16,14 @@ import java.util.Base64;
 import java.util.Set;
 
 /**
- * Cifrado simétrico AES-256-GCM para el secret TOTP de los usuarios finales. El secret
- * debe ser <b>reversible</b> (hace falta el plaintext para computar los códigos), así
- * que se guarda cifrado, no hasheado. Reutiliza la master key global
+ * Cifrado simétrico AES-256-GCM para el secret TOTP. El secret debe ser
+ * <b>reversible</b> (hace falta el plaintext para computar los códigos), así que se
+ * guarda cifrado, no hasheado. Reutiliza la master key global
  * {@code nexus.vault.master-key} derivando la clave AES por SHA-256 — idéntico a
- * {@code NotifyCrypto} pero autocontenido en el módulo {@code identity} para no añadir
- * {@code vault :: Application} a sus dependencias Modulith.
+ * {@code NotifyCrypto}.
+ *
+ * <p>Vive en {@code shared.security} para que tanto el portal de usuario final (identity)
+ * como el panel (admin) compartan el mismo cifrado del secret TOTP.</p>
  *
  * <p><b>Fail-closed:</b> si la master key está en blanco, o es el default de dev fuera
  * de perfiles de desarrollo, el bean falla al construirse.</p>

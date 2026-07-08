@@ -70,6 +70,18 @@ public class NexusAccount extends AbstractAggregateRoot<NexusAccount> {
     @Column(name = "mfa_enabled", nullable = false)
     private boolean mfaEnabled;
 
+    /**
+     * Secret TOTP cifrado (AES-256-GCM, reversible — hace falta el plaintext para computar
+     * los códigos). Nulo mientras la MFA no está inscrita. El {@code mfaEnabled} de arriba
+     * se mantiene sincronizado como bandera legible por los DTOs; el estado autoritativo
+     * es {@link #totpEnabledAt}.
+     */
+    @Column(name = "totp_secret_enc")
+    private String totpSecretEnc;
+
+    @Column(name = "totp_enabled_at")
+    private Instant totpEnabledAt;
+
     @Column(name = "instance_admin", nullable = false)
     private boolean instanceAdmin;
 
@@ -158,6 +170,32 @@ public class NexusAccount extends AbstractAggregateRoot<NexusAccount> {
 
     public void disableMfa() {
         mfaEnabled = false;
+    }
+
+    /**
+     * Guarda el secret TOTP cifrado durante la inscripción (aún no activa).
+     */
+    public void storeTotpSecret(String encryptedSecret) {
+        this.totpSecretEnc = encryptedSecret;
+    }
+
+    /**
+     * Activa la MFA TOTP: fija el instante de activación y sincroniza la bandera
+     * {@code mfaEnabled}. El secret debió almacenarse antes vía {@link #storeTotpSecret}.
+     */
+    public void enableTotp(Instant enabledAt) {
+        this.totpEnabledAt = Objects.requireNonNull(enabledAt);
+        this.mfaEnabled = true;
+    }
+
+    /**
+     * Desactiva la MFA TOTP y borra el secret + recovery codes asociados (estos últimos
+     * se borran por repositorio).
+     */
+    public void disableTotp() {
+        this.totpEnabledAt = null;
+        this.totpSecretEnc = null;
+        this.mfaEnabled = false;
     }
 
     public void grantInstanceAdmin() {

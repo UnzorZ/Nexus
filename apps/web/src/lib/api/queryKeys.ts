@@ -69,6 +69,11 @@ export const queryKeys = {
 
   sessions: () => ["sessions"] as const,
 
+  /** Estado MFA de la cuenta del panel (no project-scoped). */
+  mfa: {
+    status: () => ["panel", "mfa", "status"] as const,
+  },
+
   instance: {
     smtp: () => ["instance", "smtp"] as const,
     status: () => ["instance", "status"] as const,

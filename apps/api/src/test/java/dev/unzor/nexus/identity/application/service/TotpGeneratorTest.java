@@ -1,5 +1,7 @@
 package dev.unzor.nexus.identity.application.service;
 
+import dev.unzor.nexus.shared.security.Base32;
+import dev.unzor.nexus.shared.security.TotpGenerator;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;

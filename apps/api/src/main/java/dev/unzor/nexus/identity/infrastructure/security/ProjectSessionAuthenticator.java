@@ -1,19 +1,19 @@
 package dev.unzor.nexus.identity.infrastructure.security;
 
 import dev.unzor.nexus.identity.application.configuration.IdentityLoginProperties;
-import dev.unzor.nexus.identity.application.service.Base32;
 import dev.unzor.nexus.identity.application.service.RecordProjectUserLoginService;
-import dev.unzor.nexus.identity.application.service.TotpCrypto;
-import dev.unzor.nexus.identity.application.service.TotpGenerator;
 import dev.unzor.nexus.identity.domain.entity.ProjectUser;
 import dev.unzor.nexus.identity.domain.entity.ProjectUserRecoveryCode;
 import dev.unzor.nexus.identity.domain.exception.EmailNotVerifiedException;
 import dev.unzor.nexus.identity.domain.exception.MfaRequiredException;
-import dev.unzor.nexus.identity.infrastructure.IdentityTokens;
 import dev.unzor.nexus.identity.persistence.repository.ProjectUserRecoveryCodeRepository;
 import dev.unzor.nexus.identity.persistence.repository.ProjectUserRepository;
 import dev.unzor.nexus.shared.audit.AuditEvent;
+import dev.unzor.nexus.shared.security.Base32;
 import dev.unzor.nexus.shared.security.NexusSessionAttributes;
+import dev.unzor.nexus.shared.security.SecureHashes;
+import dev.unzor.nexus.shared.security.TotpCrypto;
+import dev.unzor.nexus.shared.security.TotpGenerator;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
@@ -223,7 +223,7 @@ public class ProjectSessionAuthenticator {
         }
         // Recovery code: hash SHA-256, single-use.
         Optional<ProjectUserRecoveryCode> match =
-                recoveryCodeRepository.findByCodeHashAndConsumedAtIsNull(IdentityTokens.hash(trimmed));
+                recoveryCodeRepository.findByCodeHashAndConsumedAtIsNull(SecureHashes.sha256Hex(trimmed));
         if (match.isPresent()) {
             match.get().consume(now);
             recoveryCodeRepository.save(match.get());

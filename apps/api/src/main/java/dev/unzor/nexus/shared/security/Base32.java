@@ -1,8 +1,11 @@
-package dev.unzor.nexus.identity.application.service;
+package dev.unzor.nexus.shared.security;
 
 /**
  * Codificación Base32 (RFC 4648) sin padding, mayúsculas — el formato en el que las
  * apps de autenticador esperan el secret TOTP. Sin dependencias externas.
+ *
+ * <p>Compartida por el portal de usuario final (identity) y el panel (admin) en
+ * {@code shared.security}.</p>
  */
 public final class Base32 {
 
