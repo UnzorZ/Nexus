@@ -52,10 +52,17 @@ export const apiRoutes = {
     session: {
       csrf: apiUrl("/api/panel/v1/csrf"),
       loginJson: apiUrl("/api/panel/v1/session/login"),
+      loginMfa: apiUrl("/api/panel/v1/session/login/mfa"),
       login: apiUrl("/panel/login"),
       frontendLogin: "/login",
       logout: apiUrl("/api/panel/v1/session/logout"),
       me: apiUrl("/api/panel/v1/me"),
+    },
+    mfa: {
+      enroll: apiUrl("/api/panel/v1/mfa/enroll"),
+      enrollVerify: apiUrl("/api/panel/v1/mfa/enroll/verify"),
+      disable: apiUrl("/api/panel/v1/mfa/disable"),
+      status: apiUrl("/api/panel/v1/mfa/status"),
     },
     sessions: {
       root: apiUrl("/api/panel/v1/sessions"),

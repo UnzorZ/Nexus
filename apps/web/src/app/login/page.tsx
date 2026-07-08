@@ -9,6 +9,7 @@ import { CheckCircle2, Eye, EyeOff, ShieldAlert } from "lucide-react";
 import { apiClient, NexusApiError } from "@/lib/api/client";
 import { CSRF_HEADER_NAME, ensureCsrfToken } from "@/lib/api/csrf";
 import { apiRoutes } from "@/lib/api/routes";
+import { completePanelMfaLogin } from "@/features/mfa/api";
 import { isInternalPath } from "@/lib/auth/continue-url";
 import { fadeUp, SPRING_SNAPPY } from "@/components/dashboard/anim";
 import { Button } from "@/components/ui/button";
@@ -95,6 +96,7 @@ function LoginScreen() {
 
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [step, setStep] = useState<"password" | "mfa">("password");
 
   const loginM = useMutation({
     mutationFn: async ({
@@ -105,7 +107,7 @@ function LoginScreen() {
       password: string;
     }) => {
       const csrfToken = await ensureCsrfToken();
-      return apiClient.post<unknown>(
+      return apiClient.post<{ code?: string }>(
         apiRoutes.panel.session.loginJson,
         { email, password },
         {
@@ -116,7 +118,12 @@ function LoginScreen() {
       );
     },
   });
-  const isPending = loginM.isPending;
+
+  const mfaM = useMutation({
+    mutationFn: (code: string) => completePanelMfaLogin(code),
+  });
+
+  const isPending = loginM.isPending || mfaM.isPending;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -136,7 +143,12 @@ function LoginScreen() {
     }
 
     try {
-      await loginM.mutateAsync({ email, password });
+      const result = await loginM.mutateAsync({ email, password });
+      if (result?.code === "mfa_required") {
+        // Contraseña válida pero la cuenta tiene MFA TOTP activa: pasar al paso del código.
+        setStep("mfa");
+        return;
+      }
       router.push(continuePath);
       router.refresh();
     } catch (err) {
@@ -145,6 +157,28 @@ function LoginScreen() {
         // mostramos el error en línea para evitar el parpadeo.
         return;
       }
+      if (err instanceof NexusApiError) {
+        setError(err.message);
+      } else {
+        setError("Could not connect to the Nexus API.");
+      }
+    }
+  }
+
+  async function handleMfaSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    const formData = new FormData(event.currentTarget);
+    const code = String(formData.get("code") ?? "").trim();
+    if (!code) {
+      setError("Enter your 6-digit code or a recovery code.");
+      return;
+    }
+    try {
+      await mfaM.mutateAsync(code);
+      router.push(continuePath);
+      router.refresh();
+    } catch (err) {
       if (err instanceof NexusApiError) {
         setError(err.message);
       } else {
@@ -190,78 +224,122 @@ function LoginScreen() {
         </motion.div>
       ) : null}
 
-      <div className="mt-7 space-y-3">
-        <SocialButton icon={GoogleIcon} label="Sign in with Google" />
-        <SocialButton icon={XIcon} label="Sign in with X" />
-      </div>
+      {step === "password" ? (
+        <>
+          <div className="mt-7 space-y-3">
+            <SocialButton icon={GoogleIcon} label="Sign in with Google" />
+            <SocialButton icon={XIcon} label="Sign in with X" />
+          </div>
 
-      <OrDivider />
+          <OrDivider />
 
-      <form className="space-y-4" onSubmit={handleSubmit}>
-        <div className="space-y-1.5">
-          <Label htmlFor="email" className="text-sm font-medium">
-            Email
-          </Label>
-          <Input
-            id="email"
-            name="email"
-            type="email"
-            className="h-12 bg-white px-3 focus-visible:ring-violet-500/30 dark:bg-input/30"
-            placeholder="you@example.com"
-            autoComplete="email"
-            inputMode="email"
-            autoFocus
-            required
-            disabled={isPending}
-          />
-        </div>
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            <div className="space-y-1.5">
+              <Label htmlFor="email" className="text-sm font-medium">
+                Email
+              </Label>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                className="h-12 bg-white px-3 focus-visible:ring-violet-500/30 dark:bg-input/30"
+                placeholder="you@example.com"
+                autoComplete="email"
+                inputMode="email"
+                autoFocus
+                required
+                disabled={isPending}
+              />
+            </div>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="password" className="text-sm font-medium">
-            Password
-          </Label>
-          <div className="relative">
+            <div className="space-y-1.5">
+              <Label htmlFor="password" className="text-sm font-medium">
+                Password
+              </Label>
+              <div className="relative">
+                <Input
+                  id="password"
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  className="h-12 bg-white px-3 pr-11 focus-visible:ring-violet-500/30 dark:bg-input/30"
+                  placeholder="Enter your password"
+                  autoComplete="current-password"
+                  required
+                  disabled={isPending}
+                />
+                <button
+                  type="button"
+                  className="absolute right-2 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  aria-pressed={showPassword}
+                  aria-controls="password"
+                  tabIndex={-1}
+                  onClick={() => setShowPassword((v) => !v)}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex justify-end py-1">
+              <Link
+                href="#"
+                className="text-sm font-medium text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400"
+              >
+                Forgot password?
+              </Link>
+            </div>
+
+            <Button
+              type="submit"
+              className="h-12 w-full rounded-xl bg-violet-600 text-white hover:bg-violet-700 dark:bg-violet-500 dark:hover:bg-violet-600"
+              disabled={isPending}
+            >
+              {isPending ? "Signing in…" : "Sign in"}
+            </Button>
+          </form>
+        </>
+      ) : (
+        <form className="mt-7 space-y-4" onSubmit={handleMfaSubmit}>
+          <div className="space-y-1.5">
+            <Label htmlFor="code" className="text-sm font-medium">
+              Authentication code
+            </Label>
             <Input
-              id="password"
-              name="password"
-              type={showPassword ? "text" : "password"}
-              className="h-12 bg-white px-3 pr-11 focus-visible:ring-violet-500/30 dark:bg-input/30"
-              placeholder="Enter your password"
-              autoComplete="current-password"
+              id="code"
+              name="code"
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              className="h-12 bg-white px-3 text-center text-lg tracking-[0.4em] focus-visible:ring-violet-500/30 dark:bg-input/30"
+              placeholder="000000"
+              autoFocus
               required
               disabled={isPending}
             />
-            <button
-              type="button"
-              className="absolute right-2 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              aria-label={showPassword ? "Hide password" : "Show password"}
-              aria-pressed={showPassword}
-              aria-controls="password"
-              tabIndex={-1}
-              onClick={() => setShowPassword((v) => !v)}
-            >
-              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
+            <p className="text-xs text-muted-foreground">
+              Enter the 6-digit code from your authenticator app, or paste a recovery code.
+            </p>
           </div>
-        </div>
-
-        <div className="flex justify-end py-1">
-          <Link
-            href="#"
-            className="text-sm font-medium text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400"
+          <Button
+            type="submit"
+            className="h-12 w-full rounded-xl bg-violet-600 text-white hover:bg-violet-700 dark:bg-violet-500 dark:hover:bg-violet-600"
+            disabled={isPending}
           >
-            Forgot password?
-          </Link>
-        </div>
-
-        <Button
-          type="submit"
-          className="h-12 w-full rounded-xl bg-violet-600 text-white hover:bg-violet-700 dark:bg-violet-500 dark:hover:bg-violet-600"
-          disabled={isPending}
-        >
-          {isPending ? "Signing in…" : "Sign in"}
-        </Button>
-      </form>
+            {mfaM.isPending ? "Verifying…" : "Verify"}
+          </Button>
+          <button
+            type="button"
+            onClick={() => {
+              setStep("password");
+              setError(null);
+            }}
+            className="block w-full text-center text-sm font-medium text-muted-foreground hover:text-foreground"
+          >
+            ← Use a different account
+          </button>
+        </form>
+      )}
 
       <p className="mt-6 text-center text-sm text-muted-foreground">
         New to Nexus?{" "}

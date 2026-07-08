@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   useCurrentAccount,
@@ -125,6 +126,14 @@ export default function SessionsPage() {
         <p className="mt-4 max-w-xl text-base leading-7 text-[#5e554a]">
           Estas son las sesiones activas de tu cuenta en el panel de Nexus. Puedes
           revocar cualquier sesión de forma individual o cerrar todas a la vez.
+        </p>
+        <p className="mt-3 text-sm">
+          <Link
+            href="/settings/security"
+            className="font-medium text-[#5e554a] underline-offset-2 hover:text-[#181612] hover:underline"
+          >
+            Configurar two-factor authentication →
+          </Link>
         </p>
 
         {error ? (
