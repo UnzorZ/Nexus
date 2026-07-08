@@ -74,7 +74,10 @@ The app exposes a **single** signing key by design (see ADR-0011). Rotating it
 invalidates outstanding access tokens until clients refresh — that is accepted by
 decision. To rotate:
 
-1. Generate a new keystore (step 1) with a fresh key.
+1. Generate a new keystore (step 1) with a fresh key — or use the bundled helper:
+   `KEYSTORE=/etc/nexus/jwt-keystore.p12 ./scripts/rotate-jwk.sh` (it generates
+   the keystore, sets `chmod 600`, and prints the four `NEXUS_OAUTH_JWK_*` values
+   to wire into the environment).
 2. Replace the file at `NEXUS_OAUTH_JWK_KEYSTORE_LOCATION` (or point the env to the
    new file) and redeploy.
 3. Outstanding access tokens signed with the previous key stop validating until
