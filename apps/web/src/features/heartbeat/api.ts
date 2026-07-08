@@ -36,7 +36,8 @@ export type RegistrySettings = {
   intervalSeconds: number;
   timeoutSeconds: number;
   offlineNotifyEnabled: boolean;
-  offlineNotifyEmail: string | null;
+  /** Destinatarios de la alerta offline (uno por elemento; vacío si desactivado). */
+  offlineNotifyRecipients: string[];
   overridden: boolean;
   updatedAt: string | null;
 };
@@ -57,7 +58,7 @@ export async function saveRegistrySettings(
     timeoutSeconds: number;
     /** Omitir (undefined) preserva la config existente de alerta offline. */
     offlineNotifyEnabled?: boolean;
-    offlineNotifyEmail?: string | null;
+    offlineNotifyRecipients?: string[];
   },
   csrfToken: string,
 ): Promise<RegistrySettings> {

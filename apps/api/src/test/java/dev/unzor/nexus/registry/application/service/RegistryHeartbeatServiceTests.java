@@ -16,6 +16,7 @@ import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -105,10 +106,10 @@ class RegistryHeartbeatServiceTests {
         when(settingsRepository.findByProjectId(projectId)).thenReturn(Optional.empty());
         when(settingsRepository.save(any(ProjectRegistrySettings.class))).thenAnswer(i -> i.getArgument(0));
 
-        RegistrySettings result = service.saveSettings(projectId, 30, 90, true, "ops@example.com", UUID.randomUUID());
+        RegistrySettings result = service.saveSettings(projectId, 30, 90, true, List.of("ops@example.com"), UUID.randomUUID());
 
         assertThat(result.offlineNotifyEnabled()).isTrue();
-        assertThat(result.offlineNotifyEmail()).isEqualTo("ops@example.com");
+        assertThat(result.offlineNotifyRecipients()).containsExactly("ops@example.com");
         assertThat(result.intervalSeconds()).isEqualTo(30);
     }
 
@@ -116,7 +117,7 @@ class RegistryHeartbeatServiceTests {
     void saveSettingsRequiresEmailWhenOfflineNotifyEnabled() {
         UUID projectId = UUID.randomUUID();
         when(settingsRepository.findByProjectId(projectId)).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> service.saveSettings(projectId, 30, 90, true, "  ", UUID.randomUUID()))
+        assertThatThrownBy(() -> service.saveSettings(projectId, 30, 90, true, List.of("  "), UUID.randomUUID()))
                 .isInstanceOf(InvalidRegistrySettingsException.class);
     }
 
@@ -124,7 +125,7 @@ class RegistryHeartbeatServiceTests {
     void saveSettingsRejectsInvalidEmailWhenEnabled() {
         UUID projectId = UUID.randomUUID();
         when(settingsRepository.findByProjectId(projectId)).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> service.saveSettings(projectId, 30, 90, true, "not-an-email", UUID.randomUUID()))
+        assertThatThrownBy(() -> service.saveSettings(projectId, 30, 90, true, List.of("not-an-email"), UUID.randomUUID()))
                 .isInstanceOf(InvalidRegistrySettingsException.class);
     }
 
@@ -134,10 +135,10 @@ class RegistryHeartbeatServiceTests {
         when(settingsRepository.findByProjectId(projectId)).thenReturn(Optional.empty());
         when(settingsRepository.save(any(ProjectRegistrySettings.class))).thenAnswer(i -> i.getArgument(0));
 
-        RegistrySettings result = service.saveSettings(projectId, 30, 90, false, "ops@example.com", UUID.randomUUID());
+        RegistrySettings result = service.saveSettings(projectId, 30, 90, false, List.of("ops@example.com"), UUID.randomUUID());
 
         assertThat(result.offlineNotifyEnabled()).isFalse();
-        assertThat(result.offlineNotifyEmail()).isNull();
+        assertThat(result.offlineNotifyRecipients()).isEmpty();
     }
 
     @Test
@@ -146,7 +147,7 @@ class RegistryHeartbeatServiceTests {
         // resetear la config de alerta offline existente.
         UUID projectId = UUID.randomUUID();
         ProjectRegistrySettings existing = new ProjectRegistrySettings(projectId, 30, 90);
-        existing.updateOfflineNotify(true, "ops@example.com");
+        existing.updateOfflineNotify(true, List.of("ops@example.com"));
         when(settingsRepository.findByProjectId(projectId)).thenReturn(Optional.of(existing));
         when(settingsRepository.save(any(ProjectRegistrySettings.class))).thenAnswer(i -> i.getArgument(0));
 
@@ -155,6 +156,6 @@ class RegistryHeartbeatServiceTests {
         assertThat(result.intervalSeconds()).isEqualTo(45);
         assertThat(result.timeoutSeconds()).isEqualTo(120);
         assertThat(result.offlineNotifyEnabled()).isTrue();
-        assertThat(result.offlineNotifyEmail()).isEqualTo("ops@example.com");
+        assertThat(result.offlineNotifyRecipients()).containsExactly("ops@example.com");
     }
 }
