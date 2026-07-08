@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { QRCodeSVG } from "qrcode.react";
-import { ShieldAlert, ShieldCheck } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import {
   beginPanelMfaEnrollment,
   confirmPanelMfaEnrollment,
@@ -27,7 +26,6 @@ function isUnauthorized(err: unknown): boolean {
 }
 
 export default function SecurityPage() {
-  const router = useRouter();
   const qc = useQueryClient();
   const [ready, setReady] = useState(false);
   const [step, setStep] = useState<Step>("idle");

@@ -12,7 +12,7 @@ Módulo de autenticación y autorización de Nexus. Implementa un **Authorizatio
 | **Tipo** | Módulo Spring Modulith (`@ApplicationModule(displayName = "Identity")`) |
 | **Protocolo** | OAuth 2.0 + OpenID Connect 1.0 |
 | **Flujos soportados** | Authorization Code, Refresh Token |
-| **Estado** | OAuth persistente en PostgreSQL; login de panel separado en `admin` |
+| **Estado** | OAuth persistente en PostgreSQL (multi-issuer por proyecto, ADR-0016); login/verify/reset/MFA/sesiones de `ProjectUser` en `/api/p/{slug}/**`; login de panel separado en `admin` |
 
 ---
 
@@ -55,11 +55,13 @@ identity/
 └── package-info.java                 # Declaración del módulo Modulith
 ```
 
-`ProjectUser` y `ProjectUserPrincipal` ya definen el modelo de usuario aislado
-por proyecto. Los repositorios y el `UserDetailsService` con resolución
-obligatoria del contexto de proyecto siguen pendientes. Las capas `oauth`,
-`sessions` y `persistence` están preparadas para la implementación de clientes,
-tokens, sesiones y acceso a datos.
+`ProjectUser` y `ProjectUserPrincipal` definen el usuario aislado por proyecto.
+La implementación vive repartida en `application/service` (login, MFA, verify,
+reset, sesiones), `application/configuration` (cadenas de seguridad + SAS),
+`persistence/repository` (JPA) e `infrastructure/security` (authenticators +
+principals). Los paquetes `oauth/` y `sessions/` del árbol de arriba siguen
+vacíos por decisión de co-localización (el código de OAuth/sesiones está en
+`application` + `infrastructure`, no en subárboles separados).
 
 La explicación completa del modelo y su separación respecto a las cuentas del
 panel está en
@@ -84,9 +86,10 @@ Request
 ```
 
 El panel Nexus **no** usa el Authorization Server global. Las cuentas
-`NexusAccount` inician sesión en `/panel/login` con sesión HTTP y CSRF
-(`XSRF-TOKEN` / `X-XSRF-TOKEN`). Los flujos OAuth persistentes preparan
-`ProjectUser` por proyecto bajo `/p/{projectSlug}/**` (diseño futuro).
+`NexusAccount` inician sesión con login JSON en `POST /api/panel/v1/session/login`
+(sesión HTTP + CSRF `XSRF-TOKEN`/`X-XSRF-TOKEN`; el form-login Thymeleaf
+`/panel/login` fue eliminado). Los flujos OAuth por proyecto sirven a
+`ProjectUser` bajo `/p/{projectSlug}/**` (multi-issuer implementado, ADR-0016).
 
 ### Cadena 1 — Authorization Server (`@Order(1)`)
 
@@ -121,13 +124,14 @@ Definida en [`PanelSecurityConfiguration`](../../apps/api/src/main/java/dev/unzo
 - Logout API: `POST /api/panel/v1/session/logout` (204, CSRF). Logout HTML: `POST /panel/logout`.
 - `/admin/**` y `/api/admin/**` quedan reservados para un futuro panel exclusivo de `INSTANCE_ADMIN`.
 
-### Cadena 4 — Proyecto reservado (`@Order(4)`)
+### Cadena 4 — API de usuario final (`@Order(4)`)
 
-Definida en [`ProjectSecurityConfiguration`](../../apps/api/src/main/java/dev/unzor/nexus/identity/application/configuration/ProjectSecurityConfiguration.java).
+Definida en [`ProjectEndUserSecurityConfiguration`](../../apps/api/src/main/java/dev/unzor/nexus/identity/application/configuration/ProjectEndUserSecurityConfiguration.java).
 
-- Aplica a `/p/**` sin deshabilitar CSRF globalmente.
-- `GET /p/{projectSlug}/login` es público y reservado; no hay login funcional de `ProjectUser`.
-- No registra `ProjectUserUserDetailsService` como bean global.
+- Aplica a `/api/p/**` (la API JSON del portal de usuario final, consumida por Next.js con credenciales). Espejo de la cadena del panel (CORS + CookieCsrf + SameSite + 401 JSON) pero SIN `DaoAuthenticationProvider`: el login es manual vía `ProjectSessionAuthenticator`.
+- `permitAll`: `GET /api/p/*/csrf`, y los `POST` de login, login/mfa, register, verify-email(+resend) y password-reset(+confirm). El resto requiere sesión.
+- `ProjectSessionAuthenticator` persiste el `SecurityContext` en la sesión compartida — lo que el Authorization Server reconoce al reanudar `/p/{slug}/oauth2/authorize`.
+- MFA TOTP: si el usuario la tiene activa, el login fija un ticket efímero y lanza `MfaRequiredException` **sin persistir contexto** (SAS no puede reanudar authorize); `POST /api/p/*/login/mfa` verifica el TOTP/recovery y entonces sí establece la sesión con ambos factores (`amr: [pwd, otp]`).
 
 ### Cadena 5 — Residual (`@Order(5)`)
 
@@ -232,9 +236,9 @@ Gestionados automáticamente por Spring Authorization Server:
 
 ```
 Next.js /register  ──POST /api/panel/v1/accounts + CSRF──►  API del panel
-Next.js /login     ──redirect──►  GET /panel/login?continue=…
-Usuario            ──POST /panel/login + CSRF──►  sesión HTTP (JSESSIONID)
-Next.js /dashboard ──GET /api/panel/v1/me + cookies──►  401 → redirect login
+Next.js /login     ──POST /api/panel/v1/session/login + CSRF──►  sesión HTTP (JSESSIONID)
+                        (si la cuenta tiene MFA → {code:mfa_required} → /session/login/mfa)
+Next.js /projects  ──GET /api/panel/v1/me + cookies──►  401 → redirect login
                    ──POST /api/panel/v1/session/logout + CSRF──►  204
 ```
 
@@ -247,13 +251,21 @@ El operador debe reclamar una instalación nueva antes de exponerla de forma gen
 
 Si el frontend (`localhost:3000`) y la API (`localhost:8080`) usan hosts distintos, el navegador trata las cookies por origen. Las mutaciones deben usar `credentials: "include"` y la API debe exponer CORS con `allowCredentials`. En producción, alinear dominio/parent domain o usar un proxy same-origin.
 
-## Flujo OAuth por proyecto (reservado)
+## Flujo OAuth por proyecto (implementado)
 
 ```
-/p/{slug}/oauth2/*  → issuer futuro por proyecto
-/p/{slug}/login     → placeholder (sin ProjectUser funcional)
-/oauth2/authorize   → redirige a /oauth2/authentication-required (no panel)
+GET  /p/{slug}/oauth2/authorize   → sin sesión → entry point redirige a
+                                     {frontend}/p/{slug}/login?continue=<authorize>
+POST /api/p/{slug}/login          → ProjectSessionAuthenticator establece sesión
+                                     (o mfa_required → /login/mfa)
+GET  /p/{slug}/oauth2/authorize   → con sesión → ConsentController →
+                                     {frontend}/p/{slug}/oauth2/consent → code
+POST /p/{slug}/oauth2/token       → access + id_token (amr refleja MFA)
 ```
+
+Cada proyecto es su propio issuer (`CompositeRegisteredClientRepository` resuelve
+el cliente por `client_id` → proyecto; `ProjectOauthClientsService` gestiona los
+clientes por proyecto desde el panel).
 
 ---
 
@@ -305,16 +317,17 @@ testImplementation 'org.springframework.boot:spring-boot-starter-security-oauth2
 - [x] Firma JWT con keystore PKCS12 persistente y `kid` estable.
 - [x] Persistencia JDBC de clientes, autorizaciones y consentimientos OAuth2.
 - [x] Cliente bootstrap técnico idempotente (`nexus.oauth.bootstrap.*`).
-- [x] Panel Nexus con `NexusAccount`, sesión HTTP, CSRF y `/panel/login`.
+- [x] **Multi-issuer por proyecto** (`/p/{slug}`) — `CompositeRegisteredClientRepository` + `ProjectOauthClientsService` (ADR-0016).
+- [x] **Login funcional de `ProjectUser`** en `/api/p/{slug}/login` (`ProjectSessionAuthenticator`, `ProjectUserUserDetailsService` con `projectId` obligatorio).
+- [x] **Verificación de email + registro dual + reseteo de contraseña** self-service (M2/M3).
+- [x] **TOTP MFA** end-user (step-up + inscripción + recovery codes; `amr: [pwd, otp]`) (M5).
+- [x] **Consent** branded vía redirect a Next.js + **gestión de sesiones** end-user (list/revoke) (M4 + sesiones).
+- [x] Panel Nexus con `NexusAccount` (login JSON + sesión HTTP + CSRF + MFA TOTP propia).
 - [x] Health-check interno del módulo.
 
-### 🔲 Pendiente (multi-issuer)
+### 🔲 Pendiente
 
-- [ ] Issuer dinámico por proyecto (`/p/{slug}`).
-- [ ] `ProjectUserUserDetailsService` con `projectId` obligatorio.
-- [ ] Discovery/JWKS/claves de firma por proyecto.
-- [ ] Login funcional de `ProjectUser` en `/p/{slug}/login`.
-- [ ] Integración con `permissions` y eventos de dominio de auth.
+- [ ] Rate-limiting en endpoints de auth pública + backups (Track B / M6).
 
 ---
 

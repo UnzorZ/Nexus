@@ -46,8 +46,8 @@ import java.util.UUID;
  * sesión (anti fixation), indexa por {@code nexus.accountId}, fija los identificadores
  * públicos de gestión de sesión, construye la autenticación con los
  * {@link FactorGrantedAuthority} (PASSWORD siempre; TOTP si procede) y persiste el
- * contexto. Reemplaza la inicialización manual que antes hacía el controlador +
- * {@code PanelSessionInitializer}.</p>
+ * contexto. Reemplaza la inicialización manual que antes hacía el controlador.
+ * </p>
  */
 @Component
 public class PanelSessionAuthenticator {

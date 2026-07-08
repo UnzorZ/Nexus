@@ -17,7 +17,8 @@ export type InstanceSmtpSettings = {
   updatedAt: string | null;
 };
 
-export type SmtpConnectionCheck = { ok: boolean; message: string };
+import type { SmtpConnectionCheck } from "@/lib/api/types";
+export type { SmtpConnectionCheck };
 
 /** Status de sólo lectura de la configuración operativa de la instancia. */
 export type InstanceStatus = {

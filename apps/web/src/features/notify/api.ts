@@ -117,7 +117,8 @@ export type SmtpSettings = {
   updatedAt: string | null;
 };
 
-export type SmtpConnectionCheck = { ok: boolean; message: string };
+import type { SmtpConnectionCheck } from "@/lib/api/types";
+export type { SmtpConnectionCheck };
 
 export async function fetchSmtpSettings(
   projectId: string,

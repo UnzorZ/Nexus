@@ -49,7 +49,7 @@ What we are protecting:
 | **CSRF** | CSRF token on state-changing routes; cookies `SameSite` (Lax default, None under `remote-dev` over HTTPS) | `SecurityConfig`, `csrf.ts` |
 | **Open redirect** | `continue`/post-login targets validated to the same realm | `safePostLoginTarget`, `isInternalPath` |
 | **XSS in email/notification preview** | Sanitized only in-browser with DOMPurify; outbound email bodies are HTML-escaped for reported values | `InstanceOfflineNotifier.escape`, dashboard preview |
-| **Secrets at rest** | API-key secrets and (planned) MFA TOTP secrets hashed/encrypted; vault uses AES-256-GCM | `VaultCrypto`, `ProjectApiKey` |
+| **Secrets at rest** | API-key secrets hashed (peppered); MFA TOTP secrets encrypted (AES-256-GCM, reversible to compute codes), recovery codes hashed SHA-256 single-use; vault uses AES-256-GCM | `VaultCrypto`, `TotpCrypto`, `ProjectApiKey` |
 | **Misconfigured production** | Fail-closed startup guard + VaultCrypto abort when dev keystore / dev master key are used outside dev profiles | `IdentityStartupGuard`, `VaultCrypto` |
 | **Information disclosure via Actuator** | Only `health` (+ liveness/readiness) and `prometheus` are public; the rest require HTTP Basic | `SecurityConfiguration` |
 
