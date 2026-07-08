@@ -329,7 +329,7 @@ export function ProjectsPageShell() {
       {/* Footer */}
       <footer className="border-t bg-card px-6 py-4 text-center text-xs text-muted-foreground">
         <Link
-          href="/dashboard/settings"
+          href="/instance-settings"
           className="transition-colors hover:text-foreground"
         >
           Panel settings

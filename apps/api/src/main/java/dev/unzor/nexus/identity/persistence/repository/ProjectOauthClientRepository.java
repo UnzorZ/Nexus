@@ -30,6 +30,4 @@ public interface ProjectOauthClientRepository extends Repository<ProjectOauthCli
     /** Global por PK: lo usa el CompositeRegisteredClientRepository para resolver
      *  un cliente desde el {@code registered_client_id} de una autorización. */
     Optional<ProjectOauthClient> findById(UUID id);
-
-    boolean existsByClientId(String clientId);
 }

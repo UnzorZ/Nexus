@@ -51,9 +51,9 @@ type SessionGuardState =
   | { status: "authenticated"; account: NexusAccount };
 
 function currentPathForContinue(): string {
-  if (typeof window === "undefined") return "/dashboard";
+  if (typeof window === "undefined") return "/projects";
   const { pathname, search } = window.location;
-  return `${pathname}${search}` || "/dashboard";
+  return `${pathname}${search}` || "/projects";
 }
 
 export function DashboardShell({

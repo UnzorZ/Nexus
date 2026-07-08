@@ -164,14 +164,6 @@ public class NexusAccount extends AbstractAggregateRoot<NexusAccount> {
         lastLoginAt = Objects.requireNonNull(loggedInAt);
     }
 
-    public void enableMfa() {
-        mfaEnabled = true;
-    }
-
-    public void disableMfa() {
-        mfaEnabled = false;
-    }
-
     /**
      * Guarda el secret TOTP cifrado durante la inscripción (aún no activa).
      */

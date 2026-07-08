@@ -101,13 +101,11 @@ const SECTION_MAP: Record<string, string> = {
 function crumbHref(crumb: string, projectId?: string): string | undefined {
   if (crumb === "Projects") return "/projects";
   if (crumb === "Project settings") {
-    return projectId ? `/projects/${projectId}/settings` : "/dashboard/settings";
+    return projectId ? `/projects/${projectId}/settings` : "/projects";
   }
   const section = SECTION_MAP[crumb];
   if (section) {
-    return projectId
-      ? `/projects/${projectId}/${section}`
-      : `/dashboard/${section}`;
+    return projectId ? `/projects/${projectId}/${section}` : "/projects";
   }
   // Un crumb dinámico que no es una sección conocida (p. ej. el nombre del
   // proyecto) enlaza a la raíz del proyecto cuando la página aporta projectId.

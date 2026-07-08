@@ -288,9 +288,13 @@ gain access to the Nexus dashboard.
 
 OAuth clients, authorizations, and consents are persisted in PostgreSQL (JDBC).
 Bootstrap client configuration: `identity/application/configuration/NexusOAuthBootstrapProperties`
-and `OidcRegisteredClientBootstrap`. Project-scoped routes under `/p/**` are reserved;
-`ProjectSecurityConfiguration` keeps CSRF enabled. Multi-issuer per project and
-functional `ProjectUser` login are not implemented yet.
+and `OidcRegisteredClientBootstrap`. The end-user surface is fully Next.js + JSON under
+`/api/p/{slug}/**` (`ProjectEndUserSecurityConfiguration`, `@Order(4)`): per-project
+multi-issuer OAuth (ADR-0016, `CompositeRegisteredClientRepository`), functional
+`ProjectUser` login + email-verify + password-reset, TOTP MFA (step-up + enrollment +
+recovery codes), consent, and per-user session management (list/revoke). CSRF is enabled
+on the `/api/p/**` chain; the OAuth machine endpoints (`/oauth2/{token,introspect,revoke}`)
+are exempt.
 
 ### notify
 
