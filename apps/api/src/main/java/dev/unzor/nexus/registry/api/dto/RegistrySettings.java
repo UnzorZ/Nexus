@@ -3,6 +3,7 @@ package dev.unzor.nexus.registry.api.dto;
 import dev.unzor.nexus.registry.domain.entity.ProjectRegistrySettings;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -15,17 +16,17 @@ public record RegistrySettings(
         int intervalSeconds,
         int timeoutSeconds,
         boolean offlineNotifyEnabled,
-        String offlineNotifyEmail,
+        List<String> offlineNotifyRecipients,
         boolean overridden,
         Instant updatedAt
 ) {
     public static RegistrySettings defaults(UUID projectId, int interval, int timeout) {
-        return new RegistrySettings(projectId, interval, timeout, false, null, false, null);
+        return new RegistrySettings(projectId, interval, timeout, false, List.of(), false, null);
     }
 
     public static RegistrySettings from(ProjectRegistrySettings settings) {
         return new RegistrySettings(settings.getProjectId(), settings.getIntervalSeconds(),
                 settings.getTimeoutSeconds(), settings.isOfflineNotifyEnabled(),
-                settings.getOfflineNotifyEmail(), true, settings.getUpdatedAt());
+                settings.getOfflineNotifyRecipients(), true, settings.getUpdatedAt());
     }
 }

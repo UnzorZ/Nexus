@@ -67,12 +67,12 @@ public class HeartbeatOfflineMonitor {
     }
 
     private void notifyIfEnabled(ProjectHeartbeat beat, Instant now) {
-        String recipient = settingsRepository.findByProjectId(beat.getProjectId())
+        java.util.List<String> recipients = settingsRepository.findByProjectId(beat.getProjectId())
                 .filter(ProjectRegistrySettings::isOfflineNotifyEnabled)
-                .map(ProjectRegistrySettings::getOfflineNotifyEmail)
-                .orElse(null);
-        if (recipient == null || recipient.isBlank()) {
-            return; // proyecto sin alerta activada o sin email
+                .map(ProjectRegistrySettings::getOfflineNotifyRecipients)
+                .orElse(java.util.List.of());
+        if (recipients.isEmpty()) {
+            return; // proyecto sin alerta activada o sin destinatarios
         }
         // Dedup antes de enviar: marca avisado aunque el SMTP falle después (no
         // re-spamea cada barrido; la recuperación al siguiente latido rearma).
@@ -80,6 +80,6 @@ public class HeartbeatOfflineMonitor {
         heartbeatRepository.save(beat);
         eventPublisher.publishEvent(new InstanceWentOffline(
                 beat.getProjectId(), beat.getInstanceId(), beat.getAppName(),
-                recipient, beat.getLastSeenAt()));
+                recipients, beat.getLastSeenAt()));
     }
 }

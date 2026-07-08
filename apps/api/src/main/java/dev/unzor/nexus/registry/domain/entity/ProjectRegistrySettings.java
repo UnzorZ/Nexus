@@ -1,6 +1,8 @@
 package dev.unzor.nexus.registry.domain.entity;
 
+import dev.unzor.nexus.registry.domain.StringListConverter;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
@@ -11,6 +13,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -36,9 +39,10 @@ public class ProjectRegistrySettings {
     @Column(name = "offline_notify_enabled", nullable = false)
     private boolean offlineNotifyEnabled;
 
-    /** Destinatario de la alerta offline (null si desactivado). */
-    @Column(name = "offline_notify_email", length = 320)
-    private String offlineNotifyEmail;
+    /** Destinatarios de la alerta offline (lista vacía si desactivado). */
+    @Convert(converter = StringListConverter.class)
+    @Column(name = "offline_notify_recipients")
+    private List<String> offlineNotifyRecipients;
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
@@ -48,7 +52,7 @@ public class ProjectRegistrySettings {
         this.intervalSeconds = intervalSeconds;
         this.timeoutSeconds = timeoutSeconds;
         this.offlineNotifyEnabled = false;
-        this.offlineNotifyEmail = null;
+        this.offlineNotifyRecipients = List.of();
     }
 
     public void update(int intervalSeconds, int timeoutSeconds) {
@@ -57,9 +61,9 @@ public class ProjectRegistrySettings {
     }
 
     /** Actualiza sólo la config de alerta offline (independiente de los umbrales). */
-    public void updateOfflineNotify(boolean offlineNotifyEnabled, String offlineNotifyEmail) {
+    public void updateOfflineNotify(boolean offlineNotifyEnabled, List<String> offlineNotifyRecipients) {
         this.offlineNotifyEnabled = offlineNotifyEnabled;
-        this.offlineNotifyEmail = offlineNotifyEmail;
+        this.offlineNotifyRecipients = offlineNotifyRecipients == null ? List.of() : offlineNotifyRecipients;
     }
 
     @PrePersist

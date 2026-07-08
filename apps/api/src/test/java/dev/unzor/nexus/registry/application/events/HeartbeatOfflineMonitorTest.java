@@ -37,7 +37,7 @@ class HeartbeatOfflineMonitorTest {
         ProjectHeartbeat beat = beat(projectId, "inst-1", "My App");
         when(heartbeatRepository.findOfflineCandidates(any())).thenReturn(List.of(beat));
         ProjectRegistrySettings settings = new ProjectRegistrySettings(projectId, 30, 90);
-        settings.updateOfflineNotify(true, "ops@example.com");
+        settings.updateOfflineNotify(true, List.of("ops@example.com"));
         when(settingsRepository.findByProjectId(projectId)).thenReturn(Optional.of(settings));
         when(heartbeatRepository.save(any(ProjectHeartbeat.class))).thenAnswer(i -> i.getArgument(0));
 
@@ -51,7 +51,7 @@ class HeartbeatOfflineMonitorTest {
         assertThat(event.projectId()).isEqualTo(projectId);
         assertThat(event.instanceId()).isEqualTo("inst-1");
         assertThat(event.appName()).isEqualTo("My App");
-        assertThat(event.recipientEmail()).isEqualTo("ops@example.com");
+        assertThat(event.recipients()).containsExactly("ops@example.com");
     }
 
     @Test
