@@ -155,6 +155,24 @@ class ProjectUsersController {
         statusService.disable(projectId, userId, principal.accountId());
     }
 
+    /**
+     * Revoca los tokens/sesiones del usuario sin cambiar su estado: bump de
+     * {@code authz_version} (introspection → inactivo) + revoca sesiones activas.
+     * Fuerza reautenticación en todas partes. Requiere {@code requireManage}.
+     */
+    @PostMapping("/{userId}/revoke-tokens")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void revokeTokens(
+            @PathVariable UUID projectId,
+            @PathVariable UUID userId,
+            @AuthenticationPrincipal AuthenticatedAccount principal,
+            Authentication authentication
+    ) {
+        boolean isInstanceAdmin = isInstanceAdmin(authentication);
+        projectAccessService.requireManage(projectId, principal.accountId(), isInstanceAdmin);
+        statusService.revokeTokens(projectId, userId, principal.accountId());
+    }
+
     @DeleteMapping("/{userId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void delete(
