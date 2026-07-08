@@ -23,7 +23,10 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.annotation.web.configuration.OAuth2AuthorizationServerConfiguration;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.config.annotation.web.configurers.oauth2.server.authorization.OAuth2AuthorizationServerConfigurer;
+import org.springframework.security.oauth2.core.oidc.OidcIdToken;
+import org.springframework.security.oauth2.core.oidc.OidcUserInfo;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.server.authorization.OAuth2Authorization;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
 import org.springframework.security.oauth2.server.authorization.settings.AuthorizationServerSettings;
 import org.springframework.security.web.SecurityFilterChain;
@@ -42,7 +45,9 @@ import java.security.PublicKey;
 import java.security.cert.Certificate;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
+import java.util.HashMap;
 import java.util.HexFormat;
+import java.util.Map;
 
 /**
  * Configuración de seguridad del Authorization Server OAuth2/OIDC y cadena residual.
@@ -88,7 +93,21 @@ public class SecurityConfig {
                                     providers.set(0, new AuthzVersionIntrospectionAuthenticationProvider(
                                             defaultProvider, authorizationService, projectUserRepository));
                                 }))
-                                .oidc(Customizer.withDefaults())
+                                .oidc(oidc -> oidc
+                                        // /userinfo: el mapper por defecto de SAS filtra los claims a
+                                        // EMAIL/PHONE/PROFILE según el scope, lo que dropearía `permissions`.
+                                        // Partimos de los claims del token (ID si existe, si no access — ambos
+                                        // llevan `permissions` vía ProjectIdTokenCustomizer) y los exponemos
+                                        // sin filtrar, de modo que /userinfo incluye sub, project_id,
+                                        // authz_version y permissions.
+                                        .userInfoEndpoint(userInfo -> userInfo.userInfoMapper(ctx -> {
+                                            OAuth2Authorization az = ctx.getAuthorization();
+                                            OAuth2Authorization.Token<?> idToken = az.getToken(OidcIdToken.class);
+                                            OAuth2Authorization.Token<?> token = idToken != null
+                                                    ? idToken : az.getAccessToken();
+                                            Map<String, Object> claims = new HashMap<>(token.getClaims());
+                                            return new OidcUserInfo(claims);
+                                        })))
                 )
                 .authorizeHttpRequests(authorize ->
                         authorize.anyRequest().authenticated()

@@ -2,6 +2,8 @@ package dev.unzor.nexus.identity.application.service;
 
 import dev.unzor.nexus.identity.application.context.ProjectAuthenticationContext;
 import dev.unzor.nexus.identity.infrastructure.security.ProjectUserPrincipal;
+import dev.unzor.nexus.permissions.application.dto.EffectiveAuthorities;
+import dev.unzor.nexus.permissions.application.service.EffectiveAuthoritiesService;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.FactorGrantedAuthority;
@@ -9,14 +11,21 @@ import org.springframework.security.oauth2.server.authorization.token.JwtEncodin
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenCustomizer;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
 /**
- * Añade los claims {@code project_id} y {@code authz_version} a los access/ID
- * tokens emitidos para usuarios finales (spec §15.3). Lee el issuer resuelto por
- * SAS ({@code {origin}/p/{slug}}), resuelve el proyecto desde el slug y, si el
- * principal es un {@link ProjectUserPrincipal}, incrusta los claims.
+ * Añade los claims {@code project_id}, {@code authz_version} y {@code permissions}
+ * a los access/ID tokens emitidos para usuarios finales (spec §15.3). Lee el
+ * issuer resuelto por SAS ({@code {origin}/p/{slug}}), resuelve el proyecto desde
+ * el slug y, si el principal es un {@link ProjectUserPrincipal}, incrusta los
+ * claims.
+ *
+ * <p>{@code permissions} contiene las claves de permiso efectivas del usuario
+ * (comodines {@code orders.*} / {@code *} verbatim, ADR-0003); un resource server
+ * que valide el JWT localmente puede autorizar a partir de ellas. Se emiten tanto
+ * en el access token como en el ID token (sin filtro por tipo de token).</p>
  *
  * <p>No añade nada para flujos sin usuario final (p. ej. client credentials) ni
  * cuando el issuer no corresponde a un proyecto. El claim {@code iss} lo fija el
@@ -26,9 +35,12 @@ import java.util.UUID;
 public class ProjectIdTokenCustomizer implements OAuth2TokenCustomizer<JwtEncodingContext> {
 
     private final ProjectSlugResolver projectSlugResolver;
+    private final EffectiveAuthoritiesService effectiveAuthoritiesService;
 
-    public ProjectIdTokenCustomizer(ProjectSlugResolver projectSlugResolver) {
+    public ProjectIdTokenCustomizer(ProjectSlugResolver projectSlugResolver,
+                                    EffectiveAuthoritiesService effectiveAuthoritiesService) {
         this.projectSlugResolver = projectSlugResolver;
+        this.effectiveAuthoritiesService = effectiveAuthoritiesService;
     }
 
     @Override
@@ -59,6 +71,11 @@ public class ProjectIdTokenCustomizer implements OAuth2TokenCustomizer<JwtEncodi
 
         context.getClaims().claim("project_id", projectId.toString());
         context.getClaims().claim("authz_version", pup.authzVersion());
+
+        // permissions: claves de permiso efectivas (comodines verbatim, ADR-0003). Se copian
+        // a un ArrayList para una serialización Jackson determinista en oauth2_authorization.
+        EffectiveAuthorities authorities = effectiveAuthoritiesService.forUser(pup.projectId(), pup.userId());
+        context.getClaims().claim("permissions", new ArrayList<>(authorities.permissionKeys()));
 
         // amr: refleja el segundo factor cuando el login completó MFA TOTP (M5).
         if (hasTotpFactor(principalAuth)) {
