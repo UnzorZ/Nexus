@@ -3,14 +3,16 @@ package dev.unzor.nexus.notify.application.events;
 import dev.unzor.nexus.notify.application.service.ProjectNotificationsService;
 import dev.unzor.nexus.shared.audit.InstanceWentOffline;
 import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
 /**
  * Reacciona a {@link InstanceWentOffline} enviando un email al destinatario
- * configurado del proyecto. Listener síncrono dentro del barrido de registry; el
+ * configurado del proyecto. Se ejecuta asíncronamente en el {@code notifyExecutor}:
+ * un SMTP lento no bloquea el barrido de registry que publicó el evento. El
  * {@code send} traga excepciones (SMTP caído → fila FAILED en {@code notifications}),
- * así que no aborta el barrido. {@code actorAccountId=null} es el emisor sistema
- * (mismo valor que usa el runtime controller).
+ * así que un fallo de envío no aborta nada. {@code actorAccountId=null} es el emisor
+ * sistema (mismo valor que usa el runtime controller).
  */
 @Component
 public class InstanceOfflineNotifier {
@@ -21,6 +23,7 @@ public class InstanceOfflineNotifier {
         this.notificationsService = notificationsService;
     }
 
+    @Async("notifyExecutor")
     @EventListener
     public void onInstanceWentOffline(InstanceWentOffline event) {
         String subject = "Instance offline: " + event.appName();
