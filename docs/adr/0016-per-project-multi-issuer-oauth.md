@@ -49,8 +49,10 @@ a session login under `/p/**`.
 
 4. **Project claims via `OAuth2TokenCustomizer`.** A `ProjectIdTokenCustomizer`
    reads the resolved issuer, resolves the project from the slug, and (when the
-   principal is a `ProjectUserPrincipal`) adds `project_id` +
-   `authz_version` to access/ID tokens. `iss` is set by the framework.
+   principal is a `ProjectUserPrincipal`) adds `project_id`, `authz_version` and
+   `permissions` (effective permission keys, wildcards verbatim, ADR-0003) to
+   access/ID tokens; `/userinfo` exposes the same claims via a `userInfoMapper`.
+   `iss` is set by the framework.
 
 5. **Token lifetimes.** Access tokens 10 min, refresh tokens 7 d rolling
    (`TokenSettings.reuseRefreshTokens(true)` rotates the refresh token on each
@@ -67,7 +69,9 @@ a session login under `/p/**`.
 
 - **Projects get real OAuth at `/p/{slug}`.** Discovery, JWKS, authorize, token,
   userinfo are served per project; tokens carry `iss`=`{host}/p/{slug}`,
-  `project_id`, `authz_version`.
+  `project_id`, `authz_version` and `permissions`. A reference consumer
+  (`examples/spring-client-app`) demonstrates local-JWT validation and
+  permission glob-matching.
 - **OAuth clients are panel-managed.** `project_oauth_clients` (V27) holds
   project-scoped clients; secrets are `{bcrypt}`-hashed and shown once; public
   clients force PKCE.
@@ -85,6 +89,10 @@ a session login under `/p/**`.
 ## Deferred
 
 Per-project signing keys; consent screen UI (first-party clients auto-approve);
-RP-Initiated Logout UI; token introspection; a `project_id` column on
-`oauth2_authorization` (defense-in-depth); `authz_version` bump wiring; JWK
-rotation tooling.
+RP-Initiated Logout UI; a `project_id` column on `oauth2_authorization`
+(defense-in-depth); JWK rotation tooling.
+
+> **No longer deferred:** token introspection (implemented via
+> `AuthzVersionIntrospectionAuthenticationProvider`, enforces `authz_version`),
+> `authz_version` bump wiring (`incrementAuthzVersion()` on role/permission
+> change), and the `permissions` claim + reference resource-server app (M7).
