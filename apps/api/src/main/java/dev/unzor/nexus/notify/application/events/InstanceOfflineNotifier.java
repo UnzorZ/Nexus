@@ -31,9 +31,13 @@ public class InstanceOfflineNotifier {
                 + " (<code>" + escape(event.instanceId()) + "</code>) has not checked in"
                 + " since " + event.lastSeenAt() + ".</p>"
                 + "<p style=\"color:#6b7280;font-size:.85rem\">Project " + event.projectId() + "</p>";
-        notificationsService.send(
-                event.projectId(), event.recipientEmail(),
-                null, subject, body, null, null);
+        // Fan-out: un envío por destinatario. El send traga excepciones de SMTP
+        // (fila FAILED en notifications), así que un fallo en uno no corta los demás.
+        for (String recipient : event.recipients()) {
+            notificationsService.send(
+                    event.projectId(), recipient,
+                    null, subject, body, null, null);
+        }
     }
 
     /** Escape HTML mínimo de valores reportados por el cliente (anti inyección en el email). */

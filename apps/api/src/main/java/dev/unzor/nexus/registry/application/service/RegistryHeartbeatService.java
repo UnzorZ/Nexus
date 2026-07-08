@@ -91,7 +91,7 @@ public class RegistryHeartbeatService {
 
     @Transactional
     public RegistrySettings saveSettings(UUID projectId, int intervalSeconds, int timeoutSeconds,
-                                         Boolean offlineNotifyEnabled, String offlineNotifyEmail,
+                                         Boolean offlineNotifyEnabled, List<String> offlineNotifyRecipients,
                                          UUID actorAccountId) {
         projectLookupService.requireById(projectId);
         if (intervalSeconds < 1 || timeoutSeconds < intervalSeconds) {
@@ -104,8 +104,10 @@ public class RegistryHeartbeatService {
         // offlineNotify* opcional: si se omite (null), se preserva la config existente
         // (así el guardado de sólo umbrales no la resetea).
         if (offlineNotifyEnabled != null) {
-            String email = offlineNotifyEnabled ? normalizeEmail(offlineNotifyEmail) : null;
-            settings.updateOfflineNotify(offlineNotifyEnabled, email);
+            List<String> recipients = offlineNotifyEnabled
+                    ? normalizeEmails(offlineNotifyRecipients)
+                    : List.of();
+            settings.updateOfflineNotify(offlineNotifyEnabled, recipients);
         }
         ProjectRegistrySettings saved = settingsRepository.save(settings);
         eventPublisher.publishEvent(AuditEvent.byAccount(
@@ -115,17 +117,36 @@ public class RegistryHeartbeatService {
         return RegistrySettings.from(saved);
     }
 
-    /** Valida el email sólo si la alerta está activada; lo normaliza (trim) o null. */
-    private static String normalizeEmail(String email) {
-        if (email == null || email.isBlank()) {
+    /**
+     * Normaliza/valida la lista de destinatarios sólo si la alerta está activada:
+     * trim, descarta vacíos, valida formato, dedupe preservando orden. Exige al
+     * menos uno válido.
+     */
+    static List<String> normalizeEmails(List<String> recipients) {
+        if (recipients == null || recipients.isEmpty()) {
             throw new InvalidRegistrySettingsException(
-                    "offlineNotifyEmail is required when offlineNotifyEnabled is true.");
+                    "offlineNotifyRecipients is required when offlineNotifyEnabled is true.");
         }
-        String trimmed = email.trim();
-        if (!trimmed.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
-            throw new InvalidRegistrySettingsException("offlineNotifyEmail is not a valid email.");
+        java.util.LinkedHashSet<String> seen = new java.util.LinkedHashSet<>();
+        for (String raw : recipients) {
+            if (raw == null) {
+                continue;
+            }
+            String trimmed = raw.trim();
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+            if (!trimmed.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
+                throw new InvalidRegistrySettingsException(
+                        "offlineNotifyRecipients contains an invalid email: " + trimmed);
+            }
+            seen.add(trimmed);
         }
-        return trimmed;
+        if (seen.isEmpty()) {
+            throw new InvalidRegistrySettingsException(
+                    "offlineNotifyRecipients is required when offlineNotifyEnabled is true.");
+        }
+        return List.copyOf(seen);
     }
 
     /** Umbrales efectivos: override del proyecto, si no el default de instancia, si no el env. */

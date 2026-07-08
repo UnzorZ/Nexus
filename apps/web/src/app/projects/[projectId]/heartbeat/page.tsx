@@ -5,7 +5,6 @@ import { Info } from "lucide-react";
 import { ActivityIcon } from "@/components/ui/activity";
 import { ClockIcon } from "@/components/ui/clock";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Table,
@@ -77,12 +76,12 @@ export default function ProjectHeartbeatPage() {
   const settingsQ = useProjectRegistrySettings(project?.id ?? "");
   const saveSettingsM = useSaveRegistrySettings(project?.id ?? "");
   const [notifyEnabled, setNotifyEnabled] = useState(false);
-  const [notifyEmail, setNotifyEmail] = useState("");
+  const [notifyEmailsText, setNotifyEmailsText] = useState("");
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect */
     if (settingsQ.data) {
       setNotifyEnabled(settingsQ.data.offlineNotifyEnabled);
-      setNotifyEmail(settingsQ.data.offlineNotifyEmail ?? "");
+      setNotifyEmailsText((settingsQ.data.offlineNotifyRecipients ?? []).join("\n"));
     }
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [settingsQ.data]);
@@ -130,11 +129,17 @@ export default function ProjectHeartbeatPage() {
 
   async function onSaveOfflineAlert() {
     if (!settingsQ.data) return;
+    const recipients = notifyEnabled
+      ? notifyEmailsText
+          .split("\n")
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0)
+      : [];
     await saveSettingsM.mutateAsync({
       intervalSeconds: settingsQ.data.intervalSeconds,
       timeoutSeconds: settingsQ.data.timeoutSeconds,
       offlineNotifyEnabled: notifyEnabled,
-      offlineNotifyEmail: notifyEnabled ? notifyEmail.trim() : null,
+      offlineNotifyRecipients: recipients,
     });
   }
 
@@ -270,19 +275,24 @@ export default function ProjectHeartbeatPage() {
             </label>
             {canManage ? (
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="hb-notify-email">Alert recipient</Label>
-                <Input
-                  id="hb-notify-email"
-                  type="email"
-                  placeholder="ops@example.com"
-                  value={notifyEmail}
-                  onChange={(e) => setNotifyEmail(e.target.value)}
+                <Label htmlFor="hb-notify-recipients">Alert recipients</Label>
+                <textarea
+                  id="hb-notify-recipients"
+                  placeholder={"ops@example.com\noncall@example.com"}
+                  value={notifyEmailsText}
+                  onChange={(e) => setNotifyEmailsText(e.target.value)}
                   disabled={!notifyEnabled}
+                  rows={3}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  spellCheck={false}
                 />
+                <p className="text-[11px] text-muted-foreground">
+                  One email per line. Each recipient gets the offline alert.
+                </p>
               </div>
             ) : settingsQ.data?.offlineNotifyEnabled ? (
               <p className="text-sm text-muted-foreground">
-                Alerts to {settingsQ.data.offlineNotifyEmail ?? "—"}.
+                Alerts to {(settingsQ.data.offlineNotifyRecipients ?? []).join(", ") || "—"}.
               </p>
             ) : (
               <p className="text-sm text-muted-foreground">Disabled.</p>
@@ -297,7 +307,11 @@ export default function ProjectHeartbeatPage() {
                   onClick={onSaveOfflineAlert}
                   disabled={
                     saveSettingsM.isPending ||
-                    (notifyEnabled && !notifyEmail.trim())
+                    (notifyEnabled &&
+                      notifyEmailsText
+                        .split("\n")
+                        .map((s) => s.trim())
+                        .filter((s) => s.length > 0).length === 0)
                   }
                 >
                   {saveSettingsM.isPending ? "Saving…" : "Save alerts"}
