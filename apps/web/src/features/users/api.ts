@@ -128,6 +128,27 @@ export async function disableProjectUser(
   );
 }
 
+/**
+ * Revoca los tokens y sesiones del usuario sin cambiar su estado: bump de
+ * authz_version (introspection → inactivo) + revoca sesiones activas. Fuerza
+ * reautenticación en todas partes.
+ */
+export async function revokeProjectUserTokens(
+  projectId: string,
+  userId: string,
+  csrfToken: string,
+): Promise<void> {
+  await apiClient.post<null>(
+    apiRoutes.panel.projects.users.statusAction(projectId, userId, "revoke-tokens"),
+    null,
+    {
+      headers: { [CSRF_HEADER_NAME]: csrfToken },
+      redirect: "manual",
+      errorMessage: "No se pudieron revocar los tokens del usuario.",
+    },
+  );
+}
+
 export async function deleteProjectUser(
   projectId: string,
   userId: string,
