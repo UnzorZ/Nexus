@@ -4,11 +4,19 @@ import dev.unzor.nexus.identity.application.service.ProjectOauthClientToRegister
 import dev.unzor.nexus.identity.domain.entity.ProjectOauthClient;
 import dev.unzor.nexus.identity.domain.enums.OauthClientStatus;
 import dev.unzor.nexus.identity.persistence.repository.ProjectOauthClientRepository;
+import dev.unzor.nexus.projects.application.service.ResolveProjectBySlugService;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.server.authorization.client.JdbcRegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
+import org.springframework.security.oauth2.server.authorization.context.AuthorizationServerContextHolder;
 
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * {@link RegisteredClientRepository} compuesto que sirve a la vez a los clientes
@@ -18,9 +26,19 @@ import java.util.UUID;
  *
  * <p>Las búsquedas prueban primero el repo de proyecto; si no encuentran, delegan
  * en el {@link JdbcRegisteredClientRepository} global (donde vive el cliente
- * bootstrap). El método {@code save} se invoca sólo desde el bootstrap runner →
- * delega al global (los clientes de proyecto se persisten directamente en
- * {@code project_oauth_clients} vía su repo, no por aquí).</p>
+ * bootstrap).</p>
+ *
+ * <p><b>save</b> discrimina por el issuer del contexto del AS:
+ * <ul>
+ *   <li>Sin contexto (bootstrap runner en arranque) o issuer global → persiste en la tabla
+ *       global (cliente técnico).</li>
+ *   <li>Issuer por-realm {@code {origin}/p/{slug}} (registro dinámico DCR en
+ *       {@code /p/{slug}/connect/register}) → persiste el nuevo cliente en
+ *       {@code project_oauth_clients} del proyecto {slug}, con el mismo id que el
+ *       {@link RegisteredClient} (las autorizaciones se keyean por ese id) y el
+ *       client_secret hasheado (bcrypt, mismo encoder que la app). Así el DCR es
+ *       <b>project-scoped</b> y el cliente queda sujeto al realm del proyecto.</li>
+ * </ul>
  *
  * <p>El aislamiento entre proyectos no depende de este repositorio: cada cliente
  * tiene un id (UUID) y un client_id globalmente únicos, y las autorizaciones se
@@ -31,22 +49,80 @@ public class CompositeRegisteredClientRepository implements RegisteredClientRepo
     private final ProjectOauthClientRepository projectRepository;
     private final ProjectOauthClientToRegisteredClientMapper mapper;
     private final JdbcRegisteredClientRepository global;
+    private final JdbcTemplate jdbc;
+    private final ResolveProjectBySlugService slugResolver;
+    private final PasswordEncoder passwordEncoder;
 
     public CompositeRegisteredClientRepository(
             ProjectOauthClientRepository projectRepository,
             ProjectOauthClientToRegisteredClientMapper mapper,
-            JdbcRegisteredClientRepository global
+            JdbcRegisteredClientRepository global,
+            JdbcTemplate jdbc,
+            ResolveProjectBySlugService slugResolver,
+            PasswordEncoder passwordEncoder
     ) {
         this.projectRepository = projectRepository;
         this.mapper = mapper;
         this.global = global;
+        this.jdbc = jdbc;
+        this.slugResolver = slugResolver;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Override
     public void save(RegisteredClient registeredClient) {
-        // Sólo el bootstrap runner llama a save; los clientes de proyecto se
-        // persisten vía ProjectOauthClientRepository.
-        global.save(registeredClient);
+        String issuer = null;
+        var ctx = AuthorizationServerContextHolder.getContext();
+        if (ctx != null) {
+            issuer = ctx.getIssuer();
+        }
+        int realmIdx = issuer == null ? -1 : issuer.lastIndexOf("/p/");
+        if (realmIdx > 0) {
+            // DCR per-issuer → persiste como cliente del proyecto {slug}.
+            String slug = issuer.substring(realmIdx + 3);
+            persistProjectClient(registeredClient, slug);
+        } else {
+            // Bootstrap runner (sin contexto) o issuer global → tabla global.
+            global.save(registeredClient);
+        }
+    }
+
+    private void persistProjectClient(RegisteredClient rc, String slug) {
+        UUID projectId = slugResolver.resolve(slug).projectId();
+        UUID id;
+        try {
+            id = UUID.fromString(rc.getId());
+        } catch (IllegalArgumentException notAUuid) {
+            throw new IllegalStateException("DCR client id is not a UUID: " + rc.getId());
+        }
+        String secretHash = rc.getClientSecret() == null ? null : passwordEncoder.encode(rc.getClientSecret());
+        String name = (rc.getClientName() != null && !rc.getClientName().isBlank())
+                ? rc.getClientName() : rc.getClientId();
+        String redirectUris = String.join("\n", rc.getRedirectUris());
+        String postLogoutRedirectUris = String.join("\n", rc.getPostLogoutRedirectUris());
+        String grantTypes = rc.getAuthorizationGrantTypes().stream()
+                .map(AuthorizationGrantType::getValue).collect(Collectors.joining("\n"));
+        String scopes = String.join("\n", rc.getScopes());
+        boolean requirePkce = rc.getClientSettings() != null && rc.getClientSettings().isRequireProofKey();
+        boolean consentRequired = rc.getClientSettings() != null && rc.getClientSettings().isRequireAuthorizationConsent();
+        Timestamp now = Timestamp.from(Instant.now());
+
+        // DCR create (INSERT) vs config update (UPDATE) por id.
+        int updated = jdbc.update(
+                "UPDATE project_oauth_clients SET client_secret_hash = ?, name = ?, redirect_uris = ?, "
+                        + "post_logout_redirect_uris = ?, grant_types = ?, scopes = ?, require_pkce = ?, "
+                        + "consent_required = ?, updated_at = ? WHERE id = ?",
+                secretHash, name, redirectUris, postLogoutRedirectUris, grantTypes, scopes,
+                requirePkce, consentRequired, now, id);
+        if (updated == 0) {
+            jdbc.update(
+                    "INSERT INTO project_oauth_clients (id, project_id, client_id, client_secret_hash, name, "
+                            + "redirect_uris, post_logout_redirect_uris, grant_types, scopes, require_pkce, "
+                            + "consent_required, status, created_by_account_id, created_at, updated_at) "
+                            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?, ?)",
+                    id, projectId, rc.getClientId(), secretHash, name, redirectUris, postLogoutRedirectUris,
+                    grantTypes, scopes, requirePkce, consentRequired, null, now, now);
+        }
     }
 
     @Override

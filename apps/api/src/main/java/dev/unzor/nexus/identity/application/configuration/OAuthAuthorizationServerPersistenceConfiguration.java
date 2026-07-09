@@ -4,9 +4,11 @@ import dev.unzor.nexus.identity.application.service.ProjectOauthClientToRegister
 import dev.unzor.nexus.identity.infrastructure.security.ProjectUserPrincipal;
 import dev.unzor.nexus.identity.persistence.CompositeRegisteredClientRepository;
 import dev.unzor.nexus.identity.persistence.repository.ProjectOauthClientRepository;
+import dev.unzor.nexus.projects.application.service.ResolveProjectBySlugService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.jackson.SecurityJacksonModules;
 import org.springframework.security.oauth2.server.authorization.JdbcOAuth2AuthorizationConsentService;
 import org.springframework.security.oauth2.server.authorization.JdbcOAuth2AuthorizationService;
@@ -31,10 +33,13 @@ class OAuthAuthorizationServerPersistenceConfiguration {
     RegisteredClientRepository registeredClientRepository(
             JdbcTemplate jdbcTemplate,
             ProjectOauthClientRepository projectRepository,
-            ProjectOauthClientToRegisteredClientMapper mapper
+            ProjectOauthClientToRegisteredClientMapper mapper,
+            ResolveProjectBySlugService slugResolver,
+            PasswordEncoder passwordEncoder
     ) {
         return new CompositeRegisteredClientRepository(
-                projectRepository, mapper, new JdbcRegisteredClientRepository(jdbcTemplate));
+                projectRepository, mapper, new JdbcRegisteredClientRepository(jdbcTemplate),
+                jdbcTemplate, slugResolver, passwordEncoder);
     }
 
     @Bean
