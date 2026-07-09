@@ -1,9 +1,11 @@
 package dev.unzor.nexus.permissions.application.service;
 
 import dev.unzor.nexus.permissions.application.dto.EffectiveAuthorities;
+import dev.unzor.nexus.permissions.domain.entity.ProjectRole;
 import dev.unzor.nexus.permissions.domain.entity.ProjectRolePermission;
 import dev.unzor.nexus.permissions.domain.entity.ProjectUserRole;
 import dev.unzor.nexus.permissions.persistence.repository.ProjectRolePermissionRepository;
+import dev.unzor.nexus.permissions.persistence.repository.ProjectRoleRepository;
 import dev.unzor.nexus.permissions.persistence.repository.ProjectUserRoleRepository;
 import dev.unzor.nexus.projects.application.service.ProjectLookupService;
 import org.springframework.stereotype.Service;
@@ -29,22 +31,25 @@ public class EffectiveAuthoritiesService {
 
     private final ProjectUserRoleRepository userRoleRepository;
     private final ProjectRolePermissionRepository rolePermissionRepository;
+    private final ProjectRoleRepository roleRepository;
     private final ProjectLookupService projectLookupService;
 
     public EffectiveAuthoritiesService(
             ProjectUserRoleRepository userRoleRepository,
             ProjectRolePermissionRepository rolePermissionRepository,
+            ProjectRoleRepository roleRepository,
             ProjectLookupService projectLookupService
     ) {
         this.userRoleRepository = userRoleRepository;
         this.rolePermissionRepository = rolePermissionRepository;
+        this.roleRepository = roleRepository;
         this.projectLookupService = projectLookupService;
     }
 
     /**
-     * Claves de permiso efectivas del usuario. Carga las asignaciones del usuario
-     * y, si tiene roles, los grants del proyecto filtrando por esos roles en
-     * memoria (una sola consulta project-scoped, igual que
+     * Claves de permiso efectivas del usuario + las claves de sus roles. Carga las
+     * asignaciones del usuario y, si tiene roles, los grants del proyecto filtrando
+     * por esos roles en memoria (una sola consulta project-scoped, igual que
      * {@code ProjectRolesService.listForProject}).
      */
     @Transactional(readOnly = true)
@@ -60,7 +65,11 @@ public class EffectiveAuthoritiesService {
                 .filter(grant -> roleIds.contains(grant.getRoleId()))
                 .map(ProjectRolePermission::getPermissionKey)
                 .collect(Collectors.toCollection(TreeSet::new));
-        return new EffectiveAuthorities(keys);
+        TreeSet<String> roles = roleRepository.findAllByProjectId(projectId).stream()
+                .filter(role -> roleIds.contains(role.getId()))
+                .map(ProjectRole::getKey)
+                .collect(Collectors.toCollection(TreeSet::new));
+        return new EffectiveAuthorities(keys, roles);
     }
 
     /**
