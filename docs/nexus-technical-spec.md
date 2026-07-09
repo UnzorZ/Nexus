@@ -1360,11 +1360,15 @@ Panel session is established on the API host (`/panel/login`). The dashboard cal
 
 ### 18.1 Artifact
 
-Recommended artifact:
+The starter lives at `packages/nexus-spring-boot-starter/` (root Gradle module,
+`group = com.unzor`). In the monorepo, apps depend on it directly:
 
 ```groovy
-implementation "com.unzor:nexus-spring-boot-starter:1.0.0"
+implementation project(':packages:nexus-spring-boot-starter')
 ```
+
+When published (future), the coordinate is `com.unzor:nexus-spring-boot-starter`
+(currently `0.0.1-SNAPSHOT`). The example app `examples/spring-client-app` consumes it.
 
 ### 18.2 Configuration
 
@@ -1389,18 +1393,27 @@ nexus:
 
 ### 18.3 SDK Responsibilities
 
-The Java SDK should:
+The starter (`nexus-spring-boot-starter`, **implemented**) autoconfigures two halves from `nexus.*`:
+
+**Management** (active on `nexus.url`):
 
 - auto-configure a `NexusClient`,
 - send heartbeat,
-- declare permissions from YAML,
-- declare permissions from code providers,
-- fetch and cache permission snapshots,
+- declare permissions from YAML + code (`PermissionDeclarationProvider`) providers,
+- fetch and cache permission snapshots (`GET /api/v1/authz/users/{userId}/snapshot`),
 - resolve wildcard permissions locally,
-- deny on expired cache when Nexus is unavailable,
+- deny on expired cache when Nexus is unavailable (fail-closed, configurable),
 - expose typed clients,
-- implement retry policies only where safe,
 - avoid hiding security failures.
+
+**Security** (active on `nexus.security.issuer`):
+
+- resource-server chain validating Nexus JWTs locally (or introspection mode,
+  `nexus.security.rs-mode=introspect`),
+- OIDC client login (authorization-code + PKCE) + RP-initiated logout,
+- `@perm` SpEL bean for permission-key authorization from the token claim,
+- back-channel logout endpoint (RFC 8417) that validates the logout token and
+  publishes a `NexusBackChannelLogoutEvent` for the app to invalidate the session.
 
 ### 18.4 SDK Client Shape
 
@@ -1420,7 +1433,7 @@ public class OrderAuthorizationService {
     }
 
     public void notifyUploadCompleted() {
-        nexus.notify()
+        nexus.notifications()
                 .send("Archivo subido correctamente");
     }
 }
