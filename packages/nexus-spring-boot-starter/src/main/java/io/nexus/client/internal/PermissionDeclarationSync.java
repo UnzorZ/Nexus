@@ -49,9 +49,9 @@ public class PermissionDeclarationSync implements ApplicationRunner {
                 log.warn("PermissionDeclarationProvider {} failed: {}", provider.getClass().getName(), e.getMessage());
             }
         }
-        if (all.isEmpty()) {
-            return;
-        }
+        // Enviamos siempre (incluso vacío) para que el backend reconcilie: si la
+        // app eliminó todas sus declaraciones, el array vacío marca los permisos
+        // previos de esta app como ausentes.
         try {
             PermissionDeclarationReceipt receipt = permissionClient.declare(all);
             log.info("Permisos declarados en Nexus: {} (creados {}, marcados missing {})",

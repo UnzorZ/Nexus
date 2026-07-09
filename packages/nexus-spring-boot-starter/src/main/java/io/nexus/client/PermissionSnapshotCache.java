@@ -55,12 +55,16 @@ public class PermissionSnapshotCache {
     public AuthorizationSnapshot get(UUID userId) {
         Instant now = Instant.now();
         Cached cached = cache.get(userId);
-        if (cached != null && cached.snapshot().expiresAt().isAfter(now)) {
+        if (cached != null && cached.validUntil().isAfter(now)) {
             return cached.snapshot();
         }
         try {
             AuthorizationSnapshot fresh = permissionClient.snapshot(userId);
-            cache.put(userId, new Cached(fresh));
+            // La validez cacheada es el mínimo entre el expiresAt del backend y el
+            // TTL configurado por el cliente (un snapshot-ttl menor acorta la ventana
+            // de autorización cacheada, aunque el backend indique más tiempo).
+            Instant validUntil = fresh.expiresAt().isBefore(now.plus(ttl)) ? fresh.expiresAt() : now.plus(ttl);
+            cache.put(userId, new Cached(fresh, validUntil));
             return fresh;
         } catch (RuntimeException e) {
             log.warn("Permission snapshot fetch failed for user {}: {}", userId, e.getMessage());
@@ -82,5 +86,5 @@ public class PermissionSnapshotCache {
         return snapshot == null ? List.of() : snapshot.permissions();
     }
 
-    private record Cached(AuthorizationSnapshot snapshot) {}
+    private record Cached(AuthorizationSnapshot snapshot, Instant validUntil) {}
 }
