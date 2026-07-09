@@ -52,6 +52,7 @@ import {
   useProjectUsers,
   useReactivateProjectUser,
   useResetProjectUserPassword,
+  useRevokeProjectUserTokens,
   useSuspendProjectUser,
   useUpdateProjectUser,
 } from "@/features/users/queries";
@@ -112,6 +113,7 @@ export default function ProjectUsersPage() {
   const disableM = useDisableProjectUser(projectId);
   const deleteM = useDeleteProjectUser(projectId);
   const resetM = useResetProjectUserPassword(projectId);
+  const revokeTokensM = useRevokeProjectUserTokens(projectId);
 
   const users = usersQ.data ?? null;
   const usersLoading = usersQ.isLoading;
@@ -153,6 +155,7 @@ export default function ProjectUsersPage() {
     disableM.isPending ||
     deleteM.isPending ||
     resetM.isPending ||
+    revokeTokensM.isPending ||
     setRolesM.isPending;
 
   const createFieldErrors = toFieldErrors(createM.error);
@@ -167,6 +170,7 @@ export default function ProjectUsersPage() {
     disableM.error ??
     deleteM.error ??
     resetM.error ??
+    revokeTokensM.error ??
     setRolesM.error;
   const actionError = actionErr ? toMessage(actionErr, USER_MESSAGES) : null;
 
@@ -181,6 +185,7 @@ export default function ProjectUsersPage() {
     disableM.reset();
     deleteM.reset();
     resetM.reset();
+    revokeTokensM.reset();
   }
 
   async function onCreate() {
@@ -448,6 +453,16 @@ export default function ProjectUsersPage() {
                               >
                                 <Ban className="size-3.5" />
                                 Disable
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                disabled={busy || user.status === "DISABLED"}
+                                onClick={() => {
+                                  resetMutations();
+                                  revokeTokensM.mutate(user.id);
+                                }}
+                              >
+                                <KeyRound className="size-3.5" />
+                                Revoke tokens
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem

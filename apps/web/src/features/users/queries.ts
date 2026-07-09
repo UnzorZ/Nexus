@@ -8,6 +8,7 @@ import {
   fetchProjectUsers,
   reactivateProjectUser,
   resetProjectUserPassword,
+  revokeProjectUserTokens,
   suspendProjectUser,
   updateProjectUser,
   type CreateProjectUserPayload,
@@ -74,6 +75,16 @@ export function useDisableProjectUser(projectId: string) {
   return useMutation({
     mutationFn: (userId: string) =>
       withCsrf((token) => disableProjectUser(projectId, userId, token)),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: queryKeys.projects.users(projectId) }),
+  });
+}
+
+export function useRevokeProjectUserTokens(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) =>
+      withCsrf((token) => revokeProjectUserTokens(projectId, userId, token)),
     onSuccess: () =>
       qc.invalidateQueries({ queryKey: queryKeys.projects.users(projectId) }),
   });
