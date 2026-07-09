@@ -453,12 +453,19 @@ Packages are not product modules. Product behavior belongs in `apps/api`; integr
 
 ### packages/nexus-spring-boot-starter
 
-Java SDK / Spring Boot starter for applications that integrate with Nexus.
+One-stop Java SDK / Spring Boot starter for applications that integrate with Nexus.
+A single dependency autoconfigures both halves: **security** (OIDC login, local JWT
+validation, `@perm` permission authz, RP-initiated + back-channel logout) and
+**management** (heartbeat, permission declaration sync, permission snapshot cache,
+notify) from the `nexus.*` properties. Root Gradle module
+(`:packages:nexus-spring-boot-starter`), library (bootJar disabled), zero dependency
+on the backend (Nexus reached only over HTTP). The `examples/spring-client-app` is a
+root module too and consumes this starter.
 
 Put here:
 
 - Nexus Java client,
-- auto-configuration,
+- auto-configuration (management + Spring Security OAuth2),
 - API key configuration,
 - heartbeat client,
 - permission declaration sync,
