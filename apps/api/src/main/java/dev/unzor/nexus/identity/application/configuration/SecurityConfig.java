@@ -93,6 +93,15 @@ public class SecurityConfig {
                                 // anuncia en discovery (pushed_authorization_request_endpoint), pero no
                                 // fuerza a los clientes existentes a usarlo.
                                 .pushedAuthorizationRequestEndpoint(Customizer.withDefaults())
+                                // Device Authorization Grant (RFC 8628): dispositivos sin browser/entrada
+                                // cómoda (CLI, TV, IoT) piden un device_code en /oauth2/device_authorization,
+                                // muestran un user_code + verification_uri, el usuario lo aprueba en su
+                                // browser en /oauth2/device_verification (redirige a la página Next.js vía
+                                // DeviceVerificationController), y el dispositivo sondea /oauth2/token hasta
+                                // obtener los tokens. El cliente debe llevar el grant
+                                // urn:ietf:params:oauth:grant-type:device_code.
+                                .deviceAuthorizationEndpoint(Customizer.withDefaults())
+                                .deviceVerificationEndpoint(dv -> dv.consentPage("/oauth2/device"))
                                 // Introspection con enforcement de authz_version (#22): un token
                                 // cuya versión stale (tras un cambio de rol) introspecta como
                                 // inactivo. Ver AuthzVersionIntrospectionAuthenticationProvider.
