@@ -46,6 +46,19 @@ import java.util.stream.Collectors;
  */
 public class CompositeRegisteredClientRepository implements RegisteredClientRepository {
 
+    /**
+     * Scopes OIDC por defecto asignados a un cliente registrado dinámicamente (DCR) que no
+     * declara scopes. SAS 7.0.5 rechaza {@code scope} en el registro dinámico por diseño
+     * ("scope must not be set during Dynamic Client Registration") — el AS controla los
+     * scopes, no el cliente auto-registrado. Sin embargo, el converter de SAS no aplica
+     * scopes por defecto, así que un cliente DCR "en bruto" llegaría con cero scopes y no
+     * podría completar un login OIDC (necesita {@code openid}). En Nexus los scopes OAuth
+     * son sólo los estándar OIDC ({@code openid}, {@code profile}) — los permisos viajan en
+     * el claim {@code permissions} (vía {@code ProjectIdTokenCustomizer}), no como scopes —,
+     * de modo que este default es suficiente para OIDC y no concede nada sensible.
+     */
+    static final java.util.Set<String> DEFAULT_DCR_SCOPES = java.util.Set.of("openid", "profile");
+
     private final ProjectOauthClientRepository projectRepository;
     private final ProjectOauthClientToRegisteredClientMapper mapper;
     private final JdbcRegisteredClientRepository global;
@@ -102,7 +115,11 @@ public class CompositeRegisteredClientRepository implements RegisteredClientRepo
         String postLogoutRedirectUris = String.join("\n", rc.getPostLogoutRedirectUris());
         String grantTypes = rc.getAuthorizationGrantTypes().stream()
                 .map(AuthorizationGrantType::getValue).collect(Collectors.joining("\n"));
-        String scopes = String.join("\n", rc.getScopes());
+        // DCR sin scopes declarados → default OIDC (ver DEFAULT_DCR_SCOPES). SAS rechaza
+        // `scope` en el registro, así que un cliente DCR llega siempre vacío aquí.
+        java.util.Set<String> effectiveScopes = rc.getScopes().isEmpty()
+                ? DEFAULT_DCR_SCOPES : rc.getScopes();
+        String scopes = String.join("\n", effectiveScopes);
         boolean requirePkce = rc.getClientSettings() != null && rc.getClientSettings().isRequireProofKey();
         boolean consentRequired = rc.getClientSettings() != null && rc.getClientSettings().isRequireAuthorizationConsent();
         Timestamp now = Timestamp.from(Instant.now());
