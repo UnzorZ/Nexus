@@ -70,6 +70,15 @@ public class ProjectOauthClient {
     @Column(name = "post_logout_redirect_uris")
     private List<String> postLogoutRedirectUris;
 
+    /**
+     * URI de Back-Channel Logout (OIDC RFC 8417): Nexus POSTea aquí un logout token firmado
+     * cuando termina la sesión del usuario final, para que el RP invalide su sesión local
+     * sin depender del browser (front-channel). Nullable: sólo los clientes que soporten
+     * back-channel logout lo declaran.
+     */
+    @Column(name = "backchannel_logout_uri", length = 500)
+    private String backchannelLogoutUri;
+
     @Convert(converter = StringListConverter.class)
     @Column(name = "grant_types", nullable = false)
     private List<String> grantTypes;
@@ -140,6 +149,13 @@ public class ProjectOauthClient {
 
     public void updateScopes(List<String> scopes) {
         this.scopes = List.copyOf(scopes);
+    }
+
+    /** Asigna la URI de back-channel logout (blank → null). */
+    public void updateBackchannelLogoutUri(String backchannelLogoutUri) {
+        this.backchannelLogoutUri =
+                (backchannelLogoutUri == null || backchannelLogoutUri.isBlank())
+                        ? null : backchannelLogoutUri.trim();
     }
 
     /** Rotación del secreto: reemplaza el hash y reactiva el cliente. */
