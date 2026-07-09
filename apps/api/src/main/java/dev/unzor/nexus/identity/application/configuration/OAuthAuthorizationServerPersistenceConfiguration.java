@@ -35,12 +35,11 @@ class OAuthAuthorizationServerPersistenceConfiguration {
             JdbcTemplate jdbcTemplate,
             ProjectOauthClientRepository projectRepository,
             ProjectOauthClientToRegisteredClientMapper mapper,
-            ResolveProjectBySlugService slugResolver,
-            PasswordEncoder passwordEncoder
+            ResolveProjectBySlugService slugResolver
     ) {
         return new CompositeRegisteredClientRepository(
                 projectRepository, mapper, new JdbcRegisteredClientRepository(jdbcTemplate),
-                jdbcTemplate, slugResolver, passwordEncoder);
+                jdbcTemplate, slugResolver);
     }
 
     @Bean
