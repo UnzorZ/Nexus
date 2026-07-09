@@ -14,6 +14,7 @@ export type OauthClientSummary = {
   name: string;
   redirectUris: string[];
   postLogoutRedirectUris: string[];
+  backchannelLogoutUri: string | null;
   grantTypes: string[];
   scopes: string[];
   requirePkce: boolean;
@@ -34,6 +35,7 @@ export type CreateOauthClientPayload = {
   name: string;
   redirectUris: string[];
   postLogoutRedirectUris?: string[];
+  backchannelLogoutUri?: string | null;
   grantTypes?: string[];
   scopes?: string[];
   requirePkce: boolean;

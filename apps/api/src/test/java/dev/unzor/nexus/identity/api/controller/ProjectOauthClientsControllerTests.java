@@ -50,17 +50,20 @@ class ProjectOauthClientsControllerTests {
         UUID accountId = UUID.randomUUID();
         AuthenticatedAccount principal = () -> accountId;
         when(service.create(projectId, "Web", List.of("https://app/cb"), null,
-                List.of("authorization_code"), List.of("openid"), true, true, false, accountId))
+                List.of("authorization_code"), List.of("openid"), true, true, false,
+                "https://app/backchannel-logout", accountId))
                 .thenReturn(created());
 
         controller.create(projectId,
                 new CreateOauthClientRequest("Web", List.of("https://app/cb"), null,
-                        List.of("authorization_code"), List.of("openid"), true, true, false),
+                        List.of("authorization_code"), List.of("openid"), true, true, false,
+                        "https://app/backchannel-logout"),
                 principal, authentication(principal, false));
 
         verify(projectAccessService).requireManage(projectId, accountId, false);
         verify(service).create(projectId, "Web", List.of("https://app/cb"), null,
-                List.of("authorization_code"), List.of("openid"), true, true, false, accountId);
+                List.of("authorization_code"), List.of("openid"), true, true, false,
+                "https://app/backchannel-logout", accountId);
     }
 
     @Test
@@ -72,7 +75,7 @@ class ProjectOauthClientsControllerTests {
                 .when(projectAccessService).requireManage(projectId, accountId, false);
 
         assertThatThrownBy(() -> controller.create(projectId,
-                new CreateOauthClientRequest("Web", List.of("https://app/cb"), null, null, null, true, true, false),
+                new CreateOauthClientRequest("Web", List.of("https://app/cb"), null, null, null, true, true, false, null),
                 principal, authentication(principal, false))).isInstanceOf(ProjectAccessDeniedException.class);
 
         verifyNoInteractions(service);
@@ -87,14 +90,14 @@ class ProjectOauthClientsControllerTests {
         var auth = authentication(principal, false);
 
         controller.update(projectId, id,
-                new UpdateOauthClientRequest("Web", List.of("https://app/cb"), null, List.of("openid"), OauthClientStatus.ACTIVE),
+                new UpdateOauthClientRequest("Web", List.of("https://app/cb"), null, List.of("openid"), OauthClientStatus.ACTIVE, null),
                 principal, auth);
         controller.rotate(projectId, id, principal, auth);
         controller.disable(projectId, id, principal, auth);
         controller.delete(projectId, id, principal, auth);
 
         verify(projectAccessService, org.mockito.Mockito.times(4)).requireManage(projectId, accountId, false);
-        verify(service).update(projectId, id, "Web", List.of("https://app/cb"), null, List.of("openid"), OauthClientStatus.ACTIVE, accountId);
+        verify(service).update(projectId, id, "Web", List.of("https://app/cb"), null, List.of("openid"), OauthClientStatus.ACTIVE, null, accountId);
         verify(service).rotateSecret(projectId, id, accountId);
         verify(service).disable(projectId, id, accountId);
         verify(service).delete(projectId, id, accountId);
@@ -109,13 +112,13 @@ class ProjectOauthClientsControllerTests {
 
     private static OauthClientSummary summary() {
         return new OauthClientSummary(UUID.randomUUID(), "nxo-x", "Web", List.of("https://app/cb"),
-                List.of(), List.of("authorization_code"), List.of("openid"), true, false, true, "ACTIVE",
+                List.of(), null, List.of("authorization_code"), List.of("openid"), true, false, true, "ACTIVE",
                 Instant.parse("2026-01-01T00:00:00Z"), Instant.parse("2026-01-01T00:00:00Z"));
     }
 
     private static OauthClientCreated created() {
         return new OauthClientCreated(UUID.randomUUID(), "nxo-x", "nxs-secret", "Web",
-                List.of("https://app/cb"), List.of(), List.of("authorization_code"), List.of("openid"),
+                List.of("https://app/cb"), List.of(), null, List.of("authorization_code"), List.of("openid"),
                 true, false, true, "ACTIVE", Instant.parse("2026-01-01T00:00:00Z"), Instant.parse("2026-01-01T00:00:00Z"));
     }
 }

@@ -66,6 +66,7 @@ public class ProjectOauthClientsService {
             boolean requirePkce,
             boolean confidential,
             boolean consentRequired,
+            String backchannelLogoutUri,
             UUID actorAccountId
     ) {
         List<String> effectiveGrants = (grantTypes == null || grantTypes.isEmpty()) ? DEFAULT_GRANT_TYPES : grantTypes;
@@ -90,6 +91,7 @@ public class ProjectOauthClientsService {
                 projectId, clientId, secretHash, name,
                 redirectUris, postLogoutRedirectUris, effectiveGrants, effectiveScopes,
                 effectiveRequirePkce, consentRequired, actorAccountId);
+        client.updateBackchannelLogoutUri(backchannelLogoutUri);
         ProjectOauthClient saved = repository.saveAndFlush(client);
         audit("oauth_client.created", projectId, saved.getId(), actorAccountId,
                 Map.of("name", saved.getName(), "client_id", saved.getClientId()));
@@ -102,12 +104,14 @@ public class ProjectOauthClientsService {
             String name,
             List<String> redirectUris, List<String> postLogoutRedirectUris, List<String> scopes,
             OauthClientStatus status,
+            String backchannelLogoutUri,
             UUID actorAccountId
     ) {
         ProjectOauthClient client = require(projectId, clientId);
         client.rename(name);
         client.updateRedirectUris(redirectUris, postLogoutRedirectUris);
         client.updateScopes(scopes);
+        client.updateBackchannelLogoutUri(backchannelLogoutUri);
         if (status == OauthClientStatus.DISABLED) {
             client.disable();
         } else {

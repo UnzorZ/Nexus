@@ -17,6 +17,7 @@ public record UpdateOauthClientRequest(
         @NotEmpty List<@Size(max = 500) String> redirectUris,
         List<@Size(max = 500) String> postLogoutRedirectUris,
         List<@Size(max = 64) String> scopes,
-        @NotNull OauthClientStatus status
+        @NotNull OauthClientStatus status,
+        @Size(max = 500) String backchannelLogoutUri
 ) {
 }

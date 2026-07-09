@@ -19,6 +19,7 @@ public record CreateOauthClientRequest(
         List<@Size(max = 64) String> scopes,
         boolean requirePkce,
         boolean confidential,
-        boolean consentRequired
+        boolean consentRequired,
+        @Size(max = 500) String backchannelLogoutUri
 ) {
 }
