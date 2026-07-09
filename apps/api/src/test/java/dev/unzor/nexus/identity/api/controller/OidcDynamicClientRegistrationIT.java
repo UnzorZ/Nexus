@@ -73,6 +73,58 @@ class OidcDynamicClientRegistrationIT {
                 .asString().startsWith("$2a$");
     }
 
+    @Test
+    void dcrClientWithoutScopeGetsDefaultOidcScopes() throws Exception {
+        // SAS 7.0.5 rechaza `scope` en DCR por diseño y su converter no aplica scopes por
+        // defecto, así que un cliente DCR llegaría con cero scopes → no podría hacer OIDC.
+        // Nexus asigna los scopes OIDC estándar (openid, profile) por defecto (los permisos
+        // viajan en el claim `permissions`, no como scopes). Este test fija ese comportamiento.
+        SeededProject p = seedProject();
+
+        mockMvc.perform(post("/p/" + p.slug + "/oauth2/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "redirect_uris": ["https://example.com/callback"],
+                                  "grant_types": ["authorization_code", "refresh_token"],
+                                  "token_endpoint_auth_method": "client_secret_basic",
+                                  "client_name": "DCR Default Scope Client"
+                                }
+                                """))
+                .andExpect(status().isCreated());
+
+        List<Map<String, Object>> rows = jdbc.queryForList(
+                "SELECT scopes FROM project_oauth_clients WHERE project_id = ?", p.projectId);
+        org.assertj.core.api.Assertions.assertThat(rows).hasSize(1);
+        org.assertj.core.api.Assertions.assertThat(rows.get(0).get("scopes"))
+                .asString()
+                .contains("openid", "profile");
+    }
+
+    @Test
+    void dcrRejectsDeclaredScopeByDesign() throws Exception {
+        // Guard: SAS rechaza `scope` en el registro dinámico (invalid_scope) — postura de
+        // seguridad (el AS controla los scopes; un cliente auto-registrado no se auto-concede
+        // nada). Nexus lo respeta: los clientes DCR reciben DEFAULT_DCR_SCOPES en su lugar.
+        // Si este test empieza a fallar (pasa a 201), alguien permitió scope arbitrario en
+        // DCR — revisar el validador del AS antes de aceptarlo.
+        SeededProject p = seedProject();
+
+        mockMvc.perform(post("/p/" + p.slug + "/oauth2/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "redirect_uris": ["https://example.com/callback"],
+                                  "grant_types": ["authorization_code", "refresh_token"],
+                                  "token_endpoint_auth_method": "client_secret_basic",
+                                  "client_name": "DCR Scoped Client",
+                                  "scope": "openid profile"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("invalid_scope"));
+    }
+
     private SeededProject seedProject() {
         String slug = "dcr-" + UUID.randomUUID();
         UUID projectId = UUID.randomUUID();
