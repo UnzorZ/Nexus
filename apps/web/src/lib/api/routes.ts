@@ -134,7 +134,7 @@ export const apiRoutes = {
         statusAction: (
           projectId: string,
           userId: string,
-          action: "suspend" | "reactivate" | "disable",
+          action: "suspend" | "reactivate" | "disable" | "revoke-tokens",
         ) =>
           apiUrl(
             `/api/panel/v1/projects/${encodeURIComponent(projectId)}/users/${encodeURIComponent(userId)}/${action}`,

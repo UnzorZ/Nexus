@@ -57,6 +57,24 @@ public class ProjectUserStatusService {
         return details;
     }
 
+    /**
+     * Revoca el acceso del usuario sin cambiar su estado: bump de {@code authz_version}
+     * (los resource servers que validan por introspection verán el token como
+     * inactivo) + revoca las sesiones activas (panel y realm del proyecto). El
+     * usuario debe reautenticarse en todas partes. No suspende ni desactiva.
+     */
+    @Transactional
+    public ProjectUserDetails revokeTokens(UUID projectId, UUID userId, UUID actorAccountId) {
+        ProjectUser user = load(projectId, userId);
+        user.incrementAuthzVersion();
+        ProjectUserDetails details = ProjectUserDetails.from(repository.save(user));
+        sessions.revokeAll(userId);
+        eventPublisher.publishEvent(AuditEvent.byAccount(
+                projectId, "project_user.tokens_revoked", "project_user",
+                Objects.toString(user.getId(), null), actorAccountId, Map.of()));
+        return details;
+    }
+
     private ProjectUserDetails transition(
             UUID projectId, UUID userId, UUID actorAccountId, String action, Consumer<ProjectUser> mutator
     ) {
