@@ -8,6 +8,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.sql.Timestamp;
@@ -123,6 +124,46 @@ class OidcDynamicClientRegistrationIT {
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("invalid_scope"));
+    }
+
+    @Test
+    void dcrClientAuthenticatesWithItsSecret() throws Exception {
+        // Regresión del doble-hash: el provider de DCR de SAS pre-codifica el secreto con el
+        // DelegatingPasswordEncoder ("{bcrypt}$2a$…"); si persistProjectClient lo recodificaba,
+        // client-auth fallaba con 401 invalid_client. Tras el fix, el cliente DCR autentica con
+        // el secreto devuelto en el registro. Lo probamos vía PAR (exige PKCE + client_secret_basic).
+        SeededProject p = seedProject();
+
+        String response = mockMvc.perform(post("/p/" + p.slug + "/oauth2/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "redirect_uris": ["https://example.com/callback"],
+                                  "grant_types": ["authorization_code", "refresh_token"],
+                                  "token_endpoint_auth_method": "client_secret_basic",
+                                  "client_name": "DCR Auth Client"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        @SuppressWarnings("unchecked")
+        java.util.Map<String, Object> dcrResponse =
+                new com.fasterxml.jackson.databind.ObjectMapper().readValue(response, java.util.Map.class);
+        String clientId = (String) dcrResponse.get("client_id");
+        String clientSecret = (String) dcrResponse.get("client_secret");
+
+        // PAR requiere PKCE; code_challenge S256 fijo para el test.
+        String challenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
+        mockMvc.perform(post("/p/" + p.slug + "/oauth2/par")
+                        .with(SecurityMockMvcRequestPostProcessors.httpBasic(clientId, clientSecret))
+                        .param("client_id", clientId)
+                        .param("redirect_uri", "https://example.com/callback")
+                        .param("response_type", "code")
+                        .param("scope", "openid profile")
+                        .param("code_challenge", challenge)
+                        .param("code_challenge_method", "S256"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.request_uri").exists());
     }
 
     private SeededProject seedProject() {
