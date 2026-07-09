@@ -6,27 +6,19 @@ plugins {
 
 group = 'io.nexus.example'
 version = '0.0.1-SNAPSHOT'
-description = 'Nexus reference client + resource-server app'
+description = 'Nexus reference client app (uses the nexus-spring-boot-starter)'
 
 java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
-    }
+    toolchain { languageVersion = JavaLanguageVersion.of(21) }
 }
 
-repositories {
-    mavenCentral()
-}
+repositories { mavenCentral() }
 
 dependencies {
-    // Web (Thymeleaf pages for the client side) + security.
-    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
-    implementation 'org.springframework.boot:spring-boot-starter-security'
+    // El starter aporta Spring Security OAuth2 (client + resource server) +
+    // webmvc + el cliente de gestión de Nexus. La app sólo añade Thymeleaf.
+    implementation project(':packages:nexus-spring-boot-starter')
     implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
-    // OIDC client (browser login, authorization-code + PKCE) + refresh-token grant.
-    implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
-    // Resource server: validate Nexus-issued JWTs locally against the project JWKS.
-    implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-security-test'

@@ -1,5 +1,6 @@
 package io.nexus.example.client;
 
+import io.nexus.client.security.NexusPermissionService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
@@ -9,10 +10,13 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtException;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
@@ -24,17 +28,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * End-to-end authorization test for the {@code permissions}-claim enforcement.
  * Drives {@code GET /api/orders} with a mocked JWT carrying various
- * {@code permissions} values and asserts the glob-match (via
- * {@link PermissionService}) yields 200 vs 403.
+ * {@code permissions} values and asserts the glob-match (via the starter's
+ * {@code @perm} bean, {@link NexusPermissionService}) yields 200 vs 403.
  *
- * <p>The OAuth2 client/resource-server Boot auto-configurations are excluded so
- * the slice test doesn't try to fetch Nexus's OIDC discovery document at
- * startup. The real resource-server chain ({@link ResourceServerSecurity}) is
- * imported directly, and a stub {@link JwtDecoder} satisfies its wiring — never
- * invoked because the {@code jwt()} post-processor short-circuits decoding.</p>
+ * <p>The OAuth2 client/resource-server Boot auto-configurations (and the starter's
+ * own auto-configs — they need {@code nexus.*}) are inactive, so the slice test
+ * doesn't fetch Nexus's discovery at startup. {@link TestSecurity} provides a
+ * minimal resource-server chain + the {@code @perm} bean; the {@code jwt()}
+ * post-processor short-circuits decoding and injects the authentication directly.</p>
  */
 @WebMvcTest(OrdersApiController.class)
-@Import({ResourceServerSecurity.class, PermissionService.class, OrdersApiAuthorizationTest.MethodSecurity.class})
+@Import(OrdersApiAuthorizationTest.TestSecurity.class)
 @ImportAutoConfiguration(exclude = {OAuth2ClientAutoConfiguration.class, OAuth2ResourceServerAutoConfiguration.class})
 class OrdersApiAuthorizationTest {
 
@@ -78,18 +82,29 @@ class OrdersApiAuthorizationTest {
     }
 
     @TestConfiguration
+    @EnableWebSecurity
     @EnableMethodSecurity
-    static class MethodSecurity {
-        // Stub decoder — never invoked because the test uses the jwt() post-processor,
-        // which short-circuits decoding and injects the authentication directly.
+    static class TestSecurity {
+        @Bean
+        SecurityFilterChain chain(HttpSecurity http) throws Exception {
+            return http
+                    .securityMatcher("/api/**")
+                    .authorizeHttpRequests(a -> a.anyRequest().authenticated())
+                    .oauth2ResourceServer(rs -> rs.jwt(Customizer.withDefaults()))
+                    .csrf(org.springframework.security.config.annotation.web.configurers.CsrfConfigurer::disable)
+                    .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                    .build();
+        }
+
+        /** Stub decoder — never invoked: the {@code jwt()} post-processor short-circuits decoding. */
         @Bean
         JwtDecoder jwtDecoder() {
-            return new JwtDecoder() {
-                @Override
-                public Jwt decode(String token) throws JwtException {
-                    throw new IllegalStateException("JwtDecoder must not be invoked in this test");
-                }
-            };
+            return token -> { throw new IllegalStateException("JwtDecoder must not be invoked in this test"); };
+        }
+
+        @Bean("perm")
+        NexusPermissionService perm() {
+            return new NexusPermissionService();
         }
     }
 }
