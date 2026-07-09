@@ -16,6 +16,7 @@ import org.springframework.security.oauth2.client.registration.ClientRegistratio
 import org.springframework.security.oauth2.client.registration.ClientRegistrations;
 import org.springframework.security.oauth2.client.oidc.web.logout.OidcClientInitiatedLogoutSuccessHandler;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.logout.LogoutSuccessHandler;
@@ -76,10 +77,15 @@ public class NexusSecurityAutoConfiguration {
     @Order(2)
     public SecurityFilterChain nexusClientFilterChain(HttpSecurity http, NexusProperties properties,
                                                        ClientRegistrationRepository clientRegistrationRepository) throws Exception {
-        String[] publicPaths = properties.getSecurity().getPublicPaths().toArray(String[]::new);
+        // El endpoint de back-channel logout recibe POSTs de Nexus SIN sesión ni
+        // token CSRF: debe ser público y estar excluido de CSRF (acotado a su path).
+        String backchannelPath = properties.getSecurity().getBackchannelLogoutPath();
+        java.util.List<String> permitAll = new java.util.ArrayList<>(properties.getSecurity().getPublicPaths());
+        permitAll.add(backchannelPath);
         http.authorizeHttpRequests(a -> a
-                        .requestMatchers(publicPaths).permitAll()
+                        .requestMatchers(permitAll.toArray(String[]::new)).permitAll()
                         .anyRequest().authenticated())
+                .csrf(csrf -> csrf.ignoringRequestMatchers(backchannelPath))
                 .oauth2Login(Customizer.withDefaults())
                 .logout(logout -> logout.logoutSuccessHandler(oidcLogoutSuccessHandler(clientRegistrationRepository)));
         return http.build();
@@ -106,10 +112,16 @@ public class NexusSecurityAutoConfiguration {
     /**
      * Decoder JWT compartido: valida los access tokens (resource server) y los
      * logout tokens back-channel (firma RS256 contra el JWKS del realm).
+     * Importante: valida el {@code iss} contra el issuer configurado — todos los
+     * realms comparten la clave de firma, así que sin esta comprobación un token
+     * válido emitido por OTRO proyecto autenticaría contra esta app.
      */
     @Bean
     public JwtDecoder nexusJwtDecoder(NexusProperties properties) {
-        return NimbusJwtDecoder.withJwkSetUri(properties.getSecurity().getIssuer() + "/oauth2/jwks").build();
+        String issuer = properties.getSecurity().getIssuer();
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(issuer + "/oauth2/jwks").build();
+        decoder.setJwtValidator(JwtValidators.createDefaultWithIssuer(issuer));
+        return decoder;
     }
 
     @Bean

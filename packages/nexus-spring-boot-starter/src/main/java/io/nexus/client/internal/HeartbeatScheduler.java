@@ -16,13 +16,20 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Arranca el latido de la instancia hacia Nexus (spec §13.1): hace el handshake
- * ({@code /register}) una vez y repite el latido cada {@code nexus.heartbeat.interval}
- * con un {@link ScheduledExecutorService} propio (no depende de
- * {@code @EnableScheduling}). Los fallos se loguean y no tiran la app.
+ * ({@code /register}) para obtener un instance token efímero y repite el latido
+ * cada {@code nexus.heartbeat.interval} con un {@link ScheduledExecutorService}
+ * propio (no depende de {@code @EnableScheduling}).
+ *
+ * <p>El instance token caduca (~1h); antes de expirarse, {@link #beat()} lo
+ * re-registra con la API key cruda (la misma que usa como fallback si no hay
+ * token válido). Así los latidos nunca fallan por token caducado. Los fallos se
+ * loguean y no tiran la app.</p>
  */
 public class HeartbeatScheduler {
 
     private static final Logger log = LoggerFactory.getLogger(HeartbeatScheduler.class);
+    /** Margen de re-registro antes de la expiración del instance token. */
+    private static final long TOKEN_REFRESH_MARGIN_SECONDS = 60;
 
     private final NexusClientBridge client;
     private final NexusProperties properties;
@@ -48,17 +55,15 @@ public class HeartbeatScheduler {
         if (!started.compareAndSet(false, true)) {
             return;
         }
-        try {
-            client.registerAndUseToken();
-        } catch (RuntimeException e) {
-            log.warn("Heartbeat register failed (los latidos usarán la API key cruda): {}", e.getMessage());
-        }
+        client.ensureRegistered();
         beat();
         executor.scheduleAtFixedRate(this::beat, interval.toMillis(), interval.toMillis(), TimeUnit.MILLISECONDS);
     }
 
+    /** Un latido: asegura instance token válido y registra el latido. */
     public void beat() {
         try {
+            client.ensureRegistered();
             String appName = properties.getAppName() == null ? "nexus-app" : properties.getAppName();
             HeartbeatReceipt receipt = client.heartbeat(instanceId, appName, null, "up");
             log.debug("Heartbeat OK para {} (próximo en {}s)", instanceId, receipt.nextHeartbeatInSeconds());
@@ -88,11 +93,17 @@ public class HeartbeatScheduler {
     }
 
     /**
-     * Puente al cliente de latido + handshake, para que el scheduler no dependa
-     * de la fachada {@code NexusClient} completa.
+     * Puente al cliente de latido + handshake + gestión del instance token.
      */
     public interface NexusClientBridge {
-        void registerAndUseToken();
+        /** Re-registra el instance token si caducó (o no existe), usando la API key. */
+        void ensureRegistered();
+
         HeartbeatReceipt heartbeat(String instanceId, String appName, String appVersion, String status);
+
+        /** Margen (segundos) antes de la expiración para re-registrar el token. */
+        default long tokenRefreshMarginSeconds() {
+            return TOKEN_REFRESH_MARGIN_SECONDS;
+        }
     }
 }

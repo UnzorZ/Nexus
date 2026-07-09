@@ -73,14 +73,21 @@ public class NexusAutoConfiguration {
                                                  NexusHttpClient http, NexusProperties properties) {
         HeartbeatScheduler.NexusClientBridge bridge = new HeartbeatScheduler.NexusClientBridge() {
             @Override
-            public void registerAndUseToken() {
+            public void ensureRegistered() {
+                if (http.instanceTokenValid()) {
+                    return;
+                }
+                // /register exige la API key cruda (rechaza instance tokens): la
+                // limpiamos para que el interceptor la envíe, luego re-registramos.
+                http.clearInstanceToken();
                 try {
                     var token = heartbeatClient.register();
                     if (token != null && token.token() != null) {
-                        http.useInstanceToken(token.token());
+                        long validFor = Math.max(1, token.expiresInSeconds() - tokenRefreshMarginSeconds());
+                        http.useInstanceToken(token.token(), java.time.Instant.now().plusSeconds(validFor));
                     }
                 } catch (RuntimeException ignored) {
-                    // El scheduler ya loguea; seguimos con la API key cruda.
+                    // Mantenemos la API key cruda (fallback del interceptor); reintentamos en el próximo latido.
                 }
             }
 
