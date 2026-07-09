@@ -65,7 +65,7 @@ class ProjectOauthClientsController {
         return service.create(
                 projectId, request.name(), request.redirectUris(), request.postLogoutRedirectUris(),
                 request.grantTypes(), request.scopes(), request.requirePkce(), request.confidential(),
-                request.consentRequired(), principal.accountId());
+                request.consentRequired(), request.backchannelLogoutUri(), principal.accountId());
     }
 
     @PatchMapping("/{id}")
@@ -80,7 +80,8 @@ class ProjectOauthClientsController {
         projectAccessService.requireManage(projectId, principal.accountId(), isInstanceAdmin);
         return service.update(
                 projectId, id, request.name(), request.redirectUris(),
-                request.postLogoutRedirectUris(), request.scopes(), request.status(), principal.accountId());
+                request.postLogoutRedirectUris(), request.scopes(), request.status(),
+                request.backchannelLogoutUri(), principal.accountId());
     }
 
     @PostMapping("/{id}/rotate")
