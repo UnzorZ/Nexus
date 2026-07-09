@@ -6,7 +6,6 @@ import dev.unzor.nexus.identity.persistence.repository.ProjectOauthClientReposit
 import dev.unzor.nexus.projects.application.service.ResolveProjectBySlugService;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.server.authorization.client.JdbcRegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
 
@@ -29,9 +28,8 @@ class CompositeRegisteredClientRepositoryTests {
     private final JdbcRegisteredClientRepository global = mock(JdbcRegisteredClientRepository.class);
     private final JdbcTemplate jdbc = mock(JdbcTemplate.class);
     private final ResolveProjectBySlugService slugResolver = mock(ResolveProjectBySlugService.class);
-    private final PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
     private final CompositeRegisteredClientRepository composite =
-            new CompositeRegisteredClientRepository(projectRepo, mapper, global, jdbc, slugResolver, passwordEncoder);
+            new CompositeRegisteredClientRepository(projectRepo, mapper, global, jdbc, slugResolver);
 
     @Test
     void findByIdResolvesProjectClientFirst() {

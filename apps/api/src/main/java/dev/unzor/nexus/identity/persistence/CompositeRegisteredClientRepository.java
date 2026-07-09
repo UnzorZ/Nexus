@@ -6,7 +6,6 @@ import dev.unzor.nexus.identity.domain.enums.OauthClientStatus;
 import dev.unzor.nexus.identity.persistence.repository.ProjectOauthClientRepository;
 import dev.unzor.nexus.projects.application.service.ResolveProjectBySlugService;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.server.authorization.client.JdbcRegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
@@ -64,22 +63,19 @@ public class CompositeRegisteredClientRepository implements RegisteredClientRepo
     private final JdbcRegisteredClientRepository global;
     private final JdbcTemplate jdbc;
     private final ResolveProjectBySlugService slugResolver;
-    private final PasswordEncoder passwordEncoder;
 
     public CompositeRegisteredClientRepository(
             ProjectOauthClientRepository projectRepository,
             ProjectOauthClientToRegisteredClientMapper mapper,
             JdbcRegisteredClientRepository global,
             JdbcTemplate jdbc,
-            ResolveProjectBySlugService slugResolver,
-            PasswordEncoder passwordEncoder
+            ResolveProjectBySlugService slugResolver
     ) {
         this.projectRepository = projectRepository;
         this.mapper = mapper;
         this.global = global;
         this.jdbc = jdbc;
         this.slugResolver = slugResolver;
-        this.passwordEncoder = passwordEncoder;
     }
 
     @Override
@@ -108,7 +104,12 @@ public class CompositeRegisteredClientRepository implements RegisteredClientRepo
         } catch (IllegalArgumentException notAUuid) {
             throw new IllegalStateException("DCR client id is not a UUID: " + rc.getId());
         }
-        String secretHash = rc.getClientSecret() == null ? null : passwordEncoder.encode(rc.getClientSecret());
+        // El provider de DCR de SAS pre-codifica el secreto con el DelegatingPasswordEncoder
+        // ("{bcrypt}$2a$…"). El client-auth lo verifica con el BCryptPasswordEncoder crudo del
+        // contexto (como los clientes del panel/dispositivo). Re-codificar aquí doble-hasharía
+        // → 401 invalid_client al autenticar el cliente DCR. Descartamos el prefijo "{bcrypt}"
+        // y guardamos el bcrypt crudo tal como lo emitió SAS.
+        String secretHash = stripDelegatingPrefix(rc.getClientSecret());
         String name = (rc.getClientName() != null && !rc.getClientName().isBlank())
                 ? rc.getClientName() : rc.getClientId();
         String redirectUris = String.join("\n", rc.getRedirectUris());
@@ -162,6 +163,19 @@ public class CompositeRegisteredClientRepository implements RegisteredClientRepo
                 .filter(CompositeRegisteredClientRepository::isActive)
                 .map(mapper::toRegisteredClient)
                 .orElseGet(() -> global.findByClientId(clientId));
+    }
+
+    /**
+     * Descarta el prefijo del DelegatingPasswordEncoder ({@code "{bcrypt}"}) que el provider
+     * de DCR de SAS añade al codificar el secreto, devolviendo el bcrypt crudo. {@code null}
+     * para clientes públicos.
+     */
+    private static String stripDelegatingPrefix(String clientSecret) {
+        if (clientSecret == null) {
+            return null;
+        }
+        int end = clientSecret.indexOf('}');
+        return (end > 0 && clientSecret.charAt(0) == '{') ? clientSecret.substring(end + 1) : clientSecret;
     }
 
     /**
