@@ -13,9 +13,9 @@ import { AuthShell } from "@/app/login/AuthShell";
 /**
  * Pantalla de consentimiento OAuth del usuario final (sustituye al flujo Thymeleaf). El
  * backend redirige aquí ({@code ConsentController}) reenviando {@code client_id},
- * {@code scope}, {@code state}, {@code action} (URL absoluta del API
- * {@code /p/{slug}/oauth2/authorize}) y {@code _csrf} (token enmascarado que el
- * {@code CsrfFilter} del AS valida al reenviarlo tal cual).
+ * {@code client_name} (nombre legible, si es un cliente de proyecto), {@code scope},
+ * {@code state}, {@code action} (URL absoluta del API {@code /p/{slug}/oauth2/authorize})
+ * y {@code _csrf} (token enmascarado que el {@code CsrfFilter} del AS valida al reenviarlo).
  *
  * <p>El envío es un <b>POST nativo</b> del navegador a {@code action} (no fetch): así la
  * cookie de sesión viaja al host del API, el AS registra el consentimiento y redirige al
@@ -42,6 +42,7 @@ function EndUserConsentScreen({
   const { slug } = use(slugPromise);
   const searchParams = useSearchParams();
   const clientId = searchParams.get("client_id") ?? "";
+  const clientName = searchParams.get("client_name") ?? "";
   const state = searchParams.get("state") ?? "";
   const action = searchParams.get("action") ?? "";
   const csrf = searchParams.get("_csrf") ?? "";
@@ -50,6 +51,10 @@ function EndUserConsentScreen({
     .split(" ")
     .map((s) => s.trim())
     .filter(Boolean);
+
+  // Nombre legible si el backend lo resolvió (cliente de proyecto); si no, client_id.
+  const displayApp = clientName || clientId;
+  const initial = displayApp.charAt(0).toUpperCase() || "?";
 
   if (!action || !csrf || !clientId) {
     return (
@@ -68,16 +73,26 @@ function EndUserConsentScreen({
 
   return (
     <AuthShell mode="minimal">
-      <motion.header variants={fadeUp} initial="hidden" animate="show">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-          Authorize request
-        </h1>
-        <p className="mt-1.5 text-sm text-muted-foreground">
-          An application wants to access the{" "}
-          <strong className="font-semibold text-foreground">{slug}</strong> project on
-          your behalf.
-        </p>
-      </motion.header>
+      {/* Identidad de la app que pide acceso: chip con inicial + nombre legible. */}
+      <motion.div
+        variants={fadeUp}
+        initial="hidden"
+        animate="show"
+        className="flex items-center gap-3.5"
+      >
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-lg font-bold text-primary">
+          {initial}
+        </div>
+        <div className="min-w-0">
+          <h1 className="truncate text-xl font-semibold tracking-tight text-foreground">
+            {displayApp}
+          </h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            wants to access the{" "}
+            <strong className="font-semibold text-foreground">{slug}</strong> project
+          </p>
+        </div>
+      </motion.div>
 
       <motion.div
         initial={{ opacity: 0, y: 12 }}
@@ -88,7 +103,7 @@ function EndUserConsentScreen({
         <Card>
           <CardHeader>
             <CardTitle className="font-heading text-sm">
-              {clientId} will be able to:
+              {displayApp} will be able to:
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -119,6 +134,11 @@ function EndUserConsentScreen({
       <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
         This does not give the application your password or session credentials. You can
         revoke access at any time from your project settings.
+      </p>
+
+      {/* client_id en mono como detalle de verificación (IdP orientado a devs). */}
+      <p className="mt-2 font-mono text-[11px] text-muted-foreground/70">
+        Client ID: {clientId}
       </p>
 
       {/* POST nativo al host del API: el AS registra el consentimiento y redirige al
