@@ -120,6 +120,7 @@ export default function ProjectOauthClientsPage() {
   const [form, setForm] = useState({
     name: "",
     redirectUris: "",
+    backchannelLogoutUri: "",
     confidential: true,
     requirePkce: true,
     consentRequired: false,
@@ -135,7 +136,7 @@ export default function ProjectOauthClientsPage() {
     .filter(Boolean);
 
   function resetForm() {
-    setForm({ name: "", redirectUris: "", confidential: true, requirePkce: true, consentRequired: false });
+    setForm({ name: "", redirectUris: "", backchannelLogoutUri: "", confidential: true, requirePkce: true, consentRequired: false });
   }
 
   async function onCreate() {
@@ -146,6 +147,7 @@ export default function ProjectOauthClientsPage() {
       const created = await createM.mutateAsync({
         name: form.name.trim(),
         redirectUris,
+        backchannelLogoutUri: form.backchannelLogoutUri.trim() || null,
         requirePkce: effectiveRequirePkce,
         confidential: form.confidential,
         consentRequired: form.consentRequired,
@@ -432,6 +434,20 @@ export default function ProjectOauthClientsPage() {
               {fieldErrors.redirectUris ? (
                 <p className="text-xs text-destructive">{fieldErrors.redirectUris}</p>
               ) : null}
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="oc-backchannel">Back-channel logout URI (optional)</Label>
+              <Input
+                id="oc-backchannel"
+                className="font-mono text-xs"
+                placeholder={"https://app.example.com/backchannel-logout"}
+                value={form.backchannelLogoutUri}
+                onChange={(e) => setForm((f) => ({ ...f, backchannelLogoutUri: e.target.value }))}
+              />
+              <p className="text-xs text-muted-foreground">
+                OIDC back-channel logout (RFC 8417): Nexus POSTs a signed logout token here
+                when the user signs out, so the app invalidates its session without the browser.
+              </p>
             </div>
             <div className="flex flex-wrap items-center gap-4">
               <label className="flex items-center gap-2 text-sm">

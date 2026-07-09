@@ -43,15 +43,18 @@ class ProjectEndUserAuthController {
     private final ProjectSlugResolver slugResolver;
     private final ProjectSessionAuthenticator sessionAuthenticator;
     private final ProjectUserRepository userRepository;
+    private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     ProjectEndUserAuthController(
             ProjectSlugResolver slugResolver,
             ProjectSessionAuthenticator sessionAuthenticator,
-            ProjectUserRepository userRepository
+            ProjectUserRepository userRepository,
+            org.springframework.context.ApplicationEventPublisher eventPublisher
     ) {
         this.slugResolver = slugResolver;
         this.sessionAuthenticator = sessionAuthenticator;
         this.userRepository = userRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     record LoginRequest(String email, String password, String continueUrl) {
@@ -122,12 +125,39 @@ class ProjectEndUserAuthController {
     }
 
     @PostMapping("/logout")
-    ResponseEntity<Void> logout(HttpServletRequest servletRequest, HttpServletResponse servletResponse) {
+    ResponseEntity<Void> logout(
+            @PathVariable String projectSlug,
+            HttpServletRequest servletRequest,
+            HttpServletResponse servletResponse
+    ) {
+        // Back-channel logout (OIDC RFC 8417): capturamos principal + issuer ANTES de que el
+        // logoutHandler limpie el SecurityContext, y publicamos el evento para el fan-out
+        // async a los clientes del realm con sesión para este usuario.
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal()
+                instanceof dev.unzor.nexus.identity.infrastructure.security.ProjectUserPrincipal pup) {
+            eventPublisher.publishEvent(
+                    new dev.unzor.nexus.identity.application.service.BackChannelLogoutRequested(
+                            auth.getName(), pup.projectId(), realmIssuer(servletRequest, projectSlug)));
+        }
         SecurityContextLogoutHandler logoutHandler = new SecurityContextLogoutHandler();
         logoutHandler.setClearAuthentication(true);
         logoutHandler.setInvalidateHttpSession(true);
         logoutHandler.logout(servletRequest, servletResponse, null);
         return ResponseEntity.noContent().build();
+    }
+
+    /** Issuer del realm = {origin}/p/{slug}, derivado del request (consistente con el discovery). */
+    private static String realmIssuer(HttpServletRequest request, String projectSlug) {
+        StringBuilder b = new StringBuilder()
+                .append(request.getScheme()).append("://").append(request.getServerName());
+        int port = request.getServerPort();
+        if (port > 0 && !(("http".equals(request.getScheme()) && port == 80)
+                || ("https".equals(request.getScheme()) && port == 443))) {
+            b.append(':').append(port);
+        }
+        return b.append("/p/").append(projectSlug).toString();
     }
 
     private ProjectAuthenticationContext resolve(String projectSlug) {
