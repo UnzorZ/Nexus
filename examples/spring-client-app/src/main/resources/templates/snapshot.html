@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Nexus — Permission Snapshot</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; color: #1e1b2e; }
+        code, pre { background: #f4f2f9; padding: 2px 6px; border-radius: 4px; font-size: .9em; }
+        .pill { display: inline-block; background: #6366f1; color: #fff; border-radius: 999px; padding: 2px 10px; margin: 2px; font-size: .85em; }
+        a { color: #4f46e5; }
+        .error { color: #b91c1c; }
+    </style>
+</head>
+<body>
+    <h1>Permission Snapshot</h1>
+    <p>Resolución fresca/autoritativa vía <code>NexusClient.permissions().snapshot(userId)</code>
+       (cacheada con TTL) — distinta del <code>@perm.has</code> por token, que es optimista hasta
+       <code>exp</code>.</p>
+
+    <form method="get">
+        <label>User ID (UUID): <input name="userId" th:value="${param.userId}" size="40" /></label>
+        <button type="submit">Consultar</button>
+    </form>
+
+    <div th:if="${result}">
+        <div th:if="${result.ok}" style="margin-top:1.5rem">
+            <h3 th:text="'authzVersion = ' + ${result.snapshot.authzVersion}"></h3>
+            <p>Roles:
+                <span th:each="r : ${result.snapshot.roles}" class="pill" th:text="${r}"></span>
+            </p>
+            <p>Permissions:
+                <span th:each="p : ${result.snapshot.permissions}" class="pill" th:text="${p}"></span>
+            </p>
+            <p>canCancelOrders = <strong th:text="${result.canCancelOrders}"></strong></p>
+            <p><small>expiresAt: <code th:text="${result.snapshot.expiresAt}"></code></small></p>
+        </div>
+        <div th:unless="${result.ok}" class="error" th:text="${result.error}"></div>
+    </div>
+
+    <p style="margin-top:2rem"><a href="/">← Home</a></p>
+</body>
+</html>
