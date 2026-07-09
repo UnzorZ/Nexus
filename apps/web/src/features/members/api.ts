@@ -30,8 +30,12 @@ export async function inviteMember(
   projectId: string,
   payload: InviteMemberPayload,
   csrfToken: string,
-): Promise<Member> {
-  return apiClient.post<Member>(
+): Promise<void> {
+  // Anti-enumeración: el backend responde 200 OK sin body exista o no la cuenta, así
+  // que el resultado del invite no revela su existencia. La mutación sólo invalida el
+  // listado; un miembro real (cuenta existente) aparece tras re-fetch, lo cual es
+  // estado legítimo que el admin debe ver.
+  await apiClient.post<null>(
     apiRoutes.panel.projects.members.root(projectId),
     payload,
     {

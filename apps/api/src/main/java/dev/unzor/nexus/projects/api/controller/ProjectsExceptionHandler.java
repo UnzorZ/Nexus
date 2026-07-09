@@ -7,7 +7,6 @@ import dev.unzor.nexus.projects.domain.exception.MembershipNotFoundException;
 import dev.unzor.nexus.projects.domain.exception.ProjectAccessDeniedException;
 import dev.unzor.nexus.projects.domain.exception.ProjectAlreadyExistException;
 import dev.unzor.nexus.projects.domain.exception.ProjectNotFoundException;
-import dev.unzor.nexus.projects.domain.exception.UnknownAccountException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -97,19 +96,6 @@ class ProjectsExceptionHandler {
         problem.setTitle("Conflict");
         problem.setProperty("code", "last_owner");
         return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
-    }
-
-    @ExceptionHandler(UnknownAccountException.class)
-    ResponseEntity<ProblemDetail> handleUnknownAccount(UnknownAccountException exception) {
-        // Detail con formato "field: msg" para que el frontend lo muestre inline
-        // bajo el campo email (parseFieldErrors en features/projects/api.ts).
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
-                HttpStatus.BAD_REQUEST,
-                "email: No NexusAccount with that address."
-        );
-        problem.setTitle("Validation failed");
-        problem.setProperty("code", "validation_error");
-        return ResponseEntity.badRequest().body(problem);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

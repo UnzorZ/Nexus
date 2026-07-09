@@ -78,8 +78,6 @@ class ProjectMembersControllerTests {
         UUID accountId = UUID.randomUUID();
         AuthenticatedAccount principal = () -> accountId;
         var authentication = authentication(principal);
-        when(inviteService.invite(projectId, "x@example.com", ProjectMembershipRole.MEMBER, accountId))
-                .thenReturn(details());
 
         controller.invite(
                 projectId,

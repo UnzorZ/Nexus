@@ -66,8 +66,8 @@ class ProjectMembersController {
     }
 
     @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
-    MembershipDetails invite(
+    @ResponseStatus(HttpStatus.OK)
+    void invite(
             @PathVariable UUID projectId,
             @Valid @RequestBody InviteMemberRequest request,
             @AuthenticationPrincipal AuthenticatedAccount principal,
@@ -77,7 +77,10 @@ class ProjectMembersController {
         // requireManage ya exige una membresía activa OWNER/ADMIN; no hace falta una
         // consulta requireAccess aparte (mismo patrón que updateProject).
         projectAccessService.requireManage(projectId, principal.accountId(), isInstanceAdmin);
-        return inviteMemberService.invite(projectId, request.email(), request.role(), principal.accountId());
+        // Anti-enumeración: el servicio es no-op silencioso si el email no tiene cuenta,
+        // de modo que la respuesta (200 OK, sin body) es idéntica exista o no — el admin
+        // no puede inferir la existencia de la cuenta por el resultado del invite.
+        inviteMemberService.invite(projectId, request.email(), request.role(), principal.accountId());
     }
 
     @PatchMapping("/{memberId}")
