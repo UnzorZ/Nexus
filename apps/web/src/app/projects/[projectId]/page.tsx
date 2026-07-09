@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { ShieldAlert } from "lucide-react";
 import {
@@ -10,7 +9,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { BookTextIcon } from "@/components/ui/book-text";
@@ -123,7 +121,6 @@ function AlertCard({
 
 export default function ProjectDashboardPage() {
   const { project, loading, error } = useProject();
-  const router = useRouter();
   const [alerts, setAlerts] = useState<Alert[]>(initialAlerts);
   const [alertsOpen, setAlertsOpen] = useState(initialAlerts.length > 0);
   const [isAlertsModalOpen, setIsAlertsModalOpen] = useState(false);
