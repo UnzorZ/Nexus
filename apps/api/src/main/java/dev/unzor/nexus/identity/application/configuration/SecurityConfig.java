@@ -102,6 +102,15 @@ public class SecurityConfig {
                                 // urn:ietf:params:oauth:grant-type:device_code.
                                 .deviceAuthorizationEndpoint(Customizer.withDefaults())
                                 .deviceVerificationEndpoint(dv -> dv.consentPage("/oauth2/device"))
+                                // Dynamic Client Registration (RFC 7591 / OIDC): un cliente se
+                                // auto-registra en /connect/register (per-issuer /p/{slug}/connect/
+                                // register). openRegistrationAllowed permite el registro inicial sin
+                                // Initial Access Token; las lecturas/updates posteriores se autentican
+                                // con el registration_access_token. CompositeRegisteredClientRepository
+                                // .save persiste el nuevo cliente en project_oauth_clients del proyecto
+                                // derivado del issuer (vía AuthorizationServerContextHolder) → DCR
+                                // project-scoped, encaja en el modelo multi-tenant.
+                                .clientRegistrationEndpoint(cr -> cr.openRegistrationAllowed(true))
                                 // Introspection con enforcement de authz_version (#22): un token
                                 // cuya versión stale (tras un cambio de rol) introspecta como
                                 // inactivo. Ver AuthzVersionIntrospectionAuthenticationProvider.
@@ -126,9 +135,16 @@ public class SecurityConfig {
                                             return new OidcUserInfo(claims);
                                         })))
                 )
-                .authorizeHttpRequests(authorize ->
-                        authorize.anyRequest().authenticated()
-                )
+                .authorizeHttpRequests(authorize -> authorize
+                        // DCR (RFC 7591): el registro inicial es abierto (openRegistrationAllowed);
+                        // lecturas/updates posteriores se autentican con el registration_access_token
+                        // (Bearer, validado por el filtro del AS). Sin este permitAll, /oauth2/register
+                        // requeriría sesión y el AS devolvería 302/401.
+                        .requestMatchers(
+                                "/oauth2/register/**",
+                                "/p/*/oauth2/register/**"
+                        ).permitAll()
+                        .anyRequest().authenticated())
                 .exceptionHandling(exceptions -> exceptions
                         .defaultAuthenticationEntryPointFor(
                                 htmlEntryPoint,
