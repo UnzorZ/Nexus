@@ -2,3 +2,6 @@ rootProject.name = 'Nexus'
 
 include 'apps:api'
 project(':apps:api').name = 'nexus-api'
+
+include 'packages:nexus-spring-boot-starter'
+project(':packages:nexus-spring-boot-starter').name = 'nexus-spring-boot-starter'
