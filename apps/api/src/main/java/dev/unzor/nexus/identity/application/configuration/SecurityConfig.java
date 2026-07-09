@@ -85,6 +85,14 @@ public class SecurityConfig {
                                 // Pantalla de consentimiento con branding (B3): SAS redirige aquí
                                 // cuando un cliente requiere consentimiento. Ver ConsentController.
                                 .authorizationEndpoint(ae -> ae.consentPage("/oauth2/consent"))
+                                // Pushed Authorization Requests (RFC 9126): el cliente empuja los
+                                // parámetros de autorización a /oauth2/par, recibe un request_uri y
+                                // redirige al browser al authorize con sólo client_id + request_uri.
+                                // Así los params (scopes, claims, etc.) no viajan por el URL del browser
+                                // ni quedan en logs/referrer. Opcional por defecto: lo soporta el AS y lo
+                                // anuncia en discovery (pushed_authorization_request_endpoint), pero no
+                                // fuerza a los clientes existentes a usarlo.
+                                .pushedAuthorizationRequestEndpoint(Customizer.withDefaults())
                                 // Introspection con enforcement de authz_version (#22): un token
                                 // cuya versión stale (tras un cambio de rol) introspecta como
                                 // inactivo. Ver AuthzVersionIntrospectionAuthenticationProvider.
