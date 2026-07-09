@@ -22,6 +22,8 @@ public interface ProjectPermissionRepository extends Repository<ProjectPermissio
 
     Optional<ProjectPermission> findByProjectIdAndId(UUID projectId, UUID id);
 
+    Optional<ProjectPermission> findByProjectIdAndKey(UUID projectId, String key);
+
     boolean existsByProjectIdAndKey(UUID projectId, String key);
 
     void delete(ProjectPermission permission);

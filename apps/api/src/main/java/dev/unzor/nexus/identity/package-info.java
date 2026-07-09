@@ -5,6 +5,8 @@
                 "projects :: Api",
                 "projects :: Exceptions",
                 "permissions :: Application",
+                "apikeys :: ProjectApiSecurity",
+                "apikeys :: ProjectApiScopes",
                 "shared :: AuditEvents",
                 "shared :: Security",
                 "shared :: Validation"
