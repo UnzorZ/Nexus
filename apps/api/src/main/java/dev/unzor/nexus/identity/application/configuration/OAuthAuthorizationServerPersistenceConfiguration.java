@@ -16,6 +16,7 @@ import org.springframework.security.oauth2.server.authorization.OAuth2Authorizat
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
 import org.springframework.security.oauth2.server.authorization.client.JdbcRegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
+import org.springframework.web.client.RestClient;
 import tools.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -80,5 +81,17 @@ class OAuthAuthorizationServerPersistenceConfiguration {
             RegisteredClientRepository registeredClientRepository
     ) {
         return new JdbcOAuth2AuthorizationConsentService(jdbcTemplate, registeredClientRepository);
+    }
+
+    /**
+     * Cliente HTTP para el fan-out del back-channel logout (OIDC RFC 8417). Definido
+     * explícitamente porque este contexto no autoconfigura un {@link RestClient} (inyectar
+     * {@code RestClient.Builder} rompía el contexto entero). Inyectado en
+     * {@link dev.unzor.nexus.identity.application.service.BackChannelLogoutService} para que su
+     * retry/backoff sea testeable con un cliente mockeado.
+     */
+    @Bean
+    RestClient backChannelLogoutRestClient() {
+        return RestClient.builder().build();
     }
 }

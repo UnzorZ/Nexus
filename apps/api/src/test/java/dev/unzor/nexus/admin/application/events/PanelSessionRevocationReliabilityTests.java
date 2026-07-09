@@ -120,7 +120,12 @@ class PanelSessionRevocationReliabilityTests {
     }
 
     private static void await(String description, BooleanSupplier condition) throws InterruptedException {
-        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+        // La entrega es asíncrona (@ApplicationModuleListener = AFTER_COMMIT + @Async) y Spring
+        // Modulith completa la publicación tras el listener. Bajo carga del full-suite (GC,
+        // contextos paralelos, I/O de Testcontainers) ese camino supera holgadamente los 5 s
+        // originales y el test flakeaba en suite completa pasando aislado. 20 s es generoso para
+        // CI sin debilitar la aserción — aquí se verifica corrección de la entrega, no latencia.
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(20);
         while (!condition.getAsBoolean() && System.nanoTime() < deadline) {
             Thread.sleep(25);
         }

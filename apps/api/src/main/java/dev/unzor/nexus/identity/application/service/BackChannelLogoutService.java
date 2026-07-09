@@ -9,6 +9,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -20,15 +21,25 @@ import java.util.List;
  * por cada uno y se lo POSTea (form-urlencoded {@code logout_token=<jwt>}) a su
  * {@code backchannel_logout_uri}.
  *
- * <p>Asíncrono (no bloquea el logout del usuario) vía el executor de notificaciones. Los
- * fallos de un cliente (RP caído, 4xx/5xx) se loguean y no impiden los demás; el RP recuperará
- * la consistencia en su próximo login (re-emisión). El reintento con backoff de la spec queda
- * fuera del MVP.</p>
+ * <p>Asíncrono (no bloquea el logout del usuario) vía el executor de notificaciones. La entrega
+ * se reintenta con backoff exponencial sobre fallos transitorios (red caída, 5xx del RP); un 4xx
+ * es un rechazo definitivo del RP y no se reintenta (RFC 8417 §2.7). Los fallos definitivos de
+ * un cliente se loguean y no impiden los demás; el RP recuperará la consistencia en su próximo
+ * login (re-emisión).</p>
  */
 @Component
 public class BackChannelLogoutService {
 
     private static final Logger log = LoggerFactory.getLogger(BackChannelLogoutService.class);
+
+    /**
+     * Reintentos de entrega del logout token (RFC 8417 §2.7: el OP SHOULD reintentar).
+     * Cuenta total de intentos por cliente (incluido el primero). Acotado para no retener
+     * hilos del {@code notifyExecutor}; el RP recupera consistencia en su próximo login.
+     */
+    static final int MAX_ATTEMPTS = 3;
+    /** Backoff inicial entre reintentos; dobla en cada intento (exponencial). */
+    static final long INITIAL_BACKOFF_MS = 500L;
 
     private final BackChannelLogoutClientResolver resolver;
     private final BackChannelLogoutTokenIssuer tokenIssuer;
@@ -36,11 +47,12 @@ public class BackChannelLogoutService {
 
     public BackChannelLogoutService(
             BackChannelLogoutClientResolver resolver,
-            BackChannelLogoutTokenIssuer tokenIssuer
+            BackChannelLogoutTokenIssuer tokenIssuer,
+            RestClient httpClient
     ) {
         this.resolver = resolver;
         this.tokenIssuer = tokenIssuer;
-        this.httpClient = RestClient.builder().build();
+        this.httpClient = httpClient;
     }
 
     @Async("notifyExecutor")
@@ -64,19 +76,56 @@ public class BackChannelLogoutService {
                     client.getClientId(), e.getMessage());
             return;
         }
-        try {
-            httpClient.post()
-                    .uri(client.getBackchannelLogoutUri())
-                    .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                    .body("logout_token=" + URLEncoder.encode(logoutToken, StandardCharsets.UTF_8))
-                    .retrieve()
-                    .toBodilessEntity();
-            log.info("Back-channel logout enviado al cliente {} para el usuario {}",
-                    client.getClientId(), event.principalName());
-        } catch (RestClientException e) {
-            // RP caído o rechazó: no rompemos el logout del usuario ni los demás clientes.
-            log.warn("Back-channel logout FALLÓ para el cliente {} ({}): {}",
-                    client.getClientId(), client.getBackchannelLogoutUri(), e.getMessage());
+        // RFC 8417 §2.7: el OP SHOULD reintentar la entrega. Reintentamos con backoff
+        // exponencial sobre fallos transitorios (red caída, 5xx del RP). Un 4xx es un
+        // rechazo definitivo del RP (token inválido para él) — no se reintenta.
+        String body = "logout_token=" + URLEncoder.encode(logoutToken, StandardCharsets.UTF_8);
+        for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+            try {
+                httpClient.post()
+                        .uri(client.getBackchannelLogoutUri())
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .body(body)
+                        .retrieve()
+                        .toBodilessEntity();
+                log.info("Back-channel logout enviado al cliente {} para el usuario {} (intento {}/{})",
+                        client.getClientId(), event.principalName(), attempt, MAX_ATTEMPTS);
+                return;
+            } catch (RestClientResponseException e) {
+                if (e.getStatusCode().is4xxClientError()) {
+                    log.warn("Back-channel logout rechazado (4xx) por el cliente {} ({}): {} — no se reintenta",
+                            client.getClientId(), client.getBackchannelLogoutUri(), e.getMessage());
+                    return;
+                }
+                if (!retry(client, attempt, e)) {
+                    return;
+                }
+            } catch (RestClientException e) {
+                if (!retry(client, attempt, e)) {
+                    return;
+                }
+            }
         }
+    }
+
+    /**
+     * Duerme el backoff exponencial y devuelve {@code true} si quedan intentos, {@code false}
+     * si era el último (entrega fallida definitiva — el RP recuperará consistencia al re-emitir
+     * en el próximo login).
+     */
+    private boolean retry(ProjectOauthClient client, int attempt, Exception cause) {
+        if (attempt >= MAX_ATTEMPTS) {
+            log.warn("Back-channel logout FALLÓ para el cliente {} ({}) tras {} intentos: {}",
+                    client.getClientId(), client.getBackchannelLogoutUri(), MAX_ATTEMPTS, cause.getMessage());
+            return false;
+        }
+        long backoff = INITIAL_BACKOFF_MS << (attempt - 1);
+        try {
+            Thread.sleep(backoff);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+        return true;
     }
 }
