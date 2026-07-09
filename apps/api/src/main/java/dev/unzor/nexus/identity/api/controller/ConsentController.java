@@ -1,5 +1,6 @@
 package dev.unzor.nexus.identity.api.controller;
 
+import dev.unzor.nexus.identity.domain.entity.ProjectOauthClient;
 import dev.unzor.nexus.identity.persistence.repository.ProjectOauthClientRepository;
 import dev.unzor.nexus.projects.application.service.ProjectLookupService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -70,7 +71,14 @@ public class ConsentController {
             HttpServletRequest request,
             HttpServletResponse response
     ) throws IOException {
-        Optional<ProjectSlug> slug = resolveSlug(clientId);
+        // Una sola consulta resuelve el slug del proyecto (SAS pierde /p/{slug} al
+        // redirigir aquí) y el nombre legible del cliente, que la página muestra en
+        // lugar del client_id crudo. El cliente técnico global (bootstrap) no es un
+        // ProjectOauthClient → optional vacío → endpoint global, sin nombre.
+        Optional<ProjectOauthClient> client = projectOauthClientRepository.findByClientId(clientId);
+        Optional<ProjectSlug> slug = client
+                .map(c -> new ProjectSlug(projectLookupService.requireSlug(c.getProjectId())));
+        String clientName = client.map(ProjectOauthClient::getName).orElse(null);
         String actionPath = slug
                 .map(s -> "/p/" + s.value + GLOBAL_AUTHORIZE_ENDPOINT)
                 .orElse(GLOBAL_AUTHORIZE_ENDPOINT);
@@ -82,6 +90,9 @@ public class ConsentController {
         StringBuilder target = new StringBuilder(frontendBaseUrl).append(consentPath)
                 .append("?client_id=").append(enc(clientId))
                 .append("&state=").append(enc(state));
+        if (clientName != null && !clientName.isBlank()) {
+            target.append("&client_name=").append(enc(clientName));
+        }
         if (scope != null && !scope.isBlank()) {
             target.append("&scope=").append(enc(scope));
         }
@@ -90,12 +101,6 @@ public class ConsentController {
         // al form Next.js, que lo reenvía tal cual en el POST de consent → valida.
         target.append("&_csrf=").append(enc(csrfToken.getToken()));
         response.sendRedirect(target.toString());
-    }
-
-    /** Reconstruye el slug del proyecto desde el client_id (SAS pierde /p/{slug} al redirigir). */
-    private Optional<ProjectSlug> resolveSlug(String clientId) {
-        return projectOauthClientRepository.findByClientId(clientId)
-                .map(c -> new ProjectSlug(projectLookupService.requireSlug(c.getProjectId())));
     }
 
     private static String absoluteApiUrl(HttpServletRequest request, String path) {

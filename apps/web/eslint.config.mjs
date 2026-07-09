@@ -27,7 +27,9 @@ const eslintConfig = defineConfig([
     // `animHandlers(ref)` — a helper that only reads the ref inside event
     // callbacks (safe). The `react-hooks/refs` rule can't see through the
     // function boundary and flags passing the ref as an arg, so relax it here.
-    files: ["src/components/dashboard/**/*.{ts,tsx}", "src/app/dashboard/**/*.{ts,tsx}"],
+    // Covers both the shared shell (`components/dashboard/**`) and the project
+    // pages that consume it (`app/projects/**`, formerly `app/dashboard/**`).
+    files: ["src/components/dashboard/**/*.{ts,tsx}", "src/app/projects/**/*.{ts,tsx}"],
     rules: {
       "react-hooks/refs": "off",
     },

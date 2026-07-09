@@ -155,8 +155,12 @@ export default function ProjectSettingsPage() {
   useEffect(() => {
     if (!project) return;
     // Reset del formulario cuando cambia el proyecto (patrón establecido en el repo).
+    // Dependencias reducidas a id/updatedAt a propósito: resetear sólo en estos
+    // cambios evita descartar ediciones en curso cuando el cache refresca la
+    // referencia del objeto `project` sin cambiar su contenido.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setForm(formFromProject(project));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.id, project?.updatedAt]);
 
   useEffect(() => {

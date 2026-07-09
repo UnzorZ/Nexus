@@ -251,6 +251,10 @@ export default function ProjectAuditPage() {
     });
   }, [events, query, actorFilter, moduleFilter, severityFilter, ipFilter]);
 
+  // TanStack Table devuelve funciones no memoizables por diseño; la regla
+  // react-hooks/incompatible-library lo marca como falso positivo (no es un
+  // bug de este código). Es el patrón establecido del data layer del repo.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data: filtered,
     columns,
