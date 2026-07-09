@@ -1,58 +1,45 @@
-# Nexus reference client + resource-server app.
+# Nexus reference client app — consumes the nexus-spring-boot-starter.
 #
-# Configure against a Nexus project: create the project, an OAuth client
-# (redirect http://localhost:8081/login/oauth2/code/nexus) and a role granting
-# the demo permissions (orders.*, inventory.read). See README.md.
+# Configure against a Nexus project:
+#   - an API key with scopes: registry:heartbeat, authz:snapshot,
+#     permissions:declare, notify:send
+#   - an OAuth client (redirect http://localhost:8081/login/oauth2/code/nexus)
+#     with a backchannel_logout_uri of http://localhost:8081/logout/backchannel
+#   - a role granting the demo permissions (orders.*, inventory.read)
+# See README.md.
+
 server:
   port: 8081
 
 nexus:
-  rs:
-    # Resource-server authorization mode.
-    #   jwt       — validate the access token locally (signature + exp); fast,
-    #               but a role revocation is only honored once the token expires.
-    #   introspect — call /oauth2/introspect per request; honors authz_version
-    #               revocation at the cost of a server round-trip each time.
-    mode: ${NEXUS_RS_MODE:jwt}
+  # --- Management half (API-key) ---
+  url: ${NEXUS_URL:http://localhost:8080}
+  api-key: ${NEXUS_API_KEY}
+  app-name: ${NEXUS_APP_NAME:nexus-spring-client-app}
+  instance-id: ${NEXUS_INSTANCE_ID:}
+  heartbeat:
+    enabled: ${NEXUS_HEARTBEAT_ENABLED:true}
+    interval: ${NEXUS_HEARTBEAT_INTERVAL:30s}
+  permissions:
+    snapshot-ttl: 30s
+    fail-closed: true
+    declarations:
+      - { key: orders.read, label: Ver pedidos }
+      - { key: orders.cancel, label: Cancelar pedidos }
+      - { key: orders.refund, label: Reembolsar pedidos }
+      - { key: inventory.read, label: Ver inventario }
 
-spring:
+  # --- Security half (OAuth2/OIDC) ---
   security:
-    oauth2:
-      client:
-        registration:
-          nexus:
-            provider: nexus
-            client-id: ${NEXUS_CLIENT_ID}
-            client-secret: ${NEXUS_CLIENT_SECRET}
-            authorization-grant-type: authorization_code
-            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
-            scope:
-              - openid
-              - profile
-            client-name: Nexus
-        provider:
-          nexus:
-            # OIDC discovery against the project issuer.
-            issuer-uri: http://localhost:8080/p/${NEXUS_PROJECT_SLUG:f-shop}/.well-known/openid-configuration
-            user-name-attribute: sub
-      resourceserver:
-        jwt:
-          # Same discovery doc — supplies the JWKS URI and the issuer for `iss` validation.
-          issuer-uri: http://localhost:8080/p/${NEXUS_PROJECT_SLUG:f-shop}/.well-known/openid-configuration
-
-# --- Introspection mode (NEXUS_RS_MODE=introspect) -------------------------
-# When mode=introspect, the resource-server chain below switches to opaque-token
-# introspection. Uncomment/override these to enable it.
-#
-# spring:
-#   security:
-#     oauth2:
-#       resourceserver:
-#         opaquetoken:
-#           introspection-uri: http://localhost:8080/p/${NEXUS_PROJECT_SLUG:f-shop}/oauth2/introspect
-#           client-id: ${NEXUS_CLIENT_ID}
-#           client-secret: ${NEXUS_CLIENT_SECRET}
+    issuer: http://localhost:8080/p/${NEXUS_PROJECT_SLUG:f-shop}
+    # Resource-server mode: jwt (local validation, default) or introspect (per-request).
+    rs-mode: ${NEXUS_RS_MODE:jwt}
+    client:
+      client-id: ${NEXUS_CLIENT_ID}
+      client-secret: ${NEXUS_CLIENT_SECRET}
+    backchannel-logout-path: /logout/backchannel
 
 logging:
   level:
     org.springframework.security: INFO
+    io.nexus.client: INFO

@@ -1,138 +1,105 @@
-# Nexus — Spring Boot 4 reference client + resource-server app
+# Nexus — Spring Boot 4 reference client app (uses `nexus-spring-boot-starter`)
 
-A self-contained reference application that integrates with a **Nexus** project
-as both an **OIDC client** (logs users in via Nexus) **and a resource server**
-(protects its own `/api/**` with Nexus-issued JWTs). It demonstrates every
-OAuth/OIDC capability a Nexus consumer needs, with clean, lift-and-reuse code.
+A self-contained reference application that integrates with a **Nexus** project as
+both an **OIDC client** (logs users in via Nexus) **and a resource server**
+(protects its own `/api/**` with Nexus-issued JWTs) **and a managed instance**
+(heartbeats, declares its permissions, caches permission snapshots, receives
+back-channel logout). It consumes the [`nexus-spring-boot-starter`](../../packages/nexus-spring-boot-starter)
+— one dependency — instead of hand-wiring Spring Security.
 
-> This is the canonical "how do I integrate with Nexus?" example. It uses the
-> standard Spring Security OAuth2 client + resource-server stack — no proprietary
-> SDK required.
+> The app itself is ~6 controllers + a couple of beans; **all** the integration
+> (security chains, JWT validation, `@perm`, heartbeat, snapshot cache, declaration
+> sync, back-channel logout endpoint) is autoconfigured by the starter from the
+> `nexus.*` properties in `application.yml`.
 
 ## What it demonstrates
 
-| Capability | Where |
-|---|---|
-| OIDC login (authorization-code + PKCE) | `SecurityConfig` (`oauth2Login`) |
-| Local JWT validation (signature + `exp`) | `ResourceServerSecurity.jwtApiFilterChain` |
-| **Permission-key authorization** from the `permissions` claim (glob-match) | `PermissionService` + `PermissionMatcher`, `@PreAuthorize("@perm.has(...)")` |
-| Scope → authority mapping | `NexusJwtAuthenticationConverter` |
-| Refresh-token flow (silent renewal) | `RefreshController` (`@RegisteredOAuth2AuthorizedClient`) |
-| `/userinfo` + ID-token claim inspection | `HomeController`, `MeApiController` |
-| `authz_version` revocation via introspection | `ResourceServerSecurity.introspectApiFilterChain` (`NEXUS_RS_MODE=introspect`) |
-| RP-initiated logout | `SecurityConfig` (`OidcClientInitiatedLogoutSuccessHandler`) |
+| Capability | Where (in the app) | Provided by |
+|---|---|---|
+| OIDC login (authorization-code + PKCE) + RP-initiated logout | — | starter `NexusSecurityAutoConfiguration` |
+| Local JWT validation (signature + `exp`) | `/api/**` | starter resource-server chain |
+| **Permission-key authz** from the `permissions` claim (glob) | `OrdersApiController`, `InventoryApiController` (`@perm.has`) | starter `NexusPermissionService` |
+| **Permission snapshot** (fresh/authoritative, cached TTL) | `NexusDemoController` (`/admin/snapshot`) | starter `PermissionSnapshotCache` + `NexusClient` |
+| **Heartbeat** to Nexus | automatic on startup | starter `HeartbeatScheduler` |
+| **Permission declaration** (YAML + code) | `application.yml` + `CodePermissionDeclarations` | starter `PermissionDeclarationSync` |
+| **Notify** via Nexus | `NexusDemoController` (`/admin/notify`) | starter `NotifyClient` |
+| **Back-channel logout** (RFC 8417) | `BackChannelLogoutListener` | starter `NexusBackChannelLogoutController` |
+| `authz_version` revocation via introspection | `NEXUS_RS_MODE=introspect` | starter resource-server chain |
+| Refresh-token flow (silent renewal) | `RefreshController` | Spring Security OAuth2 client |
 
 ## How authorization works
 
 Nexus puts the user's effective permission keys in the `permissions` claim of the
 access token (and ID token + `/userinfo`), **verbatim, including wildcards**
-(`orders.*`, `*`) — per ADR-0003 and the Nexus spec §14.3. A resource server
-matches them with three rules:
+(`orders.*`, `*`) — per ADR-0003 and the Nexus spec §14.3. Two complementary
+paths in this app:
 
-- **exact** — `orders.read` covers `orders.read`
-- **namespace wildcard** — `orders.*` covers `orders.read` (and any key under the
-  `orders.` prefix, e.g. `orders.billing.export`)
-- **global wildcard** — `*` covers everything
+- **Token-claim (optimistic)** — `@PreAuthorize("@perm.has(authentication, 'orders.read')")`
+  on the resource-server endpoints. Matches with three rules:
+  - **exact** — `orders.read` covers `orders.read`
+  - **namespace wildcard** — `orders.*` covers `orders.read` (and any key under
+    `orders.`, e.g. `orders.billing.export`), but **not** bare `orders`
+  - **global wildcard** — `*` covers everything
+- **Snapshot (fresh/authoritative)** — `nexusClient.permissions().can(userId, key)`
+  resolves from a cached permission snapshot (`GET /api/v1/authz/users/{id}/snapshot`)
+  for decisions outside the request thread or when you need `authz_version` freshness.
 
-`PermissionMatcher` implements this in ~15 lines. `PermissionService` is a SpEL
-bean (`@perm`) that reads the claim off the JWT, so controllers authorize with:
-
-```java
-@GetMapping("/api/orders")
-@PreAuthorize("@perm.has(authentication, 'orders.read')")
-public List<OrderSummary> listOrders() { ... }
-```
-
-A token carrying `permissions:["orders.*"]` (or `["*"]`) satisfies it.
+Token-claim authz is honored until the token `exp`; a role revocation reaches the
+snapshot path immediately (and the introspect mode enforces it per request).
 
 ## Prerequisites
 
-1. **Nexus running** on `http://localhost:8080` (`./gradlew :apps:nexus-api:bootRun`
-   with the dev compose `postgres` + `redis` up).
-2. A **project** with slug, e.g. `f-shop`.
-3. An **OAuth client** for that project, created in the Nexus panel, with:
-   - redirect URI: `http://localhost:8081/login/oauth2/code/nexus`
-   - grant type: `authorization_code`
-   - scopes: `openid profile`
-4. A **role** in that project granting the demo permissions — at least
-   `orders.*` and `inventory.read` — assigned to a `ProjectUser`.
-   (See the Nexus panel: *Projects → Roles* and *Members*.)
+1. **Nexus** running (default `http://localhost:8080`).
+2. A **project** (slug, e.g. `f-shop`).
+3. An **OAuth client** in that project:
+   - redirect URI `http://localhost:8081/login/oauth2/code/nexus`
+   - `backchannel_logout_uri` `http://localhost:8081/logout/backchannel`
+   - grant `authorization_code` + `refresh_token`, scopes `openid profile`
+4. An **API key** for the project with scopes:
+   `registry:heartbeat`, `authz:snapshot`, `permissions:declare`, `notify:send`.
+5. A **role** granting the demo permissions (`orders.*`, `inventory.read`,
+   `reports.export`) and a **project user** assigned that role.
 
-## Configure
+## Configure & run
 
-Set the project slug and OAuth client credentials (defaults: slug `f-shop`):
+Environment variables (see `application.yml`):
+
+| Variable | Required | Example |
+|---|---|---|
+| `NEXUS_API_KEY` | yes | `nxs_fshop_…` |
+| `NEXUS_CLIENT_ID` | yes | the OAuth client id |
+| `NEXUS_CLIENT_SECRET` | yes | the OAuth client secret |
+| `NEXUS_PROJECT_SLUG` | no (default `f-shop`) | `f-shop` |
+| `NEXUS_URL` | no (default `http://localhost:8080`) | `https://nexus.example.com` |
+| `NEXUS_RS_MODE` | no (default `jwt`) | `introspect` |
+
+Run (the app is a root Gradle module):
 
 ```bash
-export NEXUS_PROJECT_SLUG=f-shop
-export NEXUS_CLIENT_ID=<your-client-id>
-export NEXUS_CLIENT_SECRET=<your-client-secret>
+./gradlew :examples:nexus-spring-client-app:bootRun
+# → http://localhost:8081
 ```
-
-## Run
-
-```bash
-cd examples/spring-client-app
-./gradlew bootRun          # serves on http://localhost:8081
-```
-
-> The example is a **standalone Gradle project** (not part of the root build).
 
 ## Walkthrough
 
-1. Open `http://localhost:8081/` → redirected to Nexus to log in (your
-   `ProjectUser`).
-2. After consent you land on the home page, which shows your **ID-token claims** —
-   including `permissions: ["orders.*", ...]`, `project_id`, `authz_version`,
-   `amr` — and your `/userinfo` claims.
-3. Click **GET /api/orders** → `200` with the demo orders (your `orders.*`
-   permission satisfies `orders.read` via glob-match). Click **GET /api/me** to
-   see the raw JWT claims the resource server decoded locally.
-4. **Refresh token**: visit `/refresh` — it shows the current access token + its
-   expiry and the presence of a refresh token. Reload after the token expires to
-   see a freshly minted one (the SDK renewed it transparently).
-5. **Revocation story**:
-   - Default (`NEXUS_RS_MODE=jwt`, local validation): revoke the role in Nexus,
-     then call `/api/orders` again — the token is still honored until its `exp`
-     (access tokens are short-lived, 10 min — see the
-     [threat model](../../docs/threat-model.md)). The `permissions` snapshot is
-     baked into the JWT.
-   - Introspection (`NEXUS_RS_MODE=introspect`): each request is validated against
-     `/oauth2/introspect`, which returns `active:false` when `authz_version` is
-     stale — so a revoked role takes effect immediately (at the cost of a
-     server round-trip per request). Enable the opaque-token config in
-     `application.yml` and set the mode.
-6. **Log out** → RP-initiated logout ends both the local session and the Nexus
-   session (via the issuer's `end_session_endpoint`).
-
-## curl alternative (no browser)
-
-```bash
-# Mint a token at the project's token endpoint (authorization-code needs a code;
-# for a scripted check use the token your client obtained, or client-credentials
-# for machine-to-machine — note: machine tokens carry no `permissions` claim).
-TOKEN=...
-curl -H "Authorization: Bearer $TOKEN" http://localhost:8081/api/orders
-curl -H "Authorization: Bearer $TOKEN" http://localhost:8081/api/me
-```
-
-Decode the JWT at https://jwt.io to eyeball the `permissions` claim in the
-access and ID tokens.
+1. Open `http://localhost:8081` → redirected to Nexus to sign in (OIDC).
+2. After login, the **home** page shows the ID-token + `/userinfo` claims
+   (`sub`, `project_id`, `authz_version`, `permissions`, `amr`).
+3. `GET /api/orders` (with the bearer) → **200** (token carries `orders.*`).
+4. `GET /api/me` → echoes the decoded access-token claims.
+5. `/admin/snapshot?userId=<uuid>` → the cached permission snapshot for that user.
+6. Sign out of Nexus → Nexus POSTs a back-channel logout token to
+   `/logout/backchannel` → the app logs it (in a real app, it'd invalidate the
+   session for that `sub`).
 
 ## Tests
 
-```bash
-./gradlew build
-```
-
-- `PermissionMatcherTest` — the §14.3 glob rules (exact / namespace / global).
-- `OrdersApiAuthorizationTest` — end-to-end: `permissions:["orders.*"]` → `200`,
-  empty/missing → `403`, driven with a mocked JWT.
+`./gradlew :examples:nexus-spring-client-app:test` — `OrdersApiAuthorizationTest`
+drives `GET /api/orders` with mocked JWTs (`orders.*` / `*` / `orders.read` → 200;
+empty / missing / unrelated → 403).
 
 ## Further reading
 
-- Nexus spec §14.3 (permission matching) and §15.3 (token claims) —
-  `docs/nexus-technical-spec.md`
-- Per-project multi-issuer design — `docs/adr/0016-per-project-multi-issuer-oauth.md`
-- JWT signing keys / rotation — `docs/adr/0011-persistent-jwt-signing-keys.md`,
-  `docs/deployment/jwt-signing-keys.md`
-- Open risk: local-JWT validation vs. revocation — `docs/threat-model.md`
+- Starter: [`packages/nexus-spring-boot-starter`](../../packages/nexus-spring-boot-starter)
+- Spec §14.3 (permission glob), §14.11 (snapshot), §18 (SDK)
+- ADR-0003 (permission model), ADR-0016 (multi-issuer OAuth)

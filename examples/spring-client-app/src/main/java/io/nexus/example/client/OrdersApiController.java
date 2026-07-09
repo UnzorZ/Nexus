@@ -8,12 +8,12 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 /**
- * Protected API demoing <b>permission-key authorization</b>. {@code GET /api/orders}
- * requires the {@code orders.read} permission. Because the {@code permissions}
- * claim carries wildcards verbatim, a token with {@code permissions:["orders.*"]}
- * (or {@code ["*"]}) satisfies it — the match is resolved by
- * {@link PermissionService} / {@link PermissionMatcher} via the
- * {@code @perm.has(...)} SpEL expression.
+ * Protected API demoing <b>permission-key authorization</b> from the token claim.
+ * {@code GET /api/orders} requires the {@code orders.read} permission. Because the
+ * {@code permissions} claim carries wildcards verbatim, a token with
+ * {@code permissions:["orders.*"]} (or {@code ["*"]}) satisfies it — the match is
+ * resolved by the starter's {@code @perm} bean ({@code NexusPermissionService}) via
+ * the {@code @perm.has(...)} SpEL expression.
  */
 @RestController
 @RequestMapping("/api/orders")
