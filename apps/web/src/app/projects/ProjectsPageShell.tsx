@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
-  CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
@@ -63,10 +62,8 @@ function projectColor(name: string) {
 
 function ProjectCard({
   project,
-  index,
 }: {
   project: ProjectSummary;
-  index: number;
 }) {
   const tone = toneMap[project.status];
   const router = useRouter();
@@ -315,11 +312,10 @@ export function ProjectsPageShell() {
             animate="show"
             className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
           >
-            {projects.map((project, index) => (
+            {projects.map((project) => (
               <ProjectCard
                 key={project.id}
                 project={project}
-                index={index}
               />
             ))}
           </motion.div>
