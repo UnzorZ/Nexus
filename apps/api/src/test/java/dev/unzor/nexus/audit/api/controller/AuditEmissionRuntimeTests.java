@@ -47,7 +47,8 @@ class AuditEmissionRuntimeTests {
                 "{\"name\":\"CI\",\"scopes\":[\"registry:heartbeat\"],\"expiresAt\":null}");
 
         // Invita a una segunda cuenta (debe existir para que AccountDirectory la
-        // encuentre) — ejercita la emisión del módulo members.
+        // encuentre) — ejercita la emisión del módulo members. El endpoint responde 200
+        // OK (uniforme, anti-enumeración): existe o no la cuenta, el status es el mismo.
         String memberEmail = unique("member");
         registerAccount(memberEmail);
         mockMvc.perform(post("/api/panel/v1/projects/{projectId}/members", projectId)
@@ -55,7 +56,7 @@ class AuditEmissionRuntimeTests {
                         .header("X-XSRF-TOKEN", owner.csrfToken())
                         .cookie(owner.csrfCookie(), owner.sessionCookie())
                         .content("{\"email\":\"" + memberEmail + "\",\"role\":\"MEMBER\"}"))
-                .andExpect(status().isCreated());
+                .andExpect(status().isOk());
 
         mockMvc.perform(get("/api/panel/v1/projects/{projectId}/audit", projectId)
                         .header("X-XSRF-TOKEN", owner.csrfToken())
