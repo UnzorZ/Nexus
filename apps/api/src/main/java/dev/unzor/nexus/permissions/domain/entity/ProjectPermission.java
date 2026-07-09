@@ -80,11 +80,20 @@ public class ProjectPermission {
     private Instant updatedAt;
 
     public ProjectPermission(UUID projectId, String key, String label, String description) {
+        this(projectId, key, label, description, PermissionSource.WEB);
+    }
+
+    /**
+     * Constructor con origen explícito — usado por la sincronización declarativa
+     * del SDK (spec §18) para crear permisos con origen {@link PermissionSource#CODE}.
+     */
+    public ProjectPermission(UUID projectId, String key, String label, String description,
+                             PermissionSource source) {
         this.projectId = Objects.requireNonNull(projectId);
         this.key = Objects.requireNonNull(key);
         this.label = Objects.requireNonNull(label);
         this.description = description;
-        this.source = PermissionSource.WEB;
+        this.source = Objects.requireNonNull(source);
         this.enabled = true;
         this.deprecated = false;
         this.missingFromLastSync = false;
@@ -96,6 +105,31 @@ public class ProjectPermission {
     public void relabel(String label, String description) {
         this.label = Objects.requireNonNull(label);
         this.description = description;
+    }
+
+    /**
+     * Marca el permiso como declarado en este ciclo de sincronización desde una
+     * aplicación ({@link PermissionSource#CODE} para los nuevos; el origen de los
+     * ya existentes se respeta para no usurpar permisos creados a mano por el
+     * operador). Actualiza la etiqueta si la declaración trae una, refresca
+     * {@code lastDeclaredAt} y limpia {@code missingFromLastSync}.
+     */
+    public void syncDeclare(String label, Instant now) {
+        if (label != null && !label.isBlank()) {
+            this.label = label;
+        }
+        this.lastDeclaredAt = now;
+        this.missingFromLastSync = false;
+    }
+
+    /**
+     * Marca el permiso como ausente del último ciclo de sincronización (la
+     * aplicación dejó de declararlo). Sólo aplica a permisos de origen
+     * {@code CODE}/{@code YAML}; los {@code WEB}/{@code SYSTEM} no se ven
+     * afectados (son gestionados por el operador/sistema).
+     */
+    public void markMissingFromSync() {
+        this.missingFromLastSync = true;
     }
 
     @PrePersist

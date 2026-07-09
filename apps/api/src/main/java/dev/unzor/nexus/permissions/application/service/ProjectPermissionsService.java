@@ -1,7 +1,10 @@
 package dev.unzor.nexus.permissions.application.service;
 
+import dev.unzor.nexus.permissions.api.dto.PermissionDeclaration;
+import dev.unzor.nexus.permissions.api.dto.PermissionDeclarationReceipt;
 import dev.unzor.nexus.permissions.api.dto.PermissionDetails;
 import dev.unzor.nexus.permissions.domain.entity.ProjectPermission;
+import dev.unzor.nexus.permissions.domain.enums.PermissionSource;
 import dev.unzor.nexus.permissions.domain.exception.PermissionAlreadyExistsException;
 import dev.unzor.nexus.permissions.domain.exception.PermissionNotFoundException;
 import dev.unzor.nexus.permissions.persistence.repository.ProjectPermissionRepository;
@@ -13,6 +16,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -116,6 +121,72 @@ public class ProjectPermissionsService {
                 actorAccountId, Map.of("key", permission.getKey())));
         // Las concesiones rol→permiso referencian la clave (no el id), así que
         // sobreviven: borrar un permiso del catálogo no rompe los roles.
+    }
+
+    /**
+     * Sincronización declarativa de permisos desde una aplicación (spec §18 SDK).
+     * Recibe el conjunto de permisos que la app declara usar y:
+     * <ul>
+     *   <li>para cada permiso declarado: actualiza su etiqueta (si trae), refresca
+     *       {@code lastDeclaredAt} y limpia {@code missingFromLastSync}; si no
+     *       existe, lo crea con origen {@link PermissionSource#CODE};</li>
+     *   <li>los permisos de origen {@code CODE}/{@code YAML} del proyecto que NO
+     *       estén en la declaración quedan marcados {@code missingFromLastSync}
+     *       (la app dejó de declararlos).</li>
+     * </ul>
+     * Los permisos de origen {@code WEB}/{@code SYSTEM} (gestionados por el
+     * operador/sistema) nunca se tocan: la sincronización declarativa no usurpa
+     * el catálogo gestionado a mano. No muta concesiones ni bumpa
+     * {@code authz_version} (declarar un permiso del catálogo no cambia las
+     * authorities efectivas de nadie).
+     */
+    @Transactional
+    public PermissionDeclarationReceipt declare(UUID projectId, List<PermissionDeclaration> declarations) {
+        projectLookupService.requireById(projectId);
+        Instant now = Instant.now();
+        Set<String> declaredKeys = new LinkedHashSet<>();
+        int created = 0;
+
+        List<ProjectPermission> existing = permissionRepository.findAllByProjectId(projectId);
+        java.util.Map<String, ProjectPermission> byKey = new java.util.HashMap<>();
+        for (ProjectPermission p : existing) {
+            byKey.put(p.getKey(), p);
+        }
+
+        for (PermissionDeclaration d : declarations) {
+            if (d.key() == null || d.key().isBlank()) {
+                continue;
+            }
+            declaredKeys.add(d.key());
+            ProjectPermission perm = byKey.get(d.key());
+            if (perm == null) {
+                ProjectPermission createdPerm = permissionRepository.save(
+                        new ProjectPermission(projectId, d.key(),
+                                d.label() == null || d.label().isBlank() ? d.key() : d.label(),
+                                null, PermissionSource.CODE));
+                createdPerm.syncDeclare(d.label(), now);
+                byKey.put(d.key(), createdPerm);
+                created++;
+            } else {
+                perm.syncDeclare(d.label(), now);
+            }
+        }
+
+        int markedMissing = 0;
+        for (ProjectPermission p : byKey.values()) {
+            if (declaredKeys.contains(p.getKey())) {
+                continue;
+            }
+            if (p.getSource() == PermissionSource.CODE || p.getSource() == PermissionSource.YAML) {
+                p.markMissingFromSync();
+                markedMissing++;
+            }
+        }
+        for (ProjectPermission p : byKey.values()) {
+            permissionRepository.save(p);
+        }
+
+        return new PermissionDeclarationReceipt(declaredKeys.size(), created, markedMissing);
     }
 
     private ProjectPermission requirePermission(UUID projectId, UUID permissionId) {
