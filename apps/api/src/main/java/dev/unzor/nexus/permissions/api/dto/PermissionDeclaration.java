@@ -11,6 +11,6 @@ import jakarta.validation.constraints.Size;
  */
 public record PermissionDeclaration(
         @NotBlank @Size(max = 120) String key,
-        @Size(max = 200) String label
+        @Size(max = 120) String label
 ) {
 }
