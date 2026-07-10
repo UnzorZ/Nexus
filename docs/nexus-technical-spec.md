@@ -1403,8 +1403,24 @@ The starter (`nexus-spring-boot-starter`, **implemented**) autoconfigures two ha
 - fetch and cache permission snapshots (`GET /api/v1/authz/users/{userId}/snapshot`),
 - resolve wildcard permissions locally,
 - deny on expired cache when Nexus is unavailable (fail-closed, configurable),
+- read project **config** values (`nexus.config()`, `GET /api/v1/config/values[/{key}]`, scope `config:read`),
+- read **vault** secrets (`nexus.vault()`, `GET /api/v1/vault/secrets[/{key}]`, scope `vault:read`),
+- push **metrics** points (`nexus.metrics()`, `POST /api/v1/metrics/record`, scope `metrics:write`),
 - expose typed clients,
 - avoid hiding security failures.
+
+The metrics module is also **Prometheus-compatible** on the backend side:
+`GET /api/v1/metrics/export` (scope `metrics:read`) returns the project's recorded
+metrics in Prometheus exposition format, so a Prometheus server can scrape them.
+Prometheus `scrape_config` can't send `X-Nexus-Api-Key`, so the project API also
+accepts the API key as `Authorization: Bearer <key>` (scrape with `bearer_token`).
+
+```yaml
+scrape_configs:
+  - job_name: nexus-<project>
+    bearer_token: <api-key with metrics:read>
+    metrics_path: /api/v1/metrics/export
+```
 
 **Security** (active on `nexus.security.issuer`):
 
