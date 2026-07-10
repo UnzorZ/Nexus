@@ -73,6 +73,14 @@ public class ProjectPermission {
     @Column(name = "last_declared_at")
     private Instant lastDeclaredAt;
 
+    /**
+     * App que declaró este permiso (spec §18 SDK). Ámbito de la reconciliación:
+     * los {@code missing_from_last_sync} sólo se marcan para los permisos de esta
+     * app, no para los de otras apps ni los gestionados a mano ({@code WEB}).
+     */
+    @Column(name = "declared_by")
+    private String declaredBy;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -112,14 +120,24 @@ public class ProjectPermission {
      * aplicación ({@link PermissionSource#CODE} para los nuevos; el origen de los
      * ya existentes se respeta para no usurpar permisos creados a mano por el
      * operador). Actualiza la etiqueta si la declaración trae una, refresca
-     * {@code lastDeclaredAt} y limpia {@code missingFromLastSync}.
+     * {@code lastDeclaredAt}, limpia {@code missingFromLastSync} y, si la app
+     * declara su identidad ({@code declaredBy}), la asocia — sólo para permisos
+     * de origen app-managed ({@code CODE}/{@code YAML}).
      */
-    public void syncDeclare(String label, Instant now) {
+    public void syncDeclare(String label, Instant now, String declaredBy) {
         if (label != null && !label.isBlank()) {
             this.label = label;
         }
         this.lastDeclaredAt = now;
         this.missingFromLastSync = false;
+        if (declaredBy != null && !declaredBy.isBlank()
+                && (source == PermissionSource.CODE || source == PermissionSource.YAML)) {
+            this.declaredBy = declaredBy;
+        }
+    }
+
+    public String getDeclaredBy() {
+        return declaredBy;
     }
 
     /**

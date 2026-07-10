@@ -44,17 +44,18 @@ class RuntimeAuthorizationRuntimeTests {
     private JdbcTemplate jdbc;
 
     @Test
-    void declareCreatesPermissionsAndMarksMissing() throws Exception {
+    void declareCreatesPermissionsAndMarksMissingForSameApp() throws Exception {
         String email = unique("dec");
         LoginSession owner = login(email);
         String projectId = createProject(owner, randomSlug("dec"));
         String key = createKey(owner, projectId,
                 "{\"name\":\"SDK\",\"scopes\":[\"permissions:declare\"],\"expiresAt\":null}");
 
-        // Primer ciclo: declara dos permisos.
+        // Primer ciclo: la app "api" declara dos permisos.
         mockMvc.perform(post("/api/v1/permissions/declare")
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("X-Nexus-Api-Key", key)
+                        .header("X-Nexus-App", "api")
                         .content("[{\"key\":\"orders.read\",\"label\":\"Ver pedidos\"},"
                                 + "{\"key\":\"orders.cancel\",\"label\":\"Cancelar pedidos\"}]"))
                 .andExpect(status().isOk())
@@ -62,15 +63,75 @@ class RuntimeAuthorizationRuntimeTests {
                 .andExpect(jsonPath("$.created").value(2))
                 .andExpect(jsonPath("$.markedMissing").value(0));
 
-        // Segundo ciclo: suelta orders.read, añade orders.refund → orders.read queda missing.
+        // Segundo ciclo: la misma app suelta orders.read → orders.read queda missing.
         mockMvc.perform(post("/api/v1/permissions/declare")
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("X-Nexus-Api-Key", key)
+                        .header("X-Nexus-App", "api")
                         .content("[{\"key\":\"orders.cancel\"},{\"key\":\"orders.refund\"}]"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.declared").value(2))
                 .andExpect(jsonPath("$.created").value(1))
                 .andExpect(jsonPath("$.markedMissing").value(1));
+    }
+
+    @Test
+    void declareDoesNotMarkOtherAppsPermissionsMissing() throws Exception {
+        String email = unique("multi");
+        LoginSession owner = login(email);
+        String projectId = createProject(owner, randomSlug("multi"));
+        String key = createKey(owner, projectId,
+                "{\"name\":\"SDK\",\"scopes\":[\"permissions:declare\"],\"expiresAt\":null}");
+
+        // App "api" declara orders.read.
+        mockMvc.perform(post("/api/v1/permissions/declare")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Nexus-Api-Key", key)
+                        .header("X-Nexus-App", "api")
+                        .content("[{\"key\":\"orders.read\"}]"))
+                .andExpect(status().isOk());
+
+        // App "worker" declara un conjunto distinto: NO debe marcar orders.read (de api) como missing.
+        mockMvc.perform(post("/api/v1/permissions/declare")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Nexus-Api-Key", key)
+                        .header("X-Nexus-App", "worker")
+                        .content("[{\"key\":\"jobs.run\"}]"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.markedMissing").value(0));
+    }
+
+    @Test
+    void declareWithoutAppIdentityDoesNotReconcile() throws Exception {
+        String email = unique("noapp");
+        LoginSession owner = login(email);
+        String projectId = createProject(owner, randomSlug("noapp"));
+        String key = createKey(owner, projectId,
+                "{\"name\":\"SDK\",\"scopes\":[\"permissions:declare\"],\"expiresAt\":null}");
+
+        mockMvc.perform(post("/api/v1/permissions/declare")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Nexus-Api-Key", key)
+                        .content("[{\"key\":\"a.read\"}]"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.markedMissing").value(0)); // sin app → no reconcilia (safe)
+    }
+
+    @Test
+    void declareRejectsLabelExceedingColumnSize() throws Exception {
+        String email = unique("label");
+        LoginSession owner = login(email);
+        String projectId = createProject(owner, randomSlug("label"));
+        String key = createKey(owner, projectId,
+                "{\"name\":\"SDK\",\"scopes\":[\"permissions:declare\"],\"expiresAt\":null}");
+        String tooLong = "x".repeat(121); // la columna label es VARCHAR(120)
+
+        mockMvc.perform(post("/api/v1/permissions/declare")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Nexus-Api-Key", key)
+                        .header("X-Nexus-App", "api")
+                        .content("[{\"key\":\"ok\",\"label\":\"" + tooLong + "\"}]"))
+                .andExpect(status().isBadRequest()); // 400 limpio (no 500 por exceder VARCHAR(120))
     }
 
     @Test
