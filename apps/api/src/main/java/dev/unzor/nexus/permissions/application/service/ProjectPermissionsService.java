@@ -129,21 +129,23 @@ public class ProjectPermissionsService {
      * <ul>
      *   <li>para cada permiso declarado: actualiza su etiqueta (si trae), refresca
      *       {@code lastDeclaredAt} y limpia {@code missingFromLastSync}; si no
-     *       existe, lo crea con origen {@link PermissionSource#CODE};</li>
-     *   <li>los permisos de origen {@code CODE}/{@code YAML} del proyecto que NO
-     *       estén en la declaración quedan marcados {@code missingFromLastSync}
-     *       (la app dejó de declararlos).</li>
+     *       existe, lo crea con origen {@link PermissionSource#CODE} y
+     *       {@code declaredBy = app};</li>
+     *   <li>si la app declara su identidad ({@code app} no vacío), marca como
+     *       {@code missingFromLastSync} los permisos de ESE app que no estén en la
+     *       declaración — no los de otras apps ni los gestionados a mano.</li>
      * </ul>
-     * Los permisos de origen {@code WEB}/{@code SYSTEM} (gestionados por el
-     * operador/sistema) nunca se tocan: la sincronización declarativa no usurpa
-     * el catálogo gestionado a mano. No muta concesiones ni bumpa
-     * {@code authz_version} (declarar un permiso del catálogo no cambia las
-     * authorities efectivas de nadie).
+     * Los permisos de origen {@code WEB}/{@code SYSTEM} nunca se marcan missing
+     * ni se les cambia el {@code declaredBy} (la sincronización no usurpa el
+     * catálogo gestionado por el operador). Si {@code app} es nulo/vacío, no se
+     * reconcilia (no se marca nada missing) — modo seguro para no clobber entre
+     * apps que no declaran identidad. No bumpa {@code authz_version}.
      */
     @Transactional
-    public PermissionDeclarationReceipt declare(UUID projectId, List<PermissionDeclaration> declarations) {
+    public PermissionDeclarationReceipt declare(UUID projectId, String app, List<PermissionDeclaration> declarations) {
         projectLookupService.requireById(projectId);
         Instant now = Instant.now();
+        boolean scoped = app != null && !app.isBlank();
         Set<String> declaredKeys = new LinkedHashSet<>();
         int created = 0;
 
@@ -164,22 +166,26 @@ public class ProjectPermissionsService {
                         new ProjectPermission(projectId, d.key(),
                                 d.label() == null || d.label().isBlank() ? d.key() : d.label(),
                                 null, PermissionSource.CODE));
-                createdPerm.syncDeclare(d.label(), now);
+                createdPerm.syncDeclare(d.label(), now, scoped ? app : null);
                 byKey.put(d.key(), createdPerm);
                 created++;
             } else {
-                perm.syncDeclare(d.label(), now);
+                perm.syncDeclare(d.label(), now, scoped ? app : null);
             }
         }
 
         int markedMissing = 0;
-        for (ProjectPermission p : byKey.values()) {
-            if (declaredKeys.contains(p.getKey())) {
-                continue;
-            }
-            if (p.getSource() == PermissionSource.CODE || p.getSource() == PermissionSource.YAML) {
-                p.markMissingFromSync();
-                markedMissing++;
+        if (scoped) {
+            for (ProjectPermission p : byKey.values()) {
+                if (declaredKeys.contains(p.getKey())) {
+                    continue;
+                }
+                // Sólo los permisos que ESTA app declaró (mismo declaredBy) y dejó
+                // de declarar — no los de otras apps ni los WEB/SYSTEM (declaredBy null).
+                if (app.equals(p.getDeclaredBy())) {
+                    p.markMissingFromSync();
+                    markedMissing++;
+                }
             }
         }
         for (ProjectPermission p : byKey.values()) {

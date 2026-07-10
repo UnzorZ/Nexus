@@ -9,6 +9,7 @@ import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -37,7 +38,8 @@ class RuntimePermissionsController {
     @PostMapping("/declare")
     @RequiredScope("permissions:declare")
     PermissionDeclarationReceipt declare(@Valid @RequestBody List<PermissionDeclaration> declarations,
+                                         @RequestHeader(value = "X-Nexus-App", required = false) String app,
                                          @AuthenticationPrincipal ResolvedApiKey apiKey) {
-        return permissionsService.declare(apiKey.projectId(), declarations);
+        return permissionsService.declare(apiKey.projectId(), app, declarations);
     }
 }
