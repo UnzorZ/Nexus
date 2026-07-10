@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Nexus — Project Config</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; color: #1e1b2e; }
+        code, pre { background: #f4f2f9; padding: 2px 6px; border-radius: 4px; font-size: .9em; }
+        a { color: #4f46e5; }
+        .error { color: #b91c1c; }
+        table { border-collapse: collapse; margin-top: 1rem; }
+        td, th { border: 1px solid #e5e1f0; padding: 4px 10px; text-align: left; }
+    </style>
+</head>
+<body>
+    <h1>Project Config</h1>
+    <p>Lectura de valores de configuración vía <code>NexusClient.config()</code>
+       (scope <code>config:read</code>). El valor viene en claro — no es un secreto
+       (para secretos, <a href="/admin/vault">/admin/vault</a>).</p>
+
+    <form method="get">
+        <label>Key (vacío = listar todo): <input name="key" th:value="${param.key}" size="32" /></label>
+        <button type="submit">Consultar</button>
+    </form>
+
+    <div th:if="${result}">
+        <div th:if="${result.ok}" style="margin-top:1.5rem">
+            <div th:if="${result.value}">
+                <p><strong th:text="${result.value.key}"></strong> =
+                   <code th:text="${result.value.value}"></code>
+                   <small>(<span th:text="${result.value.valueType}"></span>)</small></p>
+            </div>
+            <table th:if="${result.values}">
+                <tr><th>key</th><th>value</th><th>type</th></tr>
+                <tr th:each="v : ${result.values}">
+                    <td th:text="${v.key}"></td>
+                    <td><code th:text="${v.value}"></code></td>
+                    <td><small th:text="${v.valueType}"></small></td>
+                </tr>
+            </table>
+        </div>
+        <div th:unless="${result.ok}" class="error" th:text="${result.error}"></div>
+    </div>
+
+    <p style="margin-top:2rem"><a href="/">← Home</a></p>
+</body>
+</html>

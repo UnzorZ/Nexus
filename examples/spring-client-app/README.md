@@ -23,6 +23,9 @@ back-channel logout). It consumes the [`nexus-spring-boot-starter`](../../packag
 | **Heartbeat** to Nexus | automatic on startup | starter `HeartbeatScheduler` |
 | **Permission declaration** (YAML + code) | `application.yml` + `CodePermissionDeclarations` | starter `PermissionDeclarationSync` |
 | **Notify** via Nexus | `NexusDemoController` (`/admin/notify`) | starter `NotifyClient` |
+| **Project config** (read values) | `NexusDemoController` (`/admin/config`) | starter `ConfigClient` |
+| **Vault** (reveal secrets) | `NexusDemoController` (`/admin/vault`) | starter `VaultClient` |
+| **Metrics push** (record points) | `NexusDemoController` (`/admin/metrics`) | starter `MetricsClient` |
 | **Back-channel logout** (RFC 8417) | `BackChannelLogoutListener` | starter `NexusBackChannelLogoutController` |
 | `authz_version` revocation via introspection | `NEXUS_RS_MODE=introspect` | starter resource-server chain |
 | Refresh-token flow (silent renewal) | `RefreshController` | Spring Security OAuth2 client |
@@ -56,9 +59,14 @@ snapshot path immediately (and the introspect mode enforces it per request).
    - `backchannel_logout_uri` `http://localhost:8081/logout/backchannel`
    - grant `authorization_code` + `refresh_token`, scopes `openid profile`
 4. An **API key** for the project with scopes:
-   `registry:heartbeat`, `authz:snapshot`, `permissions:declare`, `notify:send`.
+   `registry:heartbeat`, `authz:snapshot`, `permissions:declare`, `notify:send`,
+   `config:read`, `vault:read`, `metrics:write` (add `metrics:read` if you scrape
+   the Prometheus export with this key).
 5. A **role** granting the demo permissions (`orders.*`, `inventory.read`,
    `reports.export`) and a **project user** assigned that role.
+6. (For the `/admin/config` and `/admin/vault` demos) a **config value**
+   (e.g. key `demo.feature`) and a **vault secret** (e.g. key `demo-secret`)
+   created in the project.
 
 ## Configure & run
 
@@ -91,6 +99,31 @@ Run (the app is a root Gradle module):
 6. Sign out of Nexus → Nexus POSTs a back-channel logout token to
    `/logout/backchannel` → the app logs it (in a real app, it'd invalidate the
    session for that `sub`).
+7. `/admin/config?key=demo.feature` → the config value via `nexus.config()`.
+8. `/admin/vault?key=demo-secret` → the revealed secret via `nexus.vault()`.
+9. `/admin/metrics` → record a point via `nexus.metrics()`, then scrape it (below).
+
+## Prometheus
+
+The metrics you push are also exposed by the backend in Prometheus exposition
+format, so a Prometheus server can scrape them:
+
+```bash
+curl -H "Authorization: Bearer $NEXUS_API_KEY" \
+     "$NEXUS_URL/api/v1/metrics/export"   # -> # TYPE orders_created gauge ...
+```
+
+```yaml
+scrape_configs:
+  - job_name: nexus-demo
+    bearer_token: <api-key with metrics:read>   # Prometheus can't send X-Nexus-Api-Key
+    metrics_path: /api/v1/metrics/export
+    static_configs:
+      - targets: ['localhost:8080']
+```
+
+(The API key is accepted as `Authorization: Bearer` anywhere in `/api/v1/**` —
+handy for any bearer-only client, not just Prometheus.)
 
 ## Tests
 

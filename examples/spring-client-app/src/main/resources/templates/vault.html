@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Nexus — Vault</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; color: #1e1b2e; }
+        code, pre { background: #f4f2f9; padding: 2px 6px; border-radius: 4px; font-size: .9em; }
+        .pill { display: inline-block; background: #6366f1; color: #fff; border-radius: 999px; padding: 2px 10px; margin: 2px; font-size: .85em; }
+        a { color: #4f46e5; }
+        .error { color: #b91c1c; }
+        .secret { background: #fef3c7; padding: 6px 10px; border-radius: 4px; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <h1>Vault</h1>
+    <p>Revelado de secretos vía <code>NexusClient.vault()</code> (scope
+       <code>vault:read</code>). El listado expone sólo metadatos; <code>get</code>
+       revela el valor desencriptado (auditable en el backend).</p>
+
+    <form method="get">
+        <label>Key (vacío = listar metadatos): <input name="key" th:value="${param.key}" size="32" /></label>
+        <button type="submit">Consultar</button>
+    </form>
+
+    <div th:if="${result}">
+        <div th:if="${result.ok}" style="margin-top:1.5rem">
+            <div th:if="${result.secret}">
+                <p><strong th:text="${result.secret.key}"></strong> =
+                   <span class="secret" th:text="${result.secret.value}"></span></p>
+            </div>
+            <div th:if="${result.secrets}">
+                <p>Secretos:
+                    <span th:each="s : ${result.secrets}" class="pill"
+                          th:text="${s.key} + ' (' + ${s.cipher} + ')'"></span>
+                </p>
+            </div>
+        </div>
+        <div th:unless="${result.ok}" class="error" th:text="${result.error}"></div>
+    </div>
+
+    <p style="margin-top:2rem"><a href="/">← Home</a></p>
+</body>
+</html>

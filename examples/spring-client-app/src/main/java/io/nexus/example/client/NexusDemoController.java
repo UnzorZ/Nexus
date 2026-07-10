@@ -21,6 +21,13 @@ import java.util.UUID;
  *       (resolución fresca/autoritativa vía NexusClient, distinta del
  *       {@code @perm.has} por token).</li>
  *   <li>{@code /admin/notify} — envío de una notificación por Nexus.</li>
+ *   <li>{@code /admin/config} — lectura de valores de configuración del proyecto
+ *       ({@code nexus.config()}).</li>
+ *   <li>{@code /admin/vault} — revelado de un secreto del vault
+ *       ({@code nexus.vault()}).</li>
+ *   <li>{@code /admin/metrics} — reporte push de un punto de métrica
+ *       ({@code nexus.metrics()}; el lado pull Prometheus es un endpoint del
+ *       backend).</li>
  * </ul>
  */
 @Controller
@@ -66,5 +73,54 @@ public class NexusDemoController {
             model.addAttribute("notifyResult", "Error: " + e.getMessage());
         }
         return "redirect:/?notify=" + model.getAttribute("notifyResult");
+    }
+
+    @GetMapping("/config")
+    public String config(@RequestParam(required = false) String key, Model model) {
+        Map<String, Object> result;
+        try {
+            if (key != null && !key.isBlank()) {
+                result = Map.of("ok", true, "value", nexus.config().get(key));
+            } else {
+                result = Map.of("ok", true, "values", nexus.config().list());
+            }
+        } catch (RuntimeException e) {
+            result = Map.of("ok", false, "error", e.getMessage());
+        }
+        model.addAttribute("result", result);
+        return "config";
+    }
+
+    @GetMapping("/vault")
+    public String vault(@RequestParam(required = false) String key, Model model) {
+        Map<String, Object> result;
+        try {
+            if (key != null && !key.isBlank()) {
+                result = Map.of("ok", true, "secret", nexus.vault().get(key));
+            } else {
+                result = Map.of("ok", true, "secrets", nexus.vault().list());
+            }
+        } catch (RuntimeException e) {
+            result = Map.of("ok", false, "error", e.getMessage());
+        }
+        model.addAttribute("result", result);
+        return "vault";
+    }
+
+    @PostMapping("/metrics")
+    public String metrics(@RequestParam String name,
+                          @RequestParam double value,
+                          @RequestParam(required = false) String tagKey,
+                          @RequestParam(required = false) String tagValue,
+                          Model model) {
+        try {
+            Map<String, String> tags = (tagKey != null && !tagKey.isBlank())
+                    ? Map.of(tagKey, tagValue == null ? "" : tagValue)
+                    : Map.of();
+            model.addAttribute("result", Map.of("ok", true, "point", nexus.metrics().record(name, value, tags)));
+        } catch (RuntimeException e) {
+            model.addAttribute("result", Map.of("ok", false, "error", e.getMessage()));
+        }
+        return "metrics";
     }
 }
