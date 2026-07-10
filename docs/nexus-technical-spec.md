@@ -1422,14 +1422,36 @@ scrape_configs:
     metrics_path: /api/v1/metrics/export
 ```
 
-**Security** (active on `nexus.security.issuer`):
+**Security** (active on `nexus.security.issuer` — independently of the management
+half; a **security-only** deployment — resource server +/or OIDC client, no
+heartbeat — needs no `nexus.url`):
 
-- resource-server chain validating Nexus JWTs locally (or introspection mode,
-  `nexus.security.rs-mode=introspect`),
+- resource-server chain validating Nexus JWTs locally, **including the `iss`
+  claim** against the configured issuer (all realms share one signing key, so
+  `iss` validation is what isolates one project's tokens from another's); or
+  introspection mode (`nexus.security.rs-mode=introspect`, which also enforces
+  `authz_version` revocation per request),
 - OIDC client login (authorization-code + PKCE) + RP-initiated logout,
 - `@perm` SpEL bean for permission-key authorization from the token claim,
-- back-channel logout endpoint (RFC 8417) that validates the logout token and
-  publishes a `NexusBackChannelLogoutEvent` for the app to invalidate the session.
+- back-channel logout endpoint (RFC 8417) — `permitAll` + CSRF-excluded at the
+  OIDC chain (Nexus POSTs it without a session or CSRF token) — that validates
+  the logout token and publishes a `NexusBackChannelLogoutEvent` for the app to
+  invalidate the session.
+
+The starter reaches Nexus over four project-API endpoints (API-key auth,
+`@RequiredScope`-enforced):
+
+| Endpoint | Scope | Purpose |
+|---|---|---|
+| `POST /api/v1/registry/register`, `/heartbeat` | `registry:heartbeat` | instance registration + liveness |
+| `GET /api/v1/authz/users/{userId}/snapshot` | `authz:snapshot` | effective permissions + `authzVersion` (§14.11) |
+| `POST /api/v1/permissions/declare` | `permissions:declare` | app-declared permission-catalog sync |
+| `POST /api/v1/notify/send` | `notify:send` | outbound notifications |
+
+Permission declaration is **app-scoped**: the SDK sends `X-Nexus-App: <app-name>`,
+so a declare call only reconciles (marks missing) the permissions that app owns
+(`project_permissions.declared_by`) — multi-app projects don't clobber each other,
+and an empty batch marks the app's previously-declared permissions as missing.
 
 ### 18.4 SDK Client Shape
 
@@ -1758,6 +1780,9 @@ Deliverables:
 - Documentation of Spring Authorization Server internals.
 
 ### Phase 5: Java SDK
+
+> **Status: ✅ DONE.** The `nexus-spring-boot-starter` (see §18) and the
+> reference app `examples/spring-client-app` are implemented and tested.
 
 Goal: make Java app integration easy.
 
