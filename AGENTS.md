@@ -518,7 +518,12 @@ Example apps that consume Nexus.
 
 ### examples/spring-client-app
 
-Future sample Spring Boot app connected to Nexus.
+Reference Spring Boot 4 app connected to Nexus — a root Gradle module
+(`:examples:nexus-spring-client-app`) that consumes the
+`nexus-spring-boot-starter` and demos every feature: OIDC login, resource-server
+JWT authz (`@perm`), permission snapshot, heartbeat, permission declaration,
+notify, and back-channel logout. See its `README.md` for the capability matrix
+and the end-to-end walkthrough.
 
 Use examples to prove SDK ergonomics and document real integration patterns.
 
@@ -557,9 +562,10 @@ Currently registers:
 
 ```text
 apps/api -> nexus-api
+examples/spring-client-app -> nexus-spring-client-app
 ```
 
-Add future Gradle subprojects here when needed, such as the Java SDK.
+Add future Gradle subprojects here when needed.
 
 ### README.md
 
