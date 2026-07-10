@@ -1,12 +1,15 @@
 package io.nexus.client;
 
 import io.nexus.client.api.HeartbeatReceipt;
+import io.nexus.client.internal.ConfigClient;
 import io.nexus.client.internal.HeartbeatClient;
 import io.nexus.client.internal.HeartbeatScheduler;
+import io.nexus.client.internal.MetricsClient;
 import io.nexus.client.internal.NexusHttpClient;
 import io.nexus.client.internal.NotifyClient;
 import io.nexus.client.internal.PermissionClient;
 import io.nexus.client.internal.PermissionDeclarationSync;
+import io.nexus.client.internal.VaultClient;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -53,6 +56,24 @@ public class NexusAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    public ConfigClient configClient(NexusHttpClient http) {
+        return new ConfigClient(http);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public VaultClient vaultClient(NexusHttpClient http) {
+        return new VaultClient(http);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public MetricsClient metricsClient(NexusHttpClient http) {
+        return new MetricsClient(http);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     public PermissionSnapshotCache permissionSnapshotCache(PermissionClient permissionClient, NexusProperties properties) {
         return new PermissionSnapshotCache(permissionClient,
                 properties.getPermissions().getSnapshotTtl(),
@@ -62,8 +83,10 @@ public class NexusAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public NexusClient nexusClient(HeartbeatClient heartbeatClient, PermissionClient permissionClient,
-                                   PermissionSnapshotCache snapshotCache, NotifyClient notifyClient) {
-        return new NexusClient(heartbeatClient, permissionClient, snapshotCache, notifyClient);
+                                   PermissionSnapshotCache snapshotCache, NotifyClient notifyClient,
+                                   ConfigClient configClient, VaultClient vaultClient, MetricsClient metricsClient) {
+        return new NexusClient(heartbeatClient, permissionClient, snapshotCache, notifyClient,
+                configClient, vaultClient, metricsClient);
     }
 
     /** Handshake + latido periódico; sólo si {@code nexus.heartbeat.enabled=true} (default). */
