@@ -2,7 +2,9 @@ package io.nexus.client.security;
 
 import io.nexus.client.NexusProperties;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.config.Customizer;
@@ -14,6 +16,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.oauth2.client.registration.ClientRegistrations;
+import org.springframework.security.oauth2.client.registration.InMemoryClientRegistrationRepository;
 import org.springframework.security.oauth2.client.oidc.web.logout.OidcClientInitiatedLogoutSuccessHandler;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
@@ -37,6 +40,7 @@ import org.springframework.context.ApplicationEventPublisher;
 @EnableWebSecurity
 @EnableMethodSecurity
 @ConditionalOnProperty("nexus.security.issuer")
+@EnableConfigurationProperties(NexusProperties.class)
 public class NexusSecurityAutoConfiguration {
 
     // --- Resource server: JWT (default) -------------------------------------
@@ -92,16 +96,20 @@ public class NexusSecurityAutoConfiguration {
     }
 
     @Bean
-    public ClientRegistration nexusClientRegistration(NexusProperties properties) {
+    @ConditionalOnMissingBean(ClientRegistrationRepository.class)
+    public ClientRegistrationRepository nexusClientRegistrationRepository(NexusProperties properties) {
         NexusProperties.Security sec = properties.getSecurity();
-        String discovery = sec.getIssuer() + "/.well-known/openid-configuration";
-        return ClientRegistrations.fromIssuerLocation(discovery)
+        // fromIssuerLocation espera el issuer "pelado": él mismo añade
+        // /.well-known/openid-configuration y valida que el claim `issuer` del
+        // metadata coincida. Pasarle la URL well-known completa rompe esa validación.
+        ClientRegistration registration = ClientRegistrations.fromIssuerLocation(sec.getIssuer())
                 .registrationId("nexus")
                 .clientId(sec.getClient().getClientId())
                 .clientSecret(sec.getClient().getClientSecret())
                 .redirectUri("{baseUrl}/login/oauth2/code/{registrationId}")
                 .scope("openid", "profile")
                 .build();
+        return new InMemoryClientRegistrationRepository(registration);
     }
 
     @Bean("perm")
