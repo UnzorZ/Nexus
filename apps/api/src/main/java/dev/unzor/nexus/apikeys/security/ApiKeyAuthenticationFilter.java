@@ -20,7 +20,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Filtro de autenticación del API de proyecto ({@code /api/v1/**}). Acepta dos
+ * Filtro de autenticación del API de proyecto ({@code /api/v1/**}). Acepta tres
  * credenciales:
  * <ul>
  *   <li>{@code X-Nexus-Instance-Token} — token efímero (ADR-0012) verificado en
@@ -29,6 +29,11 @@ import java.util.UUID;
  *       {@link ApiKeyResolver} (SHA-256 en tiempo constante). Back-compat y
  *       bootstrap del handshake (el {@code register} la usa para mintear el
  *       token).</li>
+ *   <li>{@code Authorization: Bearer <api-key>} — la misma API key vía cabecera
+ *       estándar de Bearer. Útil para clientes que sólo pueden enviar
+ *       {@code Authorization} (p. ej. un {@code scrape_config} de Prometheus con
+ *       {@code bearer_token}); se resuelve idéntico al header {@code X-Nexus-Api-Key}.</li>
+ * </ul>
  * </ul>
  * Si alguna es válida, fija el {@code SecurityContext} (principal
  * {@link ResolvedApiKey}). Si no llega ninguna, o es inválida, escribe el error
@@ -39,6 +44,8 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
 
     public static final String HEADER = "X-Nexus-Api-Key";
     public static final String TOKEN_HEADER = "X-Nexus-Instance-Token";
+    public static final String AUTHORIZATION_HEADER = "Authorization";
+    public static final String BEARER_PREFIX = "Bearer ";
 
     private final ApiKeyResolver resolver;
     private final InstanceTokenService instanceTokenService;
@@ -78,11 +85,16 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        // API key (back-compat + bootstrap del handshake).
+        // API key (back-compat + bootstrap del handshake). Se acepta vía el header
+        // X-Nexus-Api-Key o, si éste falta, vía Authorization: Bearer <key> (para
+        // clientes que sólo pueden enviar Authorization, p. ej. Prometheus).
         String rawKey = request.getHeader(HEADER);
         if (rawKey == null || rawKey.isBlank()) {
+            rawKey = extractBearer(request);
+        }
+        if (rawKey == null || rawKey.isBlank()) {
             reject(response, HttpStatus.UNAUTHORIZED, "invalid_api_key", "Invalid API key",
-                    "A valid X-Nexus-Api-Key header is required.", "api_key.auth_invalid", null, null, "missing_header");
+                    "A valid X-Nexus-Api-Key (or Bearer) header is required.", "api_key.auth_invalid", null, null, "missing_header");
             return;
         }
         try {
@@ -111,6 +123,24 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
                 new UsernamePasswordAuthenticationToken(resolved, null, List.of());
         auth.setDetails(credential);
         SecurityContextHolder.getContext().setAuthentication(auth);
+    }
+
+    /**
+     * Extrae una API key de una cabecera {@code Authorization: Bearer <key>}
+     * (insensible a mayúsculas en el esquema). Devuelve {@code null} si la
+     * cabecera no está o no es un Bearer válido.
+     */
+    private String extractBearer(HttpServletRequest request) {
+        String header = request.getHeader(AUTHORIZATION_HEADER);
+        if (header == null || header.length() <= BEARER_PREFIX.length()) {
+            return null;
+        }
+        String scheme = header.substring(0, BEARER_PREFIX.length());
+        if (!BEARER_PREFIX.equalsIgnoreCase(scheme)) {
+            return null;
+        }
+        String token = header.substring(BEARER_PREFIX.length()).trim();
+        return token.isBlank() ? null : token;
     }
 
     private void reject(

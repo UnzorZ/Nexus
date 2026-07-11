@@ -19,6 +19,8 @@ import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.hamcrest.Matchers.containsString;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -192,6 +194,63 @@ class RuntimeAuthorizationRuntimeTests {
         mockMvc.perform(get("/api/v1/authz/users/{userId}/snapshot", UUID.randomUUID()))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("invalid_api_key"));
+    }
+
+    @Test
+    void metricsExportReturnsPrometheusTextWithRecordedPoint() throws Exception {
+        String email = unique("prom");
+        LoginSession owner = login(email);
+        String projectId = createProject(owner, randomSlug("prom"));
+        String key = createKey(owner, projectId,
+                "{\"name\":\"Prom\",\"scopes\":[\"metrics:write\",\"metrics:read\"],\"expiresAt\":null}");
+
+        mockMvc.perform(post("/api/v1/metrics/record")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Nexus-Api-Key", key)
+                        .content("{\"name\":\"orders.created\",\"value\":42,\"tags\":{\"env\":\"prod\"}}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/metrics/export")
+                        .header("X-Nexus-Api-Key", key))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith("text/plain"))
+                .andExpect(content().string(containsString("# TYPE orders_created gauge")))
+                .andExpect(content().string(containsString("orders_created{env=\"prod\"} 42.0")));
+    }
+
+    @Test
+    void metricsExportAcceptsBearerApiKey() throws Exception {
+        String email = unique("prom-bearer");
+        LoginSession owner = login(email);
+        String projectId = createProject(owner, randomSlug("promb"));
+        String key = createKey(owner, projectId,
+                "{\"name\":\"Prom\",\"scopes\":[\"metrics:write\",\"metrics:read\"],\"expiresAt\":null}");
+
+        mockMvc.perform(post("/api/v1/metrics/record")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Nexus-Api-Key", key)
+                        .content("{\"name\":\"hits\",\"value\":1}"))
+                .andExpect(status().isOk());
+
+        // Authorization: Bearer <key> — el camino del scrape de Prometheus.
+        mockMvc.perform(get("/api/v1/metrics/export")
+                        .header("Authorization", "Bearer " + key))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith("text/plain"))
+                .andExpect(content().string(containsString("# TYPE hits gauge")));
+    }
+
+    @Test
+    void metricsExportRejectsKeyWithoutReadScope() throws Exception {
+        String email = unique("prom-scope");
+        LoginSession owner = login(email);
+        String projectId = createProject(owner, randomSlug("proms"));
+        String key = createKey(owner, projectId,
+                "{\"name\":\"WriteOnly\",\"scopes\":[\"metrics:write\"],\"expiresAt\":null}");
+
+        mockMvc.perform(get("/api/v1/metrics/export")
+                        .header("X-Nexus-Api-Key", key))
+                .andExpect(status().isForbidden());
     }
 
     // --- helpers -----------------------------------------------------------------
