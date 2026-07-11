@@ -2,7 +2,8 @@
 #
 # Configure against a Nexus project:
 #   - an API key with scopes: registry:heartbeat, authz:snapshot,
-#     permissions:declare, notify:send
+#     permissions:declare, notify:send, config:read, vault:read,
+#     metrics:write (add metrics:read if you scrape the Prometheus export)
 #   - an OAuth client (redirect http://localhost:8081/login/oauth2/code/nexus)
 #     with a backchannel_logout_uri of http://localhost:8081/logout/backchannel
 #   - a role granting the demo permissions (orders.*, inventory.read)
