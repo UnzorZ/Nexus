@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Nexus — Metrics</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; color: #1e1b2e; }
+        code, pre { background: #f4f2f9; padding: 2px 6px; border-radius: 4px; font-size: .9em; }
+        a { color: #4f46e5; }
+        .error { color: #b91c1c; }
+        input { margin: 2px; }
+    </style>
+</head>
+<body>
+    <h1>Metrics (push)</h1>
+    <p>Reporte push de un punto de métrica vía <code>NexusClient.metrics().record(...)</code>
+       (scope <code>metrics:write</code>). El lado <em>pull</em> es Prometheus scrapeando
+       <code>GET /api/v1/metrics/export</code> del backend con
+       <code>bearer_token</code> = API key.</p>
+
+    <form method="post">
+        <label>name: <input name="name" placeholder="orders.created" size="24" /></label>
+        <label>value: <input name="value" value="1" size="8" /></label>
+        <label>tag: <input name="tagKey" placeholder="env" size="10" /> = <input name="tagValue" placeholder="prod" size="10" /></label>
+        <button type="submit">Record</button>
+    </form>
+
+    <div th:if="${result}" style="margin-top:1.5rem">
+        <div th:if="${result.ok}">
+            <p>Grabado ✓</p>
+            <pre th:text="${result.point}"></pre>
+            <p><small>Scrapéalo luego: <code>curl -H "Authorization: Bearer $NEXUS_API_KEY" $NEXUS_URL/api/v1/metrics/export</code></small></p>
+        </div>
+        <div th:unless="${result.ok}" class="error" th:text="${result.error}"></div>
+    </div>
+
+    <p style="margin-top:2rem"><a href="/">← Home</a></p>
+</body>
+</html>
