@@ -93,7 +93,11 @@ const SECTION_MAP: Record<string, string> = {
   Permissions: "permissions",
   Roles: "roles",
   "OAuth clients": "oauth-clients",
+  Vault: "vault",
   Heartbeat: "heartbeat",
+  Config: "config",
+  Metrics: "metrics",
+  Notify: "notify",
   Audit: "audit",
   "Project settings": "settings",
 };
