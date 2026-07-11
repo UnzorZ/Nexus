@@ -17,7 +17,7 @@ back-channel logout). It consumes the [`nexus-spring-boot-starter`](../../packag
 | Capability | Where (in the app) | Provided by |
 |---|---|---|
 | OIDC login (authorization-code + PKCE) + RP-initiated logout | — | starter `NexusSecurityAutoConfiguration` |
-| Local JWT validation (signature + `exp`) | `/api/**` | starter resource-server chain |
+| Local JWT validation (signature + `exp` + **`iss`**) | `/api/**` | starter resource-server chain |
 | **Permission-key authz** from the `permissions` claim (glob) | `OrdersApiController`, `InventoryApiController` (`@perm.has`) | starter `NexusPermissionService` |
 | **Permission snapshot** (fresh/authoritative, cached TTL) | `NexusDemoController` (`/admin/snapshot`) | starter `PermissionSnapshotCache` + `NexusClient` |
 | **Heartbeat** to Nexus | automatic on startup | starter `HeartbeatScheduler` |
@@ -29,6 +29,11 @@ back-channel logout). It consumes the [`nexus-spring-boot-starter`](../../packag
 | **Back-channel logout** (RFC 8417) | `BackChannelLogoutListener` | starter `NexusBackChannelLogoutController` |
 | `authz_version` revocation via introspection | `NEXUS_RS_MODE=introspect` | starter resource-server chain |
 | Refresh-token flow (silent renewal) | `RefreshController` | Spring Security OAuth2 client |
+
+> **Cross-realm isolation.** Every project realm shares one signing key, so the
+> resource-server chain validates the token `iss` against the configured Nexus
+> issuer — this is what stops a valid token issued by project A from
+> authenticating against an app configured for project B.
 
 ## How authorization works
 
