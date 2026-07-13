@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -47,15 +48,36 @@ public class AuthorizationSnapshotService {
     @Transactional(readOnly = true)
     public AuthorizationSnapshot snapshot(UUID projectId, UUID userId) {
         projectLookupService.requireById(projectId);
+        Optional<Long> initialVersion = projectUserRepository.findAuthzVersionByProjectIdAndId(projectId, userId);
+        // Usuario inexistente / eliminado: snapshot "deny" — permisos VACÍOS y
+        // authzVersion = -1 (remediación de auditoría). Antes se devolvían los
+        // permisos efectivos (posiblemente huérfanos de project_user_roles) junto a
+        // authzVersion = -1, y el SDK no comprobaba la versión → concedía acceso a
+        // usuarios inexistentes/eliminados. Con permisos vacíos no hay nada que
+        // conceder, y authzVersion negativa es denegación explícita para el SDK.
+        if (initialVersion.isEmpty()) {
+            return denySnapshot(projectId, userId);
+        }
         EffectiveAuthorities authorities = effectiveAuthoritiesService.forUser(projectId, userId);
-        long authzVersion = projectUserRepository.findAuthzVersionByProjectIdAndId(projectId, userId)
-                .orElse(-1L);
+        Optional<Long> confirmedVersion = projectUserRepository.findAuthzVersionByProjectIdAndId(projectId, userId);
+        // READ COMMITTED da un snapshot nuevo por sentencia: si el usuario desapareció
+        // o su versión cambió mientras se resolvían roles/permisos, nunca publicamos el
+        // resultado potencialmente huérfano/stale. El cliente podrá reintentar y hasta
+        // entonces recibe denegación explícita.
+        if (!confirmedVersion.equals(initialVersion)) {
+            return denySnapshot(projectId, userId);
+        }
         return new AuthorizationSnapshot(
                 userId,
                 projectId,
-                authzVersion,
+                confirmedVersion.orElseThrow(),
                 List.copyOf(authorities.roleKeys()),
                 List.copyOf(authorities.permissionKeys()),
+                Instant.now().plus(snapshotTtl));
+    }
+
+    private AuthorizationSnapshot denySnapshot(UUID projectId, UUID userId) {
+        return new AuthorizationSnapshot(userId, projectId, -1L, List.of(), List.of(),
                 Instant.now().plus(snapshotTtl));
     }
 }
