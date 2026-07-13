@@ -18,6 +18,7 @@ import java.util.UUID;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -39,8 +40,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class ProjectRealmIsolationChainIT {
 
     private static final String SLUG_B = "realm-iso-" + UUID.randomUUID();
+    private static final String ARCHIVED_SLUG = "realm-archived-" + UUID.randomUUID();
     private static final UUID REALM_B = UUID.fromString("00000000-0000-0000-0000-0000000000b1");
     private static final UUID REALM_A = UUID.fromString("00000000-0000-0000-0000-0000000000a1");
+    private static final UUID ARCHIVED_REALM = UUID.fromString("00000000-0000-0000-0000-0000000000c1");
 
     @Autowired
     private MockMvc mockMvc;
@@ -54,6 +57,11 @@ class ProjectRealmIsolationChainIT {
                 "INSERT INTO projects (id, slug, name, status, created_at, updated_at) "
                         + "VALUES (?, ?, 'Realm IT', 'ACTIVE', now(), now()) ON CONFLICT (slug) DO NOTHING",
                 REALM_B, SLUG_B);
+        jdbcTemplate.update(
+                "INSERT INTO projects (id, slug, name, status, created_at, updated_at) "
+                        + "VALUES (?, ?, 'Archived Realm IT', 'ARCHIVED', now(), now()) "
+                        + "ON CONFLICT (slug) DO NOTHING",
+                ARCHIVED_REALM, ARCHIVED_SLUG);
     }
 
     @Test
@@ -77,6 +85,22 @@ class ProjectRealmIsolationChainIT {
         // userId aleatorio) — lo importante es que NO sea 401.
         mockMvc.perform(get("/api/p/" + SLUG_B + "/me").with(authentication(authFor(REALM_B))))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void crossRealmPrincipalIsStillBlockedWhenTargetRealmIsArchived() throws Exception {
+        // M1 usa resolución de existencia: el estado inactivo no puede convertir una
+        // petición cross-realm en una respuesta distinta del 401 de aislamiento.
+        mockMvc.perform(get("/api/p/" + ARCHIVED_SLUG + "/me").with(authentication(authFor(REALM_A))))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void matchingPrincipalOnArchivedRealmReachesOperationalGate() throws Exception {
+        mockMvc.perform(get("/api/p/" + ARCHIVED_SLUG + "/me")
+                        .with(authentication(authFor(ARCHIVED_REALM))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("project_not_operational"));
     }
 
     /** Authentication con un ProjectUserPrincipal del projectId dado (como tras el login). */

@@ -3,6 +3,9 @@ package dev.unzor.nexus.apikeys.api.controller;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import dev.unzor.nexus.TestcontainersConfiguration;
+import dev.unzor.nexus.apikeys.persistence.repository.ProjectApiKeyRepository;
+import dev.unzor.nexus.projects.domain.entity.Project;
+import dev.unzor.nexus.projects.persistence.repository.ProjectRepository;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,6 +18,8 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -34,6 +39,12 @@ class ProjectApiRuntimeTests {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private ProjectApiKeyRepository apiKeyRepository;
+
+    @Autowired
+    private ProjectRepository projectRepository;
 
     @Test
     void whoamiRejectsMissingKey() throws Exception {
@@ -55,6 +66,41 @@ class ProjectApiRuntimeTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.projectId").value(projectId))
                 .andExpect(jsonPath("$.scopes[0]").value("registry:heartbeat"));
+    }
+
+    @Test
+    void whoamiRejectsKeyForArchivedProjectWithoutTouchingLastUsed() throws Exception {
+        String ownerEmail = unique("rt-archived");
+        registerAccount(ownerEmail);
+        LoginSession owner = login(ownerEmail);
+        String projectId = createProject(owner, randomSlug("rt"));
+        CreatedKey created = createKeyWithId(owner, projectId,
+                "{\"name\":\"CI\",\"scopes\":[\"registry:heartbeat\"],\"expiresAt\":null}");
+
+        archiveProject(owner, projectId);
+
+        mockMvc.perform(get("/api/v1/whoami").header("X-Nexus-Api-Key", created.key))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("project_not_operational"));
+        assertLastUsedIsNull(projectId, created.id);
+    }
+
+    @Test
+    void whoamiRejectsKeyForSuspendedProjectWithoutTouchingLastUsed() throws Exception {
+        String ownerEmail = unique("rt-suspended");
+        registerAccount(ownerEmail);
+        LoginSession owner = login(ownerEmail);
+        String projectId = createProject(owner, randomSlug("rt"));
+        CreatedKey created = createKeyWithId(owner, projectId,
+                "{\"name\":\"CI\",\"scopes\":[\"registry:heartbeat\"],\"expiresAt\":null}");
+        Project project = projectRepository.findById(UUID.fromString(projectId)).orElseThrow();
+        project.suspend();
+        projectRepository.saveAndFlush(project);
+
+        mockMvc.perform(get("/api/v1/whoami").header("X-Nexus-Api-Key", created.key))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("project_not_operational"));
+        assertLastUsedIsNull(projectId, created.id);
     }
 
     @Test
@@ -150,6 +196,20 @@ class ProjectApiRuntimeTests {
                         .cookie(owner.csrfCookie(), owner.sessionCookie())
                         .content("{\"name\":\"CI\",\"status\":\"DISABLED\",\"expiresAt\":null}"))
                 .andExpect(status().isOk());
+    }
+
+    private void archiveProject(LoginSession owner, String projectId) throws Exception {
+        mockMvc.perform(delete("/api/panel/v1/projects/{projectId}", projectId)
+                        .header("X-XSRF-TOKEN", owner.csrfToken())
+                        .cookie(owner.csrfCookie(), owner.sessionCookie()))
+                .andExpect(status().isNoContent());
+    }
+
+    private void assertLastUsedIsNull(String projectId, String keyId) {
+        assertThat(apiKeyRepository.findByProjectIdAndId(UUID.fromString(projectId), UUID.fromString(keyId)))
+                .get()
+                .extracting("lastUsedAt")
+                .isNull();
     }
 
     private String createProject(LoginSession owner, String slug) throws Exception {

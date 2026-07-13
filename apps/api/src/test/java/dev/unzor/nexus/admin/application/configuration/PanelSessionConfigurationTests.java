@@ -8,6 +8,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.session.FlushMode;
+import org.springframework.session.data.redis.RedisIndexedSessionRepository;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -20,6 +22,8 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 /**
  * Verifies that {@code NEXUS_SESSION_TIMEOUT} controls the real
@@ -53,6 +57,17 @@ class PanelSessionConfigurationTests {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> configuration.sessionTimeoutCustomizer(Duration.ofSeconds(-1)))
                 .withMessage("nexus.session.timeout must be positive");
+    }
+
+    @Test
+    void sessionRepositoryFlushesImmediately() {
+        PanelSessionConfiguration configuration = new PanelSessionConfiguration();
+        RedisIndexedSessionRepository repository = mock(RedisIndexedSessionRepository.class);
+
+        configuration.sessionTimeoutCustomizer(Duration.ofMinutes(2)).customize(repository);
+
+        verify(repository).setDefaultMaxInactiveInterval(Duration.ofMinutes(2));
+        verify(repository).setFlushMode(FlushMode.IMMEDIATE);
     }
 
     @Test

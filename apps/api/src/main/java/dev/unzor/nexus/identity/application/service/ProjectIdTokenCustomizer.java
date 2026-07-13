@@ -4,11 +4,16 @@ import dev.unzor.nexus.identity.application.context.ProjectAuthenticationContext
 import dev.unzor.nexus.identity.infrastructure.security.ProjectUserPrincipal;
 import dev.unzor.nexus.permissions.application.dto.EffectiveAuthorities;
 import dev.unzor.nexus.permissions.application.service.EffectiveAuthoritiesService;
+import dev.unzor.nexus.projects.domain.exception.ProjectNotFoundException;
+import dev.unzor.nexus.projects.domain.exception.ProjectNotOperationalException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.FactorGrantedAuthority;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
+import org.springframework.security.oauth2.core.OAuth2Error;
+import org.springframework.security.oauth2.core.OAuth2ErrorCodes;
 import org.springframework.security.oauth2.server.authorization.token.JwtEncodingContext;
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenCustomizer;
 import org.springframework.stereotype.Component;
@@ -62,8 +67,13 @@ public class ProjectIdTokenCustomizer implements OAuth2TokenCustomizer<JwtEncodi
         try {
             ProjectAuthenticationContext project = projectSlugResolver.resolve(slug);
             realmProjectId = project.projectId();
-        } catch (RuntimeException unknownProject) {
+        } catch (ProjectNotFoundException unknownProject) {
             return;
+        } catch (ProjectNotOperationalException inactiveProject) {
+            throw new OAuth2AuthenticationException(new OAuth2Error(
+                    OAuth2ErrorCodes.INVALID_GRANT,
+                    "The issuer project is not operational.",
+                    null), inactiveProject);
         }
 
         Authentication principalAuth = context.getPrincipal();

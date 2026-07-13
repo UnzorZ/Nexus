@@ -15,6 +15,15 @@ public class ProjectSlugResolver {
     }
 
     public ProjectAuthenticationContext resolve(String projectSlug) {
+        ProjectSlugReference reference = resolveProjectBySlugService.resolveOperational(projectSlug);
+        return new ProjectAuthenticationContext(reference.projectId(), reference.projectSlug());
+    }
+
+    /**
+     * Resuelve incluso proyectos no operativos. Se reserva para límites que deben
+     * conservar el aislamiento del realm o permitir el teardown de una sesión.
+     */
+    public ProjectAuthenticationContext resolveExisting(String projectSlug) {
         ProjectSlugReference reference = resolveProjectBySlugService.resolve(projectSlug);
         return new ProjectAuthenticationContext(reference.projectId(), reference.projectSlug());
     }

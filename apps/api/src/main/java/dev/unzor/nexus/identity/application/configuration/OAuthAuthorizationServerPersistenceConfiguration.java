@@ -3,7 +3,9 @@ package dev.unzor.nexus.identity.application.configuration;
 import dev.unzor.nexus.identity.application.service.ProjectOauthClientToRegisteredClientMapper;
 import dev.unzor.nexus.identity.infrastructure.security.ProjectUserPrincipal;
 import dev.unzor.nexus.identity.persistence.CompositeRegisteredClientRepository;
+import dev.unzor.nexus.identity.persistence.ProjectOperationalOAuth2AuthorizationService;
 import dev.unzor.nexus.identity.persistence.repository.ProjectOauthClientRepository;
+import dev.unzor.nexus.projects.application.service.ProjectLookupService;
 import dev.unzor.nexus.projects.application.service.ResolveProjectBySlugService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -15,6 +17,7 @@ import org.springframework.security.oauth2.server.authorization.JdbcOAuth2Author
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationConsentService;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
 import org.springframework.security.oauth2.server.authorization.client.JdbcRegisteredClientRepository;
+import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
@@ -31,23 +34,47 @@ class OAuthAuthorizationServerPersistenceConfiguration {
      * default (keyean por registered_client_id + principal_name).
      */
     @Bean
-    RegisteredClientRepository registeredClientRepository(
+    CompositeRegisteredClientRepository registeredClientRepository(
             JdbcTemplate jdbcTemplate,
             ProjectOauthClientRepository projectRepository,
             ProjectOauthClientToRegisteredClientMapper mapper,
-            ResolveProjectBySlugService slugResolver
+            ResolveProjectBySlugService slugResolver,
+            ProjectLookupService projectLookupService
     ) {
         return new CompositeRegisteredClientRepository(
                 projectRepository, mapper, new JdbcRegisteredClientRepository(jdbcTemplate),
-                jdbcTemplate, slugResolver);
+                jdbcTemplate, slugResolver, projectLookupService);
     }
 
     @Bean
     OAuth2AuthorizationService authorizationService(
             JdbcTemplate jdbcTemplate,
-            RegisteredClientRepository registeredClientRepository
+            CompositeRegisteredClientRepository registeredClientRepository,
+            ProjectOauthClientRepository projectOauthClientRepository,
+            ProjectLookupService projectLookupService
     ) {
-        JdbcOAuth2AuthorizationService service = new JdbcOAuth2AuthorizationService(jdbcTemplate, registeredClientRepository);
+        // Existing grants must be hydratable even after their project becomes inactive.
+        // The lifecycle gate runs immediately after hydration in the decorator below;
+        // making the composite return null during the row mapping would surface as a
+        // DataRetrievalFailureException (HTTP 500) instead of a native OAuth rejection.
+        RegisteredClientRepository hydrationRepository = new RegisteredClientRepository() {
+            @Override
+            public void save(RegisteredClient registeredClient) {
+                registeredClientRepository.save(registeredClient);
+            }
+
+            @Override
+            public RegisteredClient findById(String id) {
+                return registeredClientRepository.findByIdForAuthorizationHydration(id);
+            }
+
+            @Override
+            public RegisteredClient findByClientId(String clientId) {
+                return registeredClientRepository.findByClientId(clientId);
+            }
+        };
+        JdbcOAuth2AuthorizationService service = new JdbcOAuth2AuthorizationService(
+                jdbcTemplate, hydrationRepository);
         // El row-mapper JDBC por defecto usa SecurityJacksonModules, cuyo
         // PolymorphicTypeValidator sólo permite tipos de Spring Security. SAS persiste en
         // oauth2_authorization: (1) el principal autenticado (ProjectUserPrincipal) y (2) los
@@ -70,8 +97,9 @@ class OAuthAuthorizationServerPersistenceConfiguration {
                 .build();
         service.setAuthorizationRowMapper(
                 new JdbcOAuth2AuthorizationService.JsonMapperOAuth2AuthorizationRowMapper(
-                        registeredClientRepository, jsonMapper));
-        return service;
+                        hydrationRepository, jsonMapper));
+        return new ProjectOperationalOAuth2AuthorizationService(
+                service, projectOauthClientRepository, projectLookupService);
     }
 
     @Bean
