@@ -39,9 +39,15 @@ import java.util.stream.Collectors;
  *       <b>project-scoped</b> y el cliente queda sujeto al realm del proyecto.</li>
  * </ul>
  *
- * <p>El aislamiento entre proyectos no depende de este repositorio: cada cliente
- * tiene un id (UUID) y un client_id globalmente únicos, y las autorizaciones se
- * keyean por {@code registered_client_id} + {@code principal_name}.</p>
+ * <p><b>Aislamiento entre proyectos (remediación de auditoría, hallazgo crítico):</b>
+ * bajo un issuer por-realm {@code {origin}/p/{slug}}, {@code findById} y
+ * {@code findByClientId} sólo sirven clientes de ese proyecto — validan
+ * {@code client.projectId == issuer.projectId} (resuelto vía
+ * {@link AuthorizationServerContextHolder}) y nunca caen al repo global. Así un
+ * cliente de otro realm (o el cliente técnico global) no se resuelve bajo
+ * {@code /p/{slug}/}: SAS lo ve como inexistente y rechaza authorize/token.
+ * Sin contexto o con issuer global (arranque, issuer técnico) se conserva el
+ * comportamiento compuesto (proyecto primero, global después).</p>
  */
 public class CompositeRegisteredClientRepository implements RegisteredClientRepository {
 
@@ -145,24 +151,68 @@ public class CompositeRegisteredClientRepository implements RegisteredClientRepo
 
     @Override
     public RegisteredClient findById(String id) {
+        RealmIssuer realm = currentRealmIssuer();
         try {
             UUID uuid = UUID.fromString(id);
             return projectRepository.findById(uuid)
                     .filter(CompositeRegisteredClientRepository::isActive)
+                    .filter(client -> belongsToRealm(client, realm))
                     .map(mapper::toRegisteredClient)
-                    .orElseGet(() -> global.findById(id));
+                    .orElseGet(() -> realm.isRealm() ? null : global.findById(id));
         } catch (IllegalArgumentException notAUuid) {
-            // El cliente bootstrap usa un id configurado (string), no un UUID.
-            return global.findById(id);
+            // id no-UUID = cliente bootstrap global. Bajo un realm no se sirve.
+            return realm.isRealm() ? null : global.findById(id);
         }
     }
 
     @Override
     public RegisteredClient findByClientId(String clientId) {
+        RealmIssuer realm = currentRealmIssuer();
         return projectRepository.findByClientId(clientId)
                 .filter(CompositeRegisteredClientRepository::isActive)
+                .filter(client -> belongsToRealm(client, realm))
                 .map(mapper::toRegisteredClient)
-                .orElseGet(() -> global.findByClientId(clientId));
+                .orElseGet(() -> realm.isRealm() ? null : global.findByClientId(clientId));
+    }
+
+    /**
+     * Realm del issuer en curso (vía {@link AuthorizationServerContextHolder}):
+     * {@code GLOBAL} si no hay contexto o el issuer no es por-realm; o {@code REALM}
+     * con el projectId resuelto del slug (null si el slug no existe — aun así se
+     * trata como realm para no servir el cliente técnico global ni de otros proyectos
+     * bajo {@code /p/{slug}/}).
+     */
+    private RealmIssuer currentRealmIssuer() {
+        var ctx = AuthorizationServerContextHolder.getContext();
+        if (ctx == null) {
+            return RealmIssuer.GLOBAL;
+        }
+        String issuer = ctx.getIssuer();
+        if (issuer == null) {
+            return RealmIssuer.GLOBAL;
+        }
+        int idx = issuer.lastIndexOf("/p/");
+        if (idx < 0) {
+            return RealmIssuer.GLOBAL;
+        }
+        String slug = issuer.substring(idx + 3);
+        try {
+            return new RealmIssuer(true, slugResolver.resolve(slug).projectId());
+        } catch (RuntimeException unknownSlug) {
+            return new RealmIssuer(true, null);
+        }
+    }
+
+    /** Bajo un issuer por-realm sólo se sirve el cliente de ese proyecto; GLOBAL no filtra. */
+    private static boolean belongsToRealm(ProjectOauthClient client, RealmIssuer realm) {
+        if (!realm.isRealm()) {
+            return true;
+        }
+        return realm.projectId() != null && realm.projectId().equals(client.getProjectId());
+    }
+
+    private record RealmIssuer(boolean isRealm, UUID projectId) {
+        private static final RealmIssuer GLOBAL = new RealmIssuer(false, null);
     }
 
     /**
