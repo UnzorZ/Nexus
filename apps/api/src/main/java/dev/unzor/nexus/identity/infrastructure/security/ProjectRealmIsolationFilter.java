@@ -45,14 +45,13 @@ public class ProjectRealmIsolationFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         String slug = extractSlug(request.getRequestURI());
         if (slug != null) {
-            UUID realmProjectId = resolveQuietly(slug);
             Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-            if (realmProjectId != null
-                    && authentication != null
-                    && authentication.getPrincipal() instanceof ProjectUserPrincipal pup
-                    && !realmProjectId.equals(pup.projectId())) {
-                response.setStatus(HttpStatus.UNAUTHORIZED.value());
-                return;
+            if (authentication != null && authentication.getPrincipal() instanceof ProjectUserPrincipal pup) {
+                UUID realmProjectId = resolveQuietly(slug);
+                if (realmProjectId != null && !realmProjectId.equals(pup.projectId())) {
+                    response.setStatus(HttpStatus.UNAUTHORIZED.value());
+                    return;
+                }
             }
         }
         filterChain.doFilter(request, response);
