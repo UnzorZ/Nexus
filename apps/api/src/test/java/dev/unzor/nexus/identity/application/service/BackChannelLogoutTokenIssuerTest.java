@@ -22,15 +22,17 @@ class BackChannelLogoutTokenIssuerTest {
 
     @Test
     void issuesSignedLogoutTokenWithRequiredRfc8417Claims() {
-        Jwt token = issuer.issue("http://localhost/p/realm", "alice");
+        Jwt token = issuer.issue("http://localhost/p/realm", "alice", "demo-client");
 
-        // Claims exigidos por RFC 8417 §2.4.
+        // Claims exigidos por OIDC Back-Channel Logout 1.0 §2.4 (aud es SHOULD; lo emitimos).
         Map<String, Object> claims = token.getClaims();
-        assertThat(claims).containsKeys("iss", "sub", "iat", "exp", "jti", "events");
+        assertThat(claims).containsKeys("iss", "sub", "aud", "iat", "exp", "jti", "events");
         // iss se tipa como java.net.URL (el encoder lo parsea); en el wire (JSON) sale como
         // string, así que el RP lo recibe bien. Comparamos por toString.
         assertThat(claims.get("iss").toString()).isEqualTo("http://localhost/p/realm");
         assertThat(claims.get("sub").toString()).isEqualTo("alice");
+        // aud = client_id del RP al que va dirigido.
+        assertThat(claims.get("aud")).isEqualTo(java.util.List.of("demo-client"));
 
         // events = {"http://schemas.openid.net/event/backchannel-logout": {}}
         @SuppressWarnings("unchecked")
@@ -42,8 +44,8 @@ class BackChannelLogoutTokenIssuerTest {
         assertThat(token.getHeaders().get("alg").toString()).startsWith("RS256");
         assertThat(token.getHeaders()).containsKey("kid");
 
-        // Sin aud, sin nonce (RFC 8417 lo prohíbe).
-        assertThat(claims).doesNotContainKeys("aud", "nonce");
+        // Sin nonce (la spec §2.4 prohíbe nonce en un logout token).
+        assertThat(claims).doesNotContainKey("nonce");
     }
 
     private static JWKSource<SecurityContext> testJwkSource() {
