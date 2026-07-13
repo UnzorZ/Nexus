@@ -107,8 +107,12 @@ class ProjectEndUserSessionController {
     }
 
     private void resolve(String projectSlug) {
+        // Listar/revocar las PROPIAS sesiones y hacer logout son operaciones de teardown:
+        // deben funcionar incluso si el realm está archivado/suspendido, para que un
+        // usuario siempre pueda salir de un proyecto decomisionado. Por eso resolvemos
+        // por existencia (resolveExisting), no por operatividad — a diferencia de /me.
         try {
-            slugResolver.resolve(projectSlug);
+            slugResolver.resolveExisting(projectSlug);
         } catch (ProjectNotFoundException exception) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Project not found");
         }

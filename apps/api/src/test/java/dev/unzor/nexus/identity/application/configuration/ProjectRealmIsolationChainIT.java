@@ -17,6 +17,8 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -101,6 +103,19 @@ class ProjectRealmIsolationChainIT {
                         .with(authentication(authFor(ARCHIVED_REALM))))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("project_not_operational"));
+    }
+
+    @Test
+    void archivedRealmPrincipalCanStillManageOwnSessionsForTeardown() throws Exception {
+        // F1: logout y autorrevocación de sesiones son operaciones de teardown y no deben
+        // caer en el gate operacional — un usuario debe poder salir de un realm
+        // decomisionado. /me (runtime read) sigue gated (test anterior); /sessions no.
+        mockMvc.perform(get("/api/p/" + ARCHIVED_SLUG + "/sessions")
+                        .with(authentication(authFor(ARCHIVED_REALM))))
+                .andExpect(status().isOk());
+        mockMvc.perform(delete("/api/p/" + ARCHIVED_SLUG + "/sessions")
+                        .with(authentication(authFor(ARCHIVED_REALM))).with(csrf()))
+                .andExpect(status().isNoContent());
     }
 
     /** Authentication con un ProjectUserPrincipal del projectId dado (como tras el login). */
