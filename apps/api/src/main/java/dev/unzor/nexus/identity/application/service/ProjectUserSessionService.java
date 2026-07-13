@@ -1,6 +1,7 @@
 package dev.unzor.nexus.identity.application.service;
 
 import dev.unzor.nexus.identity.domain.exception.SessionNotFoundException;
+import dev.unzor.nexus.identity.persistence.repository.ProjectUserRepository;
 import dev.unzor.nexus.shared.security.NexusSessionAttributes;
 import dev.unzor.nexus.shared.security.SessionSummary;
 import org.slf4j.Logger;
@@ -38,9 +39,14 @@ public class ProjectUserSessionService {
     private static final Logger log = LoggerFactory.getLogger(ProjectUserSessionService.class);
 
     private final ObjectProvider<RedisIndexedSessionRepository> sessionRepositoryProvider;
+    private final ProjectUserRepository projectUserRepository;
 
-    public ProjectUserSessionService(ObjectProvider<RedisIndexedSessionRepository> sessionRepositoryProvider) {
+    public ProjectUserSessionService(
+            ObjectProvider<RedisIndexedSessionRepository> sessionRepositoryProvider,
+            ProjectUserRepository projectUserRepository
+    ) {
         this.sessionRepositoryProvider = sessionRepositoryProvider;
+        this.projectUserRepository = projectUserRepository;
     }
 
     /**
@@ -94,6 +100,27 @@ public class ProjectUserSessionService {
                     .keySet().forEach(sessionRepository::deleteById);
         } catch (RuntimeException e) {
             log.warn("Failed to revoke project-user sessions: userId={}", userId, e);
+        }
+    }
+
+    /**
+     * Revoca todas las sesiones (autenticadas o con MFA pendiente) de los usuarios
+     * del proyecto. A diferencia de {@link #revokeAll(UUID)}, este camino es
+     * fail-closed: el archivado no puede confirmar si Redis falla y deja sesiones
+     * históricas potencialmente reutilizables tras una restauración.
+     */
+    public void revokeAllForProject(UUID projectId) {
+        List<UUID> userIds = projectUserRepository.findIdsByProjectId(projectId);
+        if (userIds.isEmpty()) {
+            return;
+        }
+        RedisIndexedSessionRepository sessionRepository = sessionRepositoryProvider.getIfAvailable();
+        if (sessionRepository == null) {
+            throw new IllegalStateException("Redis session repository unavailable");
+        }
+        for (UUID userId : userIds) {
+            sessionRepository.findByPrincipalName(NexusSessionAttributes.projectUserIndexValue(userId))
+                    .keySet().forEach(sessionRepository::deleteById);
         }
     }
 

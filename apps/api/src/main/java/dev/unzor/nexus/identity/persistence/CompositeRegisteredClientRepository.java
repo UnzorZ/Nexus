@@ -4,13 +4,20 @@ import dev.unzor.nexus.identity.application.service.ProjectOauthClientToRegister
 import dev.unzor.nexus.identity.domain.entity.ProjectOauthClient;
 import dev.unzor.nexus.identity.domain.enums.OauthClientStatus;
 import dev.unzor.nexus.identity.persistence.repository.ProjectOauthClientRepository;
+import dev.unzor.nexus.projects.application.service.ProjectLookupService;
 import dev.unzor.nexus.projects.application.service.ResolveProjectBySlugService;
+import dev.unzor.nexus.projects.domain.exception.ProjectNotFoundException;
+import dev.unzor.nexus.projects.domain.exception.ProjectNotOperationalException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
+import org.springframework.security.oauth2.core.OAuth2Error;
+import org.springframework.security.oauth2.core.OAuth2ErrorCodes;
 import org.springframework.security.oauth2.server.authorization.client.JdbcRegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.context.AuthorizationServerContextHolder;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -69,22 +76,26 @@ public class CompositeRegisteredClientRepository implements RegisteredClientRepo
     private final JdbcRegisteredClientRepository global;
     private final JdbcTemplate jdbc;
     private final ResolveProjectBySlugService slugResolver;
+    private final ProjectLookupService projectLookupService;
 
     public CompositeRegisteredClientRepository(
             ProjectOauthClientRepository projectRepository,
             ProjectOauthClientToRegisteredClientMapper mapper,
             JdbcRegisteredClientRepository global,
             JdbcTemplate jdbc,
-            ResolveProjectBySlugService slugResolver
+            ResolveProjectBySlugService slugResolver,
+            ProjectLookupService projectLookupService
     ) {
         this.projectRepository = projectRepository;
         this.mapper = mapper;
         this.global = global;
         this.jdbc = jdbc;
         this.slugResolver = slugResolver;
+        this.projectLookupService = projectLookupService;
     }
 
     @Override
+    @Transactional
     public void save(RegisteredClient registeredClient) {
         String issuer = null;
         var ctx = AuthorizationServerContextHolder.getContext();
@@ -103,7 +114,20 @@ public class CompositeRegisteredClientRepository implements RegisteredClientRepo
     }
 
     private void persistProjectClient(RegisteredClient rc, String slug) {
-        UUID projectId = slugResolver.resolve(slug).projectId();
+        final UUID projectId;
+        try {
+            projectId = slugResolver.resolveOperational(slug).projectId();
+            // Hold the shared project-row lock until the DCR INSERT/UPDATE commits.
+            // ArchiveProjectService must acquire the conflicting write lock, so it
+            // cannot interleave between the operational check and client persistence.
+            projectLookupService.lockOperationalById(projectId);
+        } catch (ProjectNotFoundException | ProjectNotOperationalException unavailableProject) {
+            throw new OAuth2AuthenticationException(new OAuth2Error(
+                    OAuth2ErrorCodes.INVALID_REQUEST,
+                    "The issuer project is not operational.",
+                    "https://datatracker.ietf.org/doc/html/rfc7591#section-3.2.2"),
+                    unavailableProject);
+        }
         UUID id;
         try {
             id = UUID.fromString(rc.getId());
@@ -154,13 +178,42 @@ public class CompositeRegisteredClientRepository implements RegisteredClientRepo
         RealmIssuer realm = currentRealmIssuer();
         try {
             UUID uuid = UUID.fromString(id);
-            return projectRepository.findById(uuid)
-                    .filter(CompositeRegisteredClientRepository::isActive)
-                    .filter(client -> belongsToRealm(client, realm))
-                    .map(mapper::toRegisteredClient)
-                    .orElseGet(() -> realm.isRealm() ? null : global.findById(id));
+            var projectClient = projectRepository.findById(uuid);
+            if (projectClient.isEmpty()) {
+                return realm.isRealm() ? null : global.findById(id);
+            }
+            return mapIfUsable(projectClient.get(), realm);
         } catch (IllegalArgumentException notAUuid) {
             // id no-UUID = cliente bootstrap global. Bajo un realm no se sirve.
+            return realm.isRealm() ? null : global.findById(id);
+        }
+    }
+
+    /**
+     * Resolves the client needed to deserialize an existing JDBC authorization.
+     * Project operational state is deliberately checked by
+     * {@link ProjectOperationalOAuth2AuthorizationService} after hydration: returning
+     * {@code null} here makes SAS convert an otherwise valid authorization row into a
+     * {@code DataRetrievalFailureException} before the runtime gate can return a native
+     * OAuth invalid-token/invalid-grant result.
+     *
+     * <p>Client status and realm isolation still apply. Only the project lifecycle
+     * check is deferred.</p>
+     */
+    public RegisteredClient findByIdForAuthorizationHydration(String id) {
+        RealmIssuer realm = currentExistingRealmIssuer();
+        try {
+            UUID uuid = UUID.fromString(id);
+            var projectClient = projectRepository.findById(uuid);
+            if (projectClient.isEmpty()) {
+                return realm.isRealm() ? null : global.findById(id);
+            }
+            ProjectOauthClient client = projectClient.get();
+            if (!isActive(client) || !belongsToRealm(client, realm)) {
+                return null;
+            }
+            return mapper.toRegisteredClient(client);
+        } catch (IllegalArgumentException notAUuid) {
             return realm.isRealm() ? null : global.findById(id);
         }
     }
@@ -168,11 +221,11 @@ public class CompositeRegisteredClientRepository implements RegisteredClientRepo
     @Override
     public RegisteredClient findByClientId(String clientId) {
         RealmIssuer realm = currentRealmIssuer();
-        return projectRepository.findByClientId(clientId)
-                .filter(CompositeRegisteredClientRepository::isActive)
-                .filter(client -> belongsToRealm(client, realm))
-                .map(mapper::toRegisteredClient)
-                .orElseGet(() -> realm.isRealm() ? null : global.findByClientId(clientId));
+        var projectClient = projectRepository.findByClientId(clientId);
+        if (projectClient.isEmpty()) {
+            return realm.isRealm() ? null : global.findByClientId(clientId);
+        }
+        return mapIfUsable(projectClient.get(), realm);
     }
 
     /**
@@ -183,6 +236,14 @@ public class CompositeRegisteredClientRepository implements RegisteredClientRepo
      * bajo {@code /p/{slug}/}).
      */
     private RealmIssuer currentRealmIssuer() {
+        return currentRealmIssuer(true);
+    }
+
+    private RealmIssuer currentExistingRealmIssuer() {
+        return currentRealmIssuer(false);
+    }
+
+    private RealmIssuer currentRealmIssuer(boolean requireOperational) {
         var ctx = AuthorizationServerContextHolder.getContext();
         if (ctx == null) {
             return RealmIssuer.GLOBAL;
@@ -197,9 +258,33 @@ public class CompositeRegisteredClientRepository implements RegisteredClientRepo
         }
         String slug = issuer.substring(idx + 3);
         try {
-            return new RealmIssuer(true, slugResolver.resolve(slug).projectId());
-        } catch (RuntimeException unknownSlug) {
+            UUID projectId = requireOperational
+                    ? slugResolver.resolveOperational(slug).projectId()
+                    : slugResolver.resolve(slug).projectId();
+            return new RealmIssuer(true, projectId);
+        } catch (ProjectNotFoundException | ProjectNotOperationalException unavailableRealm) {
             return new RealmIssuer(true, null);
+        }
+    }
+
+    /**
+     * A project-backed client shadows the global repository even when it cannot be
+     * served. This prevents an inactive project client from accidentally falling
+     * through to a global client with the same id/client-id.
+     */
+    private RegisteredClient mapIfUsable(ProjectOauthClient client, RealmIssuer realm) {
+        if (!isActive(client) || !belongsToRealm(client, realm) || !isProjectOperational(client.getProjectId())) {
+            return null;
+        }
+        return mapper.toRegisteredClient(client);
+    }
+
+    private boolean isProjectOperational(UUID projectId) {
+        try {
+            projectLookupService.requireOperationalById(projectId);
+            return true;
+        } catch (ProjectNotFoundException | ProjectNotOperationalException unavailableProject) {
+            return false;
         }
     }
 

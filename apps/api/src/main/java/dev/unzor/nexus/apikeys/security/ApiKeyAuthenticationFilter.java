@@ -3,6 +3,10 @@ package dev.unzor.nexus.apikeys.security;
 import dev.unzor.nexus.apikeys.domain.exception.ApiKeyDisabledException;
 import dev.unzor.nexus.apikeys.domain.exception.ApiKeyExpiredException;
 import dev.unzor.nexus.apikeys.domain.exception.ApiKeyInvalidException;
+import dev.unzor.nexus.apikeys.domain.exception.ApiKeyProjectNotOperationalException;
+import dev.unzor.nexus.projects.application.service.ProjectLookupService;
+import dev.unzor.nexus.projects.domain.exception.ProjectNotFoundException;
+import dev.unzor.nexus.projects.domain.exception.ProjectNotOperationalException;
 import dev.unzor.nexus.shared.audit.AuditEvent;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -49,17 +53,20 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
 
     private final ApiKeyResolver resolver;
     private final InstanceTokenService instanceTokenService;
+    private final ProjectLookupService projectLookupService;
     private final ProjectApiProblemWriter problemWriter;
     private final ApplicationEventPublisher eventPublisher;
 
     public ApiKeyAuthenticationFilter(
             ApiKeyResolver resolver,
             InstanceTokenService instanceTokenService,
+            ProjectLookupService projectLookupService,
             ProjectApiProblemWriter problemWriter,
             ApplicationEventPublisher eventPublisher
     ) {
         this.resolver = resolver;
         this.instanceTokenService = instanceTokenService;
+        this.projectLookupService = projectLookupService;
         this.problemWriter = problemWriter;
         this.eventPublisher = eventPublisher;
     }
@@ -80,7 +87,19 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
                         null, null, "no_match");
                 return;
             }
-            authenticate(resolved.get(), ResolvedCredential.INSTANCE_TOKEN);
+            ResolvedApiKey instanceToken = resolved.get();
+            try {
+                projectLookupService.requireOperationalById(instanceToken.projectId());
+            } catch (ProjectNotFoundException exception) {
+                reject(response, HttpStatus.UNAUTHORIZED, "invalid_instance_token", "Invalid instance token",
+                        "The instance token is invalid or expired.", "instance_token.auth_invalid",
+                        instanceToken.projectId(), instanceToken.keyId(), "project_not_found");
+                return;
+            } catch (ProjectNotOperationalException exception) {
+                rejectProjectNotOperational(response, instanceToken, "instance_token.auth_rejected");
+                return;
+            }
+            authenticate(instanceToken, ResolvedCredential.INSTANCE_TOKEN);
             filterChain.doFilter(request, response);
             return;
         }
@@ -114,6 +133,11 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
                     "The API key has expired.", "api_key.auth_expired",
                     exception.getProjectId(), exception.getKeyId(), "expired");
             return;
+        } catch (ApiKeyProjectNotOperationalException exception) {
+            reject(response, HttpStatus.FORBIDDEN, "project_not_operational", "Project not operational",
+                    "The project is not operational.", "api_key.auth_rejected",
+                    exception.getProjectId(), exception.getKeyId(), "project_not_operational");
+            return;
         }
         filterChain.doFilter(request, response);
     }
@@ -123,6 +147,16 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
                 new UsernamePasswordAuthenticationToken(resolved, null, List.of());
         auth.setDetails(credential);
         SecurityContextHolder.getContext().setAuthentication(auth);
+    }
+
+    private void rejectProjectNotOperational(
+            HttpServletResponse response,
+            ResolvedApiKey resolved,
+            String auditAction
+    ) {
+        reject(response, HttpStatus.FORBIDDEN, "project_not_operational", "Project not operational",
+                "The project is not operational.", auditAction,
+                resolved.projectId(), resolved.keyId(), "project_not_operational");
     }
 
     /**

@@ -1,5 +1,6 @@
 package dev.unzor.nexus.projects.application.service;
 
+import dev.unzor.nexus.projects.application.ProjectArchived;
 import dev.unzor.nexus.projects.domain.entity.Project;
 import dev.unzor.nexus.projects.domain.enums.ProjectStatus;
 import dev.unzor.nexus.projects.domain.exception.ProjectNotFoundException;
@@ -35,7 +36,10 @@ public class ArchiveProjectService {
             return;
         }
         project.archive();
-        projectRepository.save(project);
+        // Materializa el UPDATE y conserva su lock exclusivo hasta el commit. Así se
+        // serializa con las escrituras OAuth que toman el lock compartido del proyecto.
+        projectRepository.saveAndFlush(project);
+        eventPublisher.publishEvent(new ProjectArchived(projectId));
         eventPublisher.publishEvent(AuditEvent.byAccount(
                 projectId, "project.archived", "project", projectId.toString(),
                 actorAccountId, null));

@@ -41,7 +41,7 @@ class ProjectRealmIsolationFilterTest {
 
     @Test
     void blocksCrossRealmPrincipalOnEndUserApi() throws Exception {
-        when(slugResolver.resolve("realm-b")).thenReturn(new ProjectAuthenticationContext(REALM_B, "realm-b"));
+        when(slugResolver.resolveExisting("realm-b")).thenReturn(new ProjectAuthenticationContext(REALM_B, "realm-b"));
         authenticate(REALM_A); // sesión abierta en el realm A
 
         MockHttpServletResponse response = run("GET", "/api/p/realm-b/me");
@@ -51,7 +51,7 @@ class ProjectRealmIsolationFilterTest {
 
     @Test
     void blocksCrossRealmPrincipalOnOauthAuthorize() throws Exception {
-        when(slugResolver.resolve("realm-b")).thenReturn(new ProjectAuthenticationContext(REALM_B, "realm-b"));
+        when(slugResolver.resolveExisting("realm-b")).thenReturn(new ProjectAuthenticationContext(REALM_B, "realm-b"));
         authenticate(REALM_A);
 
         MockHttpServletResponse response = run("GET", "/p/realm-b/oauth2/authorize");
@@ -61,7 +61,7 @@ class ProjectRealmIsolationFilterTest {
 
     @Test
     void allowsMatchingRealm() throws Exception {
-        when(slugResolver.resolve("realm-a")).thenReturn(new ProjectAuthenticationContext(REALM_A, "realm-a"));
+        when(slugResolver.resolveExisting("realm-a")).thenReturn(new ProjectAuthenticationContext(REALM_A, "realm-a"));
         authenticate(REALM_A);
 
         MockHttpServletResponse response = run("GET", "/api/p/realm-a/me");
@@ -72,7 +72,7 @@ class ProjectRealmIsolationFilterTest {
     @Test
     void allowsWhenNoPrincipal() throws Exception {
         // permitAll (login, register…): sin principal → pasa sin tocar el gate.
-        when(slugResolver.resolve("realm-a")).thenReturn(new ProjectAuthenticationContext(REALM_A, "realm-a"));
+        when(slugResolver.resolveExisting("realm-a")).thenReturn(new ProjectAuthenticationContext(REALM_A, "realm-a"));
 
         MockHttpServletResponse response = run("POST", "/api/p/realm-a/login");
 
@@ -82,7 +82,7 @@ class ProjectRealmIsolationFilterTest {
     @Test
     void allowsWhenSlugUnresolvable() throws Exception {
         // Slug que no es proyecto: no se rechaza aquí (el handler devolverá su 404).
-        when(slugResolver.resolve("nope")).thenThrow(new RuntimeException("not found"));
+        when(slugResolver.resolveExisting("nope")).thenThrow(new RuntimeException("not found"));
         authenticate(REALM_A);
 
         MockHttpServletResponse response = run("GET", "/api/p/nope/me");

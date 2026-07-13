@@ -4,10 +4,17 @@ import dev.unzor.nexus.identity.application.service.ProjectOauthClientToRegister
 import dev.unzor.nexus.identity.domain.entity.ProjectOauthClient;
 import dev.unzor.nexus.identity.persistence.repository.ProjectOauthClientRepository;
 import dev.unzor.nexus.projects.api.dto.ProjectSlugReference;
+import dev.unzor.nexus.projects.application.service.ProjectLookupService;
 import dev.unzor.nexus.projects.application.service.ResolveProjectBySlugService;
+import dev.unzor.nexus.projects.domain.enums.ProjectStatus;
+import dev.unzor.nexus.projects.domain.exception.ProjectNotOperationalException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.oauth2.core.AuthorizationGrantType;
+import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
+import org.springframework.security.oauth2.core.OAuth2ErrorCodes;
 import org.springframework.security.oauth2.server.authorization.client.JdbcRegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
 import org.springframework.security.oauth2.server.authorization.context.AuthorizationServerContext;
@@ -23,7 +30,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.mockingDetails;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class CompositeRegisteredClientRepositoryTests {
@@ -33,8 +42,10 @@ class CompositeRegisteredClientRepositoryTests {
     private final JdbcRegisteredClientRepository global = mock(JdbcRegisteredClientRepository.class);
     private final JdbcTemplate jdbc = mock(JdbcTemplate.class);
     private final ResolveProjectBySlugService slugResolver = mock(ResolveProjectBySlugService.class);
+    private final ProjectLookupService projectLookupService = mock(ProjectLookupService.class);
     private final CompositeRegisteredClientRepository composite =
-            new CompositeRegisteredClientRepository(projectRepo, mapper, global, jdbc, slugResolver);
+            new CompositeRegisteredClientRepository(
+                    projectRepo, mapper, global, jdbc, slugResolver, projectLookupService);
 
     @AfterEach
     void clearIssuerContext() {
@@ -106,6 +117,53 @@ class CompositeRegisteredClientRepositoryTests {
     }
 
     @Test
+    void globalLookupServesActiveProjectClientAfterOperationalCheck() {
+        String clientId = "nxo-active";
+        ProjectOauthClient entity = projectClient(REALM_A, UUID.randomUUID());
+        RegisteredClient mapped = mock(RegisteredClient.class);
+        when(projectRepo.findByClientId(clientId)).thenReturn(Optional.of(entity));
+        when(mapper.toRegisteredClient(entity)).thenReturn(mapped);
+
+        assertThat(composite.findByClientId(clientId)).isSameAs(mapped);
+
+        verify(projectLookupService).requireOperationalById(REALM_A);
+        verify(global, never()).findByClientId(any());
+    }
+
+    @Test
+    void globalLookupDoesNotServeInactiveProjectClientOrFallBackToGlobal() {
+        String clientId = "nxo-inactive";
+        ProjectOauthClient entity = projectClient(REALM_A, UUID.randomUUID());
+        when(projectRepo.findByClientId(clientId)).thenReturn(Optional.of(entity));
+        org.mockito.Mockito.doThrow(
+                        new ProjectNotOperationalException(REALM_A, ProjectStatus.ARCHIVED))
+                .when(projectLookupService).requireOperationalById(REALM_A);
+
+        assertThat(composite.findByClientId(clientId)).isNull();
+
+        verify(mapper, never()).toRegisteredClient(any());
+        verify(global, never()).findByClientId(any());
+    }
+
+    @Test
+    void inactiveProjectClientRemainsHydratableForAuthorizationRowMapping() {
+        UUID clientId = UUID.randomUUID();
+        ProjectOauthClient entity = projectClient(REALM_A, clientId);
+        RegisteredClient mapped = mock(RegisteredClient.class);
+        when(projectRepo.findById(clientId)).thenReturn(Optional.of(entity));
+        when(mapper.toRegisteredClient(entity)).thenReturn(mapped);
+        org.mockito.Mockito.doThrow(
+                        new ProjectNotOperationalException(REALM_A, ProjectStatus.ARCHIVED))
+                .when(projectLookupService).requireOperationalById(REALM_A);
+
+        // Runtime client lookup is gated, but JDBC authorization hydration has a
+        // dedicated path so SAS does not turn the row into DataRetrievalFailure/500.
+        assertThat(composite.findById(clientId.toString())).isNull();
+        assertThat(composite.findByIdForAuthorizationHydration(clientId.toString()))
+                .isSameAs(mapped);
+    }
+
+    @Test
     void saveAlwaysDelegatesToGlobal() {
         RegisteredClient rc = mock(RegisteredClient.class);
 
@@ -113,6 +171,37 @@ class CompositeRegisteredClientRepositoryTests {
 
         verify(global).save(rc);
         verify(projectRepo, never()).save(any());
+    }
+
+    @Test
+    void projectRealmSaveLocksOperationalProjectBeforeDcrWrite() {
+        realmContext("http://localhost:8080/p/realm-a");
+        when(slugResolver.resolveOperational("realm-a"))
+                .thenReturn(new ProjectSlugReference(REALM_A, "realm-a"));
+        RegisteredClient client = dcrClient();
+
+        composite.save(client);
+
+        verify(projectLookupService).lockOperationalById(REALM_A);
+        assertThat(mockingDetails(jdbc).getInvocations()).isNotEmpty();
+        verify(global, never()).save(any());
+    }
+
+    @Test
+    void projectRealmSaveTranslatesInactiveLockToNativeOauthErrorWithoutWriting() {
+        realmContext("http://localhost:8080/p/realm-a");
+        when(slugResolver.resolveOperational("realm-a"))
+                .thenReturn(new ProjectSlugReference(REALM_A, "realm-a"));
+        org.mockito.Mockito.doThrow(
+                        new ProjectNotOperationalException(REALM_A, ProjectStatus.ARCHIVED))
+                .when(projectLookupService).lockOperationalById(REALM_A);
+
+        assertThatThrownBy(() -> composite.save(dcrClient()))
+                .isInstanceOfSatisfying(OAuth2AuthenticationException.class,
+                        error -> assertThat(error.getError().getErrorCode())
+                                .isEqualTo(OAuth2ErrorCodes.INVALID_REQUEST));
+        verifyNoInteractions(jdbc);
+        verify(global, never()).save(any());
     }
 
     @Test
@@ -150,7 +239,8 @@ class CompositeRegisteredClientRepositoryTests {
     @Test
     void findByClientIdServesOnlySameRealmClientUnderRealmIssuer() {
         realmContext("http://localhost:8080/p/realm-a");
-        when(slugResolver.resolve("realm-a")).thenReturn(new ProjectSlugReference(REALM_A, "realm-a"));
+        when(slugResolver.resolveOperational("realm-a"))
+                .thenReturn(new ProjectSlugReference(REALM_A, "realm-a"));
         String clientId = "nxo-a";
         ProjectOauthClient clientA = projectClient(REALM_A, UUID.randomUUID());
         RegisteredClient mapped = mock(RegisteredClient.class);
@@ -165,7 +255,8 @@ class CompositeRegisteredClientRepositoryTests {
         // Cliente del realm B pedido bajo el issuer del realm A → no se sirve y NO cae
         // al repo global bajo un issuer por-realm.
         realmContext("http://localhost:8080/p/realm-a");
-        when(slugResolver.resolve("realm-a")).thenReturn(new ProjectSlugReference(REALM_A, "realm-a"));
+        when(slugResolver.resolveOperational("realm-a"))
+                .thenReturn(new ProjectSlugReference(REALM_A, "realm-a"));
         ProjectOauthClient clientB = projectClient(REALM_B, UUID.randomUUID());
         when(projectRepo.findByClientId("nxo-b")).thenReturn(Optional.of(clientB));
 
@@ -176,7 +267,8 @@ class CompositeRegisteredClientRepositoryTests {
     @Test
     void findByClientIdDoesNotFallBackToGlobalUnderRealmIssuer() {
         realmContext("http://localhost:8080/p/realm-a");
-        when(slugResolver.resolve("realm-a")).thenReturn(new ProjectSlugReference(REALM_A, "realm-a"));
+        when(slugResolver.resolveOperational("realm-a"))
+                .thenReturn(new ProjectSlugReference(REALM_A, "realm-a"));
         when(projectRepo.findByClientId("missing")).thenReturn(Optional.empty());
 
         assertThat(composite.findByClientId("missing")).isNull();
@@ -186,13 +278,43 @@ class CompositeRegisteredClientRepositoryTests {
     @Test
     void findByIdFiltersOutCrossRealmClientAndSkipsGlobal() {
         realmContext("http://localhost:8080/p/realm-a");
-        when(slugResolver.resolve("realm-a")).thenReturn(new ProjectSlugReference(REALM_A, "realm-a"));
+        when(slugResolver.resolveOperational("realm-a"))
+                .thenReturn(new ProjectSlugReference(REALM_A, "realm-a"));
         UUID id = UUID.randomUUID();
         ProjectOauthClient clientB = projectClient(REALM_B, id);
         when(projectRepo.findById(id)).thenReturn(Optional.of(clientB));
 
         assertThat(composite.findById(id.toString())).isNull();
         verify(global, never()).findById(any());
+    }
+
+    @Test
+    void inactiveRealmNeverFallsBackToGlobalClient() {
+        realmContext("http://localhost:8080/p/realm-a");
+        when(slugResolver.resolveOperational("realm-a"))
+                .thenThrow(new ProjectNotOperationalException(REALM_A, ProjectStatus.SUSPENDED));
+        RegisteredClient globalClient = mock(RegisteredClient.class);
+        when(global.findByClientId("technical-client")).thenReturn(globalClient);
+        when(projectRepo.findByClientId("technical-client")).thenReturn(Optional.empty());
+
+        assertThat(composite.findByClientId("technical-client")).isNull();
+
+        verify(global, never()).findByClientId(any());
+    }
+
+    @Test
+    void inactiveRealmHydratesOnlyItsOwnExistingAuthorizationClient() {
+        realmContext("http://localhost:8080/p/realm-a");
+        when(slugResolver.resolve("realm-a"))
+                .thenReturn(new ProjectSlugReference(REALM_A, "realm-a"));
+        UUID clientId = UUID.randomUUID();
+        ProjectOauthClient clientA = projectClient(REALM_A, clientId);
+        RegisteredClient mapped = mock(RegisteredClient.class);
+        when(projectRepo.findById(clientId)).thenReturn(Optional.of(clientA));
+        when(mapper.toRegisteredClient(clientA)).thenReturn(mapped);
+
+        assertThat(composite.findByIdForAuthorizationHydration(clientId.toString()))
+                .isSameAs(mapped);
     }
 
     /** Fija un contexto AS con el issuer dado (simula una petición por-realm del AS). */
@@ -222,5 +344,17 @@ class CompositeRegisteredClientRepositoryTests {
                 UUID.randomUUID(), "nxo-" + id, "{bcrypt}x", "Web",
                 List.of("https://app/cb"), List.of(), List.of("authorization_code", "refresh_token"),
                 List.of("openid"), true, false, null);
+    }
+
+    private static RegisteredClient dcrClient() {
+        return RegisteredClient.withId(UUID.randomUUID().toString())
+                .clientId("nxo-dcr")
+                .clientSecret("{bcrypt}hash")
+                .clientName("DCR")
+                .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
+                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+                .redirectUri("https://app/cb")
+                .scope("openid")
+                .build();
     }
 }

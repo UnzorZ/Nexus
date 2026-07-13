@@ -7,6 +7,7 @@ import dev.unzor.nexus.projects.domain.exception.MembershipNotFoundException;
 import dev.unzor.nexus.projects.domain.exception.ProjectAccessDeniedException;
 import dev.unzor.nexus.projects.domain.exception.ProjectAlreadyExistException;
 import dev.unzor.nexus.projects.domain.exception.ProjectNotFoundException;
+import dev.unzor.nexus.projects.domain.exception.ProjectNotOperationalException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -41,6 +42,17 @@ class ProjectsExceptionHandler {
         problem.setTitle("Not found");
         problem.setProperty("code", "resource_not_found");
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
+    }
+
+    @ExceptionHandler(ProjectNotOperationalException.class)
+    ResponseEntity<ProblemDetail> handleNotOperational(ProjectNotOperationalException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.FORBIDDEN,
+                "Project is not operational."
+        );
+        problem.setTitle("Forbidden");
+        problem.setProperty("code", "project_not_operational");
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(problem);
     }
 
     @ExceptionHandler(ProjectAccessDeniedException.class)

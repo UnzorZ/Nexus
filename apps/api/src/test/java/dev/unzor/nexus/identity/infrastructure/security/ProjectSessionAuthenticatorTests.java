@@ -4,8 +4,13 @@ import dev.unzor.nexus.identity.application.configuration.IdentityLoginPropertie
 import dev.unzor.nexus.identity.application.service.RecordProjectUserLoginService;
 import dev.unzor.nexus.identity.domain.entity.ProjectUser;
 import dev.unzor.nexus.identity.domain.exception.EmailNotVerifiedException;
+import dev.unzor.nexus.identity.domain.exception.MfaRequiredException;
 import dev.unzor.nexus.identity.persistence.repository.ProjectUserRepository;
+import dev.unzor.nexus.projects.application.service.ProjectLookupService;
+import dev.unzor.nexus.projects.domain.enums.ProjectStatus;
+import dev.unzor.nexus.projects.domain.exception.ProjectNotOperationalException;
 import dev.unzor.nexus.shared.audit.AuditEvent;
+import dev.unzor.nexus.shared.security.NexusSessionAttributes;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -18,6 +23,7 @@ import org.springframework.security.core.authority.FactorGrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.session.FindByIndexNameSessionRepository;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -30,10 +36,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class ProjectSessionAuthenticatorTests {
@@ -49,9 +57,11 @@ class ProjectSessionAuthenticatorTests {
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
     private final IdentityLoginProperties loginProperties = new IdentityLoginProperties(5, Duration.ofMinutes(15));
     private final dev.unzor.nexus.shared.security.TotpCrypto totpCrypto = mock(dev.unzor.nexus.shared.security.TotpCrypto.class);
+    private final ProjectLookupService projectLookupService = mock(ProjectLookupService.class);
 
     private final ProjectSessionAuthenticator authenticator = new ProjectSessionAuthenticator(
-            userDetailsService, repository, recoveryCodeRepository, encoder, recordLoginService, eventPublisher, loginProperties, totpCrypto);
+            userDetailsService, repository, recoveryCodeRepository, encoder, recordLoginService, eventPublisher,
+            loginProperties, totpCrypto, projectLookupService);
 
     private MockHttpServletRequest request;
     private MockHttpServletResponse response;
@@ -106,7 +116,8 @@ class ProjectSessionAuthenticatorTests {
         // igualar tiempos (anti-enumeración). Lo verificamos vía un spy del encoder.
         BCryptPasswordEncoder spyEncoder = spy(new BCryptPasswordEncoder());
         ProjectSessionAuthenticator authenticatorWithSpy = new ProjectSessionAuthenticator(
-                userDetailsService, repository, recoveryCodeRepository, spyEncoder, recordLoginService, eventPublisher, loginProperties, totpCrypto);
+                userDetailsService, repository, recoveryCodeRepository, spyEncoder, recordLoginService, eventPublisher,
+                loginProperties, totpCrypto, projectLookupService);
         UUID projectId = UUID.randomUUID();
         when(userDetailsService.loadProjectUser(projectId, "ghost@example.com"))
                 .thenThrow(new UsernameNotFoundException("not found"));
@@ -215,7 +226,7 @@ class ProjectSessionAuthenticatorTests {
     void lockoutExpiresAndCorrectPasswordWorksAgain() {
         ProjectSessionAuthenticator shortLockAuth = new ProjectSessionAuthenticator(
                 userDetailsService, repository, recoveryCodeRepository, encoder, recordLoginService, eventPublisher,
-                new IdentityLoginProperties(2, Duration.ofMillis(1)), totpCrypto);
+                new IdentityLoginProperties(2, Duration.ofMillis(1)), totpCrypto, projectLookupService);
         UUID projectId = UUID.randomUUID();
         ProjectUser user = activeUser(projectId, "neo@example.com", "secret123");
         when(userDetailsService.loadProjectUser(projectId, "neo@example.com"))
@@ -248,6 +259,60 @@ class ProjectSessionAuthenticatorTests {
 
         assertThat(user.getFailedLoginAttempts()).isZero();
         assertThat(user.getLockedUntil()).isNull();
+    }
+
+    @Test
+    void mfaPendingSessionIsIndexedByProjectUserSoArchiveCanRevokeIt() {
+        UUID projectId = UUID.randomUUID();
+        ProjectUser user = activeUser(projectId, "neo@example.com", "secret123");
+        user.storeTotpSecret("encrypted-secret");
+        user.enableTotp(Instant.now());
+        when(userDetailsService.loadProjectUser(projectId, "neo@example.com"))
+                .thenReturn(ProjectUserPrincipal.from(user, AUTHORITIES));
+        when(repository.findByProjectIdAndId(projectId, user.getId())).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> authenticator.authenticate(
+                projectId, "neo@example.com", "secret123", request, response))
+                .isInstanceOf(MfaRequiredException.class);
+
+        assertThat(request.getSession(false).getAttribute(NexusSessionAttributes.PROJECT_USER_ID))
+                .isEqualTo(user.getId().toString());
+        assertThat(request.getSession(false).getAttribute(
+                FindByIndexNameSessionRepository.PRINCIPAL_NAME_INDEX_NAME))
+                .isEqualTo(NexusSessionAttributes.projectUserIndexValue(user.getId()));
+        assertThat(request.getSession(false).getAttribute(NexusSessionAttributes.MFA_PENDING))
+                .isInstanceOf(MfaPendingTicket.class);
+        verify(recordLoginService, never()).recordLogin(any(), any());
+    }
+
+    @Test
+    void inactiveProjectIsRejectedBeforeLookingUpCredentials() {
+        UUID projectId = UUID.randomUUID();
+        ProjectNotOperationalException failure =
+                new ProjectNotOperationalException(projectId, ProjectStatus.ARCHIVED);
+        doThrow(failure).when(projectLookupService).lockOperationalById(projectId);
+
+        assertThatThrownBy(() -> authenticator.authenticate(
+                projectId, "neo@example.com", "secret123", request, response))
+                .isSameAs(failure);
+
+        verifyNoInteractions(userDetailsService, repository, recoveryCodeRepository, recordLoginService, eventPublisher);
+        assertThat(request.getSession(false)).isNull();
+    }
+
+    @Test
+    void inactiveProjectIsRejectedBeforeReadingMfaTicketOrUser() {
+        UUID projectId = UUID.randomUUID();
+        ProjectNotOperationalException failure =
+                new ProjectNotOperationalException(projectId, ProjectStatus.SUSPENDED);
+        doThrow(failure).when(projectLookupService).lockOperationalById(projectId);
+
+        assertThatThrownBy(() -> authenticator.completeMfaAuthentication(
+                projectId, "123456", request, response))
+                .isSameAs(failure);
+
+        verifyNoInteractions(userDetailsService, repository, recoveryCodeRepository, recordLoginService, eventPublisher);
+        assertThat(request.getSession(false)).isNull();
     }
 
     private void assertAudited(String action, UUID expectedUserId) {

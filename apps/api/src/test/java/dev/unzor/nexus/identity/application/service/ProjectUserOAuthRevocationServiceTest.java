@@ -16,6 +16,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class ProjectUserOAuthRevocationServiceTest {
@@ -59,5 +60,46 @@ class ProjectUserOAuthRevocationServiceTest {
                 "alice", projectId, "https://nexus.example/p/acme", List.of(target));
         order.verify(publisher).publishEvent(event);
         assertThat(event.targets()).containsExactly(target);
+    }
+
+    @Test
+    void snapshotsAllProjectTargetsBeforeDeletingAndPublishesMaterializedEvents() {
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        BackChannelLogoutClientResolver resolver = mock(BackChannelLogoutClientResolver.class);
+        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+        ProjectUserOAuthRevocationService service =
+                new ProjectUserOAuthRevocationService(jdbcTemplate, resolver, publisher);
+        UUID projectId = UUID.randomUUID();
+        BackChannelLogoutTarget target = new BackChannelLogoutTarget(
+                UUID.randomUUID(), "client-a", "https://rp.example/logout");
+        when(resolver.resolveForProject(projectId)).thenReturn(List.of(
+                new BackChannelLogoutClientResolver.ResolvedLogout(
+                        "alice", "https://nexus.example/p/acme", List.of(target))));
+        when(jdbcTemplate.update(anyString(), any(Object[].class))).thenReturn(2);
+
+        service.revokeForProject(projectId);
+
+        var order = inOrder(resolver, jdbcTemplate, publisher);
+        order.verify(resolver).resolveForProject(projectId);
+        order.verify(jdbcTemplate).update(anyString(), eq(projectId));
+        order.verify(publisher).publishEvent(new BackChannelLogoutRequested(
+                "alice", projectId, "https://nexus.example/p/acme", List.of(target)));
+    }
+
+    @Test
+    void projectRevocationIsIdempotentWhenThereAreNoAuthorizations() {
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        BackChannelLogoutClientResolver resolver = mock(BackChannelLogoutClientResolver.class);
+        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+        ProjectUserOAuthRevocationService service =
+                new ProjectUserOAuthRevocationService(jdbcTemplate, resolver, publisher);
+        UUID projectId = UUID.randomUUID();
+        when(resolver.resolveForProject(projectId)).thenReturn(List.of());
+        when(jdbcTemplate.update(anyString(), any(Object[].class))).thenReturn(0);
+
+        service.revokeForProject(projectId);
+        service.revokeForProject(projectId);
+
+        verifyNoInteractions(publisher);
     }
 }
