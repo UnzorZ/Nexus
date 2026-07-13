@@ -21,7 +21,9 @@ import java.util.TreeSet;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -77,6 +79,25 @@ class ProjectIdTokenCustomizerTest {
         Map<String, Object> claims = runCustomizer(customizer, OAuth2TokenType.ACCESS_TOKEN, "not-a-project-user");
 
         assertThat(claims).doesNotContainKey("permissions").doesNotContainKey("project_id");
+    }
+
+    @Test
+    void crossRealmPrincipalAbortsTokenIssuance() {
+        // El issuer (realm B) != el proyecto del principal (PROJECT_ID = A): la emisión
+        // ABORTA (no degrada). Remediación del hallazgo crítico: antes project_id venía
+        // del issuer y permissions del principal, mezclando A y B; y luego sólo se
+        // omitían los claims, dejando emitir un token iss=B con sujeto de A. Ahora throw.
+        UUID otherRealm = UUID.fromString("00000000-0000-0000-0000-000000000099");
+        ProjectSlugResolver slugResolver = mock(ProjectSlugResolver.class);
+        when(slugResolver.resolve("shop")).thenReturn(new ProjectAuthenticationContext(otherRealm, "shop"));
+        EffectiveAuthoritiesService authorities = mock(EffectiveAuthoritiesService.class);
+
+        ProjectIdTokenCustomizer customizer = new ProjectIdTokenCustomizer(slugResolver, authorities);
+        ProjectUserPrincipal pup = principal(7L); // projectId = PROJECT_ID (A)
+
+        assertThatThrownBy(() -> runCustomizer(customizer, OAuth2TokenType.ACCESS_TOKEN, pup))
+                .isInstanceOf(IllegalStateException.class);
+        verifyNoInteractions(authorities);
     }
 
     private static ProjectUserPrincipal principal(long authzVersion) {

@@ -7,6 +7,8 @@ import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
 import dev.unzor.nexus.identity.application.observability.NexusOAuthJwkState;
 import dev.unzor.nexus.identity.application.service.AuthzVersionIntrospectionAuthenticationProvider;
+import dev.unzor.nexus.identity.application.service.ProjectSlugResolver;
+import dev.unzor.nexus.identity.infrastructure.security.ProjectRealmIsolationFilter;
 import dev.unzor.nexus.identity.persistence.repository.ProjectUserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,6 +34,7 @@ import org.springframework.security.oauth2.server.authorization.settings.Authori
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
+import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.security.web.util.matcher.MediaTypeRequestMatcher;
 
 import java.io.InputStream;
@@ -73,13 +76,20 @@ public class SecurityConfig {
             HttpSecurity http,
             ProjectOauthAuthenticationEntryPoint htmlEntryPoint,
             OAuth2AuthorizationService authorizationService,
-            ProjectUserRepository projectUserRepository
+            ProjectUserRepository projectUserRepository,
+            ProjectSlugResolver slugResolver
     ) throws Exception {
         OAuth2AuthorizationServerConfigurer authorizationServerConfigurer =
                 new OAuth2AuthorizationServerConfigurer();
 
         http
                 .securityMatcher(authorizationServerConfigurer.getEndpointsMatcher())
+                // Aislamiento de realms (remediación de auditoría, hallazgo crítico): una
+                // sesión de otro realm no puede obtener un token aquí (/oauth2/authorize,
+                // /token, PAR, device…). Anclado tras SecurityContextHolderFilter para correr
+                // con el principal ya cargado y ANTES de los filtros del AS — así bloquea en
+                // el authorize, no después de emitir el code.
+                .addFilterAfter(new ProjectRealmIsolationFilter(slugResolver), SecurityContextHolderFilter.class)
                 .with(authorizationServerConfigurer, authorizationServer ->
                         authorizationServer
                                 // Pantalla de consentimiento con branding (B3): SAS redirige aquí

@@ -4,6 +4,8 @@ import dev.unzor.nexus.identity.application.context.ProjectAuthenticationContext
 import dev.unzor.nexus.identity.infrastructure.security.ProjectUserPrincipal;
 import dev.unzor.nexus.permissions.application.dto.EffectiveAuthorities;
 import dev.unzor.nexus.permissions.application.service.EffectiveAuthoritiesService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.FactorGrantedAuthority;
@@ -34,6 +36,8 @@ import java.util.UUID;
 @Component
 public class ProjectIdTokenCustomizer implements OAuth2TokenCustomizer<JwtEncodingContext> {
 
+    private static final Logger log = LoggerFactory.getLogger(ProjectIdTokenCustomizer.class);
+
     private final ProjectSlugResolver projectSlugResolver;
     private final EffectiveAuthoritiesService effectiveAuthoritiesService;
 
@@ -54,10 +58,10 @@ public class ProjectIdTokenCustomizer implements OAuth2TokenCustomizer<JwtEncodi
             return;
         }
 
-        final UUID projectId;
+        final UUID realmProjectId;
         try {
             ProjectAuthenticationContext project = projectSlugResolver.resolve(slug);
-            projectId = project.projectId();
+            realmProjectId = project.projectId();
         } catch (RuntimeException unknownProject) {
             return;
         }
@@ -69,7 +73,19 @@ public class ProjectIdTokenCustomizer implements OAuth2TokenCustomizer<JwtEncodi
             return;
         }
 
-        context.getClaims().claim("project_id", projectId.toString());
+        // Aislamiento entre realms (remediación de auditoría, hallazgo crítico): el
+        // principal en sesión debe pertenecer al realm cuyo token se emite. Un mismatch
+        // ABORTA la emisión (no la degrada): un token con iss de B y sujeto autenticado
+        // en A no debe producirse bajo ningún concepto. El ProjectRealmIsolationFilter y
+        // el CompositeRegisteredClientRepository ya bloquean antes (authorize cross-realm
+        // y cliente cross-realm); este throw es la última línea de defensa al codificar.
+        if (!realmProjectId.equals(pup.projectId())) {
+            log.warn("Refusing cross-realm token issuance: principal project {} != issuer realm {}.",
+                    pup.projectId(), realmProjectId);
+            throw new IllegalStateException("Cross-realm token issuance refused");
+        }
+
+        context.getClaims().claim("project_id", pup.projectId().toString());
         context.getClaims().claim("authz_version", pup.authzVersion());
 
         // permissions: claves de permiso efectivas (comodines verbatim, ADR-0003). Se copian
