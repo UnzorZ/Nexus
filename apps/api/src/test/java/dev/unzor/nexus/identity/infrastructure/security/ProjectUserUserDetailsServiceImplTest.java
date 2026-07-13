@@ -38,6 +38,7 @@ class ProjectUserUserDetailsServiceImplTest {
                 .extracting(a -> a.getAuthority())
                 .containsExactlyInAnyOrder("ROLE_PROJECT_USER", "orders.*", "orders.read");
         assertThat(principal.userId()).isEqualTo(userId);
+        assertThat(principal.getUsername()).isEqualTo("alice@example.com");
     }
 
     @Test

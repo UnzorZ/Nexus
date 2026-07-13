@@ -41,11 +41,13 @@ public class PermissionSnapshotCache {
 
     /**
      * ¿Tiene el usuario el permiso {@code key}? Deniega (false) si no hay
-     * snapshot válido y Nexus no responde (fail-closed).
+     * snapshot válido y Nexus no responde (fail-closed), o si el snapshot es de
+     * denegación (authzVersion &lt; 0: usuario inexistente/eliminado — remediación
+     * de auditoría: nunca se concede nada contra una versión negativa).
      */
     public boolean can(UUID userId, String key) {
         AuthorizationSnapshot snapshot = get(userId);
-        if (snapshot == null) {
+        if (snapshot == null || isDeny(snapshot)) {
             return false;
         }
         return PermissionMatcher.matches(snapshot.permissions(), key);
@@ -83,7 +85,15 @@ public class PermissionSnapshotCache {
 
     public List<String> permissions(UUID userId) {
         AuthorizationSnapshot snapshot = get(userId);
-        return snapshot == null ? List.of() : snapshot.permissions();
+        if (snapshot == null || isDeny(snapshot)) {
+            return List.of();
+        }
+        return snapshot.permissions();
+    }
+
+    /** Snapshot de denegación: authzVersion negativa (usuario inexistente/eliminado). */
+    private static boolean isDeny(AuthorizationSnapshot snapshot) {
+        return snapshot.authzVersion() < 0;
     }
 
     private record Cached(AuthorizationSnapshot snapshot, Instant validUntil) {}

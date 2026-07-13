@@ -3,10 +3,11 @@ package dev.unzor.nexus.identity.application.service;
 import dev.unzor.nexus.identity.domain.entity.ProjectOauthClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.event.EventListener;
 import org.springframework.http.MediaType;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
@@ -56,24 +57,33 @@ public class BackChannelLogoutService {
     }
 
     @Async("notifyExecutor")
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onLogoutRequested(BackChannelLogoutRequested event) {
-        List<ProjectOauthClient> clients = resolver.resolve(event.principalName(), event.projectId());
-        if (clients.isEmpty()) {
+        List<BackChannelLogoutTarget> targets = event.targets().isEmpty()
+                ? resolver.resolve(event.principalName(), event.projectId()).stream()
+                        .map(BackChannelLogoutService::snapshot)
+                        .toList()
+                : event.targets();
+        if (targets.isEmpty()) {
             return;
         }
-        for (ProjectOauthClient client : clients) {
-            send(client, event);
+        for (BackChannelLogoutTarget target : targets) {
+            send(target, event);
         }
     }
 
-    private void send(ProjectOauthClient client, BackChannelLogoutRequested event) {
+    private static BackChannelLogoutTarget snapshot(ProjectOauthClient client) {
+        return new BackChannelLogoutTarget(
+                client.getId(), client.getClientId(), client.getBackchannelLogoutUri());
+    }
+
+    private void send(BackChannelLogoutTarget client, BackChannelLogoutRequested event) {
         String logoutToken;
         try {
             logoutToken = tokenIssuer.issue(event.issuer(), event.principalName()).getTokenValue();
         } catch (Exception e) {
             log.warn("Back-channel logout: no se pudo emitir el token para el cliente {}: {}",
-                    client.getClientId(), e.getMessage());
+                    client.clientId(), e.getMessage());
             return;
         }
         // RFC 8417 §2.7: el OP SHOULD reintentar la entrega. Reintentamos con backoff
@@ -83,18 +93,18 @@ public class BackChannelLogoutService {
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
             try {
                 httpClient.post()
-                        .uri(client.getBackchannelLogoutUri())
+                        .uri(client.logoutUri())
                         .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                         .body(body)
                         .retrieve()
                         .toBodilessEntity();
                 log.info("Back-channel logout enviado al cliente {} para el usuario {} (intento {}/{})",
-                        client.getClientId(), event.principalName(), attempt, MAX_ATTEMPTS);
+                        client.clientId(), event.principalName(), attempt, MAX_ATTEMPTS);
                 return;
             } catch (RestClientResponseException e) {
                 if (e.getStatusCode().is4xxClientError()) {
                     log.warn("Back-channel logout rechazado (4xx) por el cliente {} ({}): {} — no se reintenta",
-                            client.getClientId(), client.getBackchannelLogoutUri(), e.getMessage());
+                            client.clientId(), client.logoutUri(), e.getMessage());
                     return;
                 }
                 if (!retry(client, attempt, e)) {
@@ -113,10 +123,10 @@ public class BackChannelLogoutService {
      * si era el último (entrega fallida definitiva — el RP recuperará consistencia al re-emitir
      * en el próximo login).
      */
-    private boolean retry(ProjectOauthClient client, int attempt, Exception cause) {
+    private boolean retry(BackChannelLogoutTarget client, int attempt, Exception cause) {
         if (attempt >= MAX_ATTEMPTS) {
             log.warn("Back-channel logout FALLÓ para el cliente {} ({}) tras {} intentos: {}",
-                    client.getClientId(), client.getBackchannelLogoutUri(), MAX_ATTEMPTS, cause.getMessage());
+                    client.clientId(), client.logoutUri(), MAX_ATTEMPTS, cause.getMessage());
             return false;
         }
         long backoff = INITIAL_BACKOFF_MS << (attempt - 1);

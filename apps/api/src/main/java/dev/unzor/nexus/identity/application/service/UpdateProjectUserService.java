@@ -3,6 +3,7 @@ package dev.unzor.nexus.identity.application.service;
 import dev.unzor.nexus.identity.api.dto.ProjectUserDetails;
 import dev.unzor.nexus.identity.domain.entity.ProjectUser;
 import dev.unzor.nexus.identity.domain.exception.ProjectUserNotFoundException;
+import dev.unzor.nexus.identity.infrastructure.security.ProjectUserPrincipal;
 import dev.unzor.nexus.identity.persistence.repository.ProjectUserRepository;
 import dev.unzor.nexus.shared.audit.AuditEvent;
 import org.springframework.context.ApplicationEventPublisher;
@@ -22,10 +23,19 @@ public class UpdateProjectUserService {
 
     private final ProjectUserRepository repository;
     private final ApplicationEventPublisher eventPublisher;
+    private final ProjectUserOAuthRevocationService oauthRevocation;
+    private final ProjectUserSessionService sessions;
 
-    public UpdateProjectUserService(ProjectUserRepository repository, ApplicationEventPublisher eventPublisher) {
+    public UpdateProjectUserService(
+            ProjectUserRepository repository,
+            ApplicationEventPublisher eventPublisher,
+            ProjectUserOAuthRevocationService oauthRevocation,
+            ProjectUserSessionService sessions
+    ) {
         this.repository = repository;
         this.eventPublisher = eventPublisher;
+        this.oauthRevocation = oauthRevocation;
+        this.sessions = sessions;
     }
 
     @Transactional
@@ -33,7 +43,16 @@ public class UpdateProjectUserService {
             UUID projectId, UUID userId, String displayName, String username, UUID actorAccountId
     ) {
         ProjectUser user = load(projectId, userId);
+        String previousPrincipalName = ProjectUserPrincipal.loginOf(user);
         user.updateProfile(displayName.trim(), username == null || username.isBlank() ? null : username.trim());
+        if (!Objects.equals(previousPrincipalName, ProjectUserPrincipal.loginOf(user))) {
+            // El subject OIDC cambió por una edición explícita del perfil. Revocamos por
+            // userId serializado (no por el nombre anterior), invalidamos introspection y
+            // sesiones para que no sobrevivan grants con el subject antiguo.
+            user.incrementAuthzVersion();
+            oauthRevocation.revokeForProjectUser(projectId, userId);
+            sessions.revokeAll(userId);
+        }
         ProjectUser saved = repository.save(user);
         eventPublisher.publishEvent(AuditEvent.byAccount(
                 projectId, "project_user.updated", "project_user", Objects.toString(saved.getId(), null),

@@ -25,24 +25,23 @@ public class ProjectUserStatusService {
     private final ProjectUserRepository repository;
     private final ApplicationEventPublisher eventPublisher;
     private final ProjectUserSessionService sessions;
+    private final ProjectUserOAuthRevocationService oauthRevocation;
 
     public ProjectUserStatusService(
             ProjectUserRepository repository,
             ApplicationEventPublisher eventPublisher,
-            ProjectUserSessionService sessions
+            ProjectUserSessionService sessions,
+            ProjectUserOAuthRevocationService oauthRevocation
     ) {
         this.repository = repository;
         this.eventPublisher = eventPublisher;
         this.sessions = sessions;
+        this.oauthRevocation = oauthRevocation;
     }
 
     @Transactional
     public ProjectUserDetails suspend(UUID projectId, UUID userId, UUID actorAccountId) {
-        ProjectUserDetails details = transition(projectId, userId, actorAccountId, "project_user.suspended", ProjectUser::suspend);
-        // Revoca las sesiones activas: un ProjectUserPrincipal stale no debe seguir
-        // teniendo acceso (web ni OAuth) hasta que la sesión expirase.
-        sessions.revokeAll(userId);
-        return details;
+        return restrict(projectId, userId, actorAccountId, "project_user.suspended", ProjectUser::suspend);
     }
 
     @Transactional
@@ -52,9 +51,32 @@ public class ProjectUserStatusService {
 
     @Transactional
     public ProjectUserDetails disable(UUID projectId, UUID userId, UUID actorAccountId) {
-        ProjectUserDetails details = transition(projectId, userId, actorAccountId, "project_user.disabled", ProjectUser::disable);
+        return restrict(projectId, userId, actorAccountId, "project_user.disabled", ProjectUser::disable);
+    }
+
+    /**
+     * Suspender/desactivar (remediación de auditoría #4): cambia el estado, bump de
+     * {@code authz_version} (introspection → inactivo; los JWT locales caducan solos) y
+     * revoca sesiones HTTP + autorizaciones OAuth persistidas. Sin esto último, un
+     * refresh token podía seguir emitiendo tokens nuevos tras suspender/desactivar.
+     */
+    private ProjectUserDetails restrict(
+            UUID projectId, UUID userId, UUID actorAccountId, String action, Consumer<ProjectUser> mutator
+    ) {
+        ProjectUser user = load(projectId, userId);
+        mutator.accept(user);
+        user.incrementAuthzVersion();
+        ProjectUser saved = repository.save(user);
+        revokeCredentials(projectId, userId, saved);
+        eventPublisher.publishEvent(AuditEvent.byAccount(
+                projectId, action, "project_user", Objects.toString(saved.getId(), null),
+                actorAccountId, Map.of()));
+        return ProjectUserDetails.from(saved);
+    }
+
+    private void revokeCredentials(UUID projectId, UUID userId, ProjectUser user) {
+        oauthRevocation.revokeForProjectUser(projectId, userId);
         sessions.revokeAll(userId);
-        return details;
     }
 
     /**
@@ -68,7 +90,8 @@ public class ProjectUserStatusService {
         ProjectUser user = load(projectId, userId);
         user.incrementAuthzVersion();
         ProjectUserDetails details = ProjectUserDetails.from(repository.save(user));
-        sessions.revokeAll(userId);
+        // Sesiones HTTP + autorizaciones OAuth persistidas (refresh tokens).
+        revokeCredentials(projectId, userId, user);
         eventPublisher.publishEvent(AuditEvent.byAccount(
                 projectId, "project_user.tokens_revoked", "project_user",
                 Objects.toString(user.getId(), null), actorAccountId, Map.of()));
