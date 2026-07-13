@@ -1,5 +1,7 @@
 package dev.unzor.nexus.identity.application.configuration;
 
+import dev.unzor.nexus.identity.application.service.ProjectSlugResolver;
+import dev.unzor.nexus.identity.infrastructure.security.ProjectRealmIsolationFilter;
 import dev.unzor.nexus.shared.security.SameSiteCsrfCookieFilter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -11,6 +13,7 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
+import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
@@ -35,7 +38,8 @@ class ProjectEndUserSecurityConfiguration {
     SecurityFilterChain endUserApiSecurityFilterChain(
             HttpSecurity http,
             @Value("${nexus.session.cookie.same-site:${NEXUS_SESSION_COOKIE_SAME_SITE:Lax}}") String sameSite,
-            @Value("${nexus.session.cookie.secure:${NEXUS_SESSION_COOKIE_SECURE:false}}") boolean secure
+            @Value("${nexus.session.cookie.secure:${NEXUS_SESSION_COOKIE_SECURE:false}}") boolean secure,
+            ProjectSlugResolver slugResolver
     ) throws Exception {
         CookieCsrfTokenRepository csrfRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
         csrfRepository.setCookieName(CSRF_COOKIE_NAME);
@@ -49,6 +53,9 @@ class ProjectEndUserSecurityConfiguration {
                 .securityMatcher("/api/p/**")
                 .cors(Customizer.withDefaults())
                 .addFilterBefore(new SameSiteCsrfCookieFilter(CSRF_COOKIE_NAME, sameSite, secure), CsrfFilter.class)
+                // Aislamiento de realms: un principal de otro realm no puede operar los
+                // endpoints JSON de este slug (/me, MFA, sesiones…). Tras SecurityContextHolder.
+                .addFilterAfter(new ProjectRealmIsolationFilter(slugResolver), SecurityContextHolderFilter.class)
                 .csrf(csrf -> csrf
                         .csrfTokenRepository(csrfRepository)
                         .csrfTokenRequestHandler(csrfRequestHandler)

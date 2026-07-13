@@ -3,11 +3,16 @@ package dev.unzor.nexus.identity.persistence;
 import dev.unzor.nexus.identity.application.service.ProjectOauthClientToRegisteredClientMapper;
 import dev.unzor.nexus.identity.domain.entity.ProjectOauthClient;
 import dev.unzor.nexus.identity.persistence.repository.ProjectOauthClientRepository;
+import dev.unzor.nexus.projects.api.dto.ProjectSlugReference;
 import dev.unzor.nexus.projects.application.service.ResolveProjectBySlugService;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.oauth2.server.authorization.client.JdbcRegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
+import org.springframework.security.oauth2.server.authorization.context.AuthorizationServerContext;
+import org.springframework.security.oauth2.server.authorization.context.AuthorizationServerContextHolder;
+import org.springframework.security.oauth2.server.authorization.settings.AuthorizationServerSettings;
 
 import java.util.List;
 import java.util.Optional;
@@ -30,6 +35,12 @@ class CompositeRegisteredClientRepositoryTests {
     private final ResolveProjectBySlugService slugResolver = mock(ResolveProjectBySlugService.class);
     private final CompositeRegisteredClientRepository composite =
             new CompositeRegisteredClientRepository(projectRepo, mapper, global, jdbc, slugResolver);
+
+    @AfterEach
+    void clearIssuerContext() {
+        // Cada test parte sin contexto AS (= issuer global / arranque).
+        AuthorizationServerContextHolder.setContext(null);
+    }
 
     @Test
     void findByIdResolvesProjectClientFirst() {
@@ -129,6 +140,81 @@ class CompositeRegisteredClientRepositoryTests {
 
         assertThat(result).isNull();
         verify(mapper, never()).toRegisteredClient(any());
+    }
+
+    // --- Aislamiento por realm (remediación hallazgo crítico) ---
+
+    private static final UUID REALM_A = UUID.fromString("00000000-0000-0000-0000-0000000000a1");
+    private static final UUID REALM_B = UUID.fromString("00000000-0000-0000-0000-0000000000b2");
+
+    @Test
+    void findByClientIdServesOnlySameRealmClientUnderRealmIssuer() {
+        realmContext("http://localhost:8080/p/realm-a");
+        when(slugResolver.resolve("realm-a")).thenReturn(new ProjectSlugReference(REALM_A, "realm-a"));
+        String clientId = "nxo-a";
+        ProjectOauthClient clientA = projectClient(REALM_A, UUID.randomUUID());
+        RegisteredClient mapped = mock(RegisteredClient.class);
+        when(projectRepo.findByClientId(clientId)).thenReturn(Optional.of(clientA));
+        when(mapper.toRegisteredClient(clientA)).thenReturn(mapped);
+
+        assertThat(composite.findByClientId(clientId)).isSameAs(mapped);
+    }
+
+    @Test
+    void findByClientIdFiltersOutCrossRealmClient() {
+        // Cliente del realm B pedido bajo el issuer del realm A → no se sirve y NO cae
+        // al repo global bajo un issuer por-realm.
+        realmContext("http://localhost:8080/p/realm-a");
+        when(slugResolver.resolve("realm-a")).thenReturn(new ProjectSlugReference(REALM_A, "realm-a"));
+        ProjectOauthClient clientB = projectClient(REALM_B, UUID.randomUUID());
+        when(projectRepo.findByClientId("nxo-b")).thenReturn(Optional.of(clientB));
+
+        assertThat(composite.findByClientId("nxo-b")).isNull();
+        verify(global, never()).findByClientId(any());
+    }
+
+    @Test
+    void findByClientIdDoesNotFallBackToGlobalUnderRealmIssuer() {
+        realmContext("http://localhost:8080/p/realm-a");
+        when(slugResolver.resolve("realm-a")).thenReturn(new ProjectSlugReference(REALM_A, "realm-a"));
+        when(projectRepo.findByClientId("missing")).thenReturn(Optional.empty());
+
+        assertThat(composite.findByClientId("missing")).isNull();
+        verify(global, never()).findByClientId(any());
+    }
+
+    @Test
+    void findByIdFiltersOutCrossRealmClientAndSkipsGlobal() {
+        realmContext("http://localhost:8080/p/realm-a");
+        when(slugResolver.resolve("realm-a")).thenReturn(new ProjectSlugReference(REALM_A, "realm-a"));
+        UUID id = UUID.randomUUID();
+        ProjectOauthClient clientB = projectClient(REALM_B, id);
+        when(projectRepo.findById(id)).thenReturn(Optional.of(clientB));
+
+        assertThat(composite.findById(id.toString())).isNull();
+        verify(global, never()).findById(any());
+    }
+
+    /** Fija un contexto AS con el issuer dado (simula una petición por-realm del AS). */
+    private static void realmContext(String issuer) {
+        AuthorizationServerContextHolder.setContext(new AuthorizationServerContext() {
+            @Override
+            public String getIssuer() {
+                return issuer;
+            }
+
+            @Override
+            public AuthorizationServerSettings getAuthorizationServerSettings() {
+                return AuthorizationServerSettings.builder().multipleIssuersAllowed(true).build();
+            }
+        });
+    }
+
+    private static ProjectOauthClient projectClient(UUID projectId, UUID id) {
+        return new ProjectOauthClient(
+                projectId, "nxo-" + id, "{bcrypt}x", "Web",
+                List.of("https://app/cb"), List.of(), List.of("authorization_code", "refresh_token"),
+                List.of("openid"), true, false, null);
     }
 
     private static ProjectOauthClient projectClient(UUID id) {
