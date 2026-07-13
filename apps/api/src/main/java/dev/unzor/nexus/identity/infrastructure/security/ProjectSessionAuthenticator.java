@@ -8,6 +8,7 @@ import dev.unzor.nexus.identity.domain.exception.EmailNotVerifiedException;
 import dev.unzor.nexus.identity.domain.exception.MfaRequiredException;
 import dev.unzor.nexus.identity.persistence.repository.ProjectUserRecoveryCodeRepository;
 import dev.unzor.nexus.identity.persistence.repository.ProjectUserRepository;
+import dev.unzor.nexus.projects.application.service.ProjectLookupService;
 import dev.unzor.nexus.shared.audit.AuditEvent;
 import dev.unzor.nexus.shared.security.Base32;
 import dev.unzor.nexus.shared.security.NexusSessionAttributes;
@@ -30,7 +31,9 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
+import org.springframework.session.FindByIndexNameSessionRepository;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -80,6 +83,7 @@ public class ProjectSessionAuthenticator {
     private final ApplicationEventPublisher eventPublisher;
     private final IdentityLoginProperties loginProperties;
     private final TotpCrypto totpCrypto;
+    private final ProjectLookupService projectLookupService;
     private final String dummyPasswordHash;
     private final HttpSessionSecurityContextRepository securityContextRepository =
             new HttpSessionSecurityContextRepository();
@@ -92,7 +96,8 @@ public class ProjectSessionAuthenticator {
             RecordProjectUserLoginService recordLoginService,
             ApplicationEventPublisher eventPublisher,
             IdentityLoginProperties loginProperties,
-            TotpCrypto totpCrypto
+            TotpCrypto totpCrypto,
+            ProjectLookupService projectLookupService
     ) {
         this.userDetailsService = userDetailsService;
         this.repository = repository;
@@ -102,6 +107,7 @@ public class ProjectSessionAuthenticator {
         this.eventPublisher = eventPublisher;
         this.loginProperties = loginProperties;
         this.totpCrypto = totpCrypto;
+        this.projectLookupService = projectLookupService;
         this.dummyPasswordHash = passwordEncoder.encode(DUMMY_PASSWORD);
     }
 
@@ -110,10 +116,15 @@ public class ProjectSessionAuthenticator {
      * sesión. Si hay MFA, fija el ticket pendiente y lanza {@link MfaRequiredException}
      * (sin sesión autenticada). Lanza {@link BadCredentialsException} en cualquier fallo.
      */
+    @Transactional(noRollbackFor = {
+            BadCredentialsException.class, MfaRequiredException.class, EmailNotVerifiedException.class
+    })
     public Authentication authenticate(
             UUID projectId, String email, String rawPassword,
             HttpServletRequest request, HttpServletResponse response
     ) {
+        // Cortar antes de consultar credenciales, mutar lockout o emitir auditoría.
+        projectLookupService.lockOperationalById(projectId);
         ProjectUserPrincipal principal;
         ProjectUser user;
         try {
@@ -152,6 +163,15 @@ public class ProjectSessionAuthenticator {
         // persiste SecurityContext; la sesión sigue anónima para SAS).
         if (user.isMfaEnabled()) {
             HttpSession session = request.getSession();
+            // También las sesiones anónimas con MFA pendiente deben quedar bajo el
+            // índice estable del ProjectUser: al archivar el proyecto se borran junto
+            // con las sesiones ya autenticadas y no pueden revivir tras restaurarlo.
+            session.setAttribute(NexusSessionAttributes.PROJECT_USER_ID, user.getId().toString());
+            // RedisIndexedSessionRepository sólo recalcula el índice cuando cambia
+            // principalName o SPRING_SECURITY_CONTEXT. Este marcador dispara el
+            // IndexResolver sin autenticar la sesión (sigue sin SecurityContext).
+            session.setAttribute(FindByIndexNameSessionRepository.PRINCIPAL_NAME_INDEX_NAME,
+                    NexusSessionAttributes.projectUserIndexValue(user.getId()));
             session.setAttribute(NexusSessionAttributes.MFA_PENDING,
                     new MfaPendingTicket(user.getId(), projectId, now, now.plus(MFA_PENDING_TTL)));
             throw new MfaRequiredException(projectId, user.getEmail());
@@ -166,9 +186,14 @@ public class ProjectSessionAuthenticator {
      * Lanza {@link BadCredentialsException} si no hay ticket, está expirado, o el código
      * no valida (esto último cuenta hacia el lockout).
      */
+    @Transactional(noRollbackFor = {
+            BadCredentialsException.class, MfaRequiredException.class, EmailNotVerifiedException.class
+    })
     public Authentication completeMfaAuthentication(
             UUID projectId, String code, HttpServletRequest request, HttpServletResponse response
     ) {
+        // El proyecto puede suspenderse entre contraseña y segundo factor.
+        projectLookupService.lockOperationalById(projectId);
         Instant now = Instant.now();
         HttpSession session = request.getSession(false);
         Object raw = (session == null) ? null : session.getAttribute(NexusSessionAttributes.MFA_PENDING);

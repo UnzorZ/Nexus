@@ -13,6 +13,7 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import java.util.UUID;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -145,6 +146,30 @@ class RegistryHeartbeatRuntimeTests {
     }
 
     @Test
+    void heartbeatRejectsInstanceTokenAfterProjectIsArchived() throws Exception {
+        String ownerEmail = unique("tok-archived");
+        registerAccount(ownerEmail);
+        LoginSession owner = login(ownerEmail);
+        String projectId = createProject(owner, randomSlug("tok"));
+        String key = createKey(owner, projectId,
+                "{\"name\":\"CI\",\"scopes\":[\"registry:heartbeat\"],\"expiresAt\":null}");
+
+        MvcResult reg = mockMvc.perform(post("/api/v1/registry/register").header("X-Nexus-Api-Key", key))
+                .andExpect(status().isOk())
+                .andReturn();
+        String token = objectMapper.readTree(reg.getResponse().getContentAsString()).at("/token").asText();
+
+        archiveProject(owner, projectId);
+
+        mockMvc.perform(post("/api/v1/registry/heartbeat")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Nexus-Instance-Token", token)
+                        .content(validBody()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("project_not_operational"));
+    }
+
+    @Test
     void heartbeatRejectsInvalidInstanceToken() throws Exception {
         mockMvc.perform(post("/api/v1/registry/heartbeat")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -257,6 +282,13 @@ class RegistryHeartbeatRuntimeTests {
                         .cookie(owner.csrfCookie(), owner.sessionCookie())
                         .content("{\"name\":\"CI\",\"status\":\"DISABLED\",\"expiresAt\":null}"))
                 .andExpect(status().isOk());
+    }
+
+    private void archiveProject(LoginSession owner, String projectId) throws Exception {
+        mockMvc.perform(delete("/api/panel/v1/projects/{projectId}", projectId)
+                        .header("X-XSRF-TOKEN", owner.csrfToken())
+                        .cookie(owner.csrfCookie(), owner.sessionCookie()))
+                .andExpect(status().isNoContent());
     }
 
     private String createProject(LoginSession owner, String slug) throws Exception {

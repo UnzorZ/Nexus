@@ -4,11 +4,16 @@ import dev.unzor.nexus.identity.application.context.ProjectAuthenticationContext
 import dev.unzor.nexus.identity.infrastructure.security.ProjectUserPrincipal;
 import dev.unzor.nexus.permissions.application.dto.EffectiveAuthorities;
 import dev.unzor.nexus.permissions.application.service.EffectiveAuthoritiesService;
+import dev.unzor.nexus.projects.domain.enums.ProjectStatus;
+import dev.unzor.nexus.projects.domain.exception.ProjectNotFoundException;
+import dev.unzor.nexus.projects.domain.exception.ProjectNotOperationalException;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
+import org.springframework.security.oauth2.core.OAuth2ErrorCodes;
 import org.springframework.security.oauth2.server.authorization.OAuth2TokenType;
 import org.springframework.security.oauth2.server.authorization.context.AuthorizationServerContext;
 import org.springframework.security.oauth2.server.authorization.settings.AuthorizationServerSettings;
@@ -97,6 +102,37 @@ class ProjectIdTokenCustomizerTest {
 
         assertThatThrownBy(() -> runCustomizer(customizer, OAuth2TokenType.ACCESS_TOKEN, pup))
                 .isInstanceOf(IllegalStateException.class);
+        verifyNoInteractions(authorities);
+    }
+
+    @Test
+    void unknownIssuerProjectAddsNoClaims() {
+        ProjectSlugResolver slugResolver = mock(ProjectSlugResolver.class);
+        when(slugResolver.resolve("shop")).thenThrow(new ProjectNotFoundException("shop"));
+        EffectiveAuthoritiesService authorities = mock(EffectiveAuthoritiesService.class);
+
+        ProjectIdTokenCustomizer customizer = new ProjectIdTokenCustomizer(slugResolver, authorities);
+        Map<String, Object> claims = runCustomizer(
+                customizer, OAuth2TokenType.ACCESS_TOKEN, principal(7L));
+
+        assertThat(claims).doesNotContainKey("permissions").doesNotContainKey("project_id");
+        verifyNoInteractions(authorities);
+    }
+
+    @Test
+    void inactiveIssuerProjectAbortsWithNativeOauthError() {
+        ProjectSlugResolver slugResolver = mock(ProjectSlugResolver.class);
+        when(slugResolver.resolve("shop")).thenThrow(
+                new ProjectNotOperationalException(PROJECT_ID, ProjectStatus.ARCHIVED));
+        EffectiveAuthoritiesService authorities = mock(EffectiveAuthoritiesService.class);
+
+        ProjectIdTokenCustomizer customizer = new ProjectIdTokenCustomizer(slugResolver, authorities);
+
+        assertThatThrownBy(() -> runCustomizer(
+                customizer, OAuth2TokenType.ACCESS_TOKEN, principal(7L)))
+                .isInstanceOfSatisfying(OAuth2AuthenticationException.class,
+                        error -> assertThat(error.getError().getErrorCode())
+                                .isEqualTo(OAuth2ErrorCodes.INVALID_GRANT));
         verifyNoInteractions(authorities);
     }
 

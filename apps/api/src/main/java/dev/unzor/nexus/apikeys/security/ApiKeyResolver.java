@@ -5,7 +5,10 @@ import dev.unzor.nexus.apikeys.domain.enums.ApiKeyStatus;
 import dev.unzor.nexus.apikeys.domain.exception.ApiKeyDisabledException;
 import dev.unzor.nexus.apikeys.domain.exception.ApiKeyExpiredException;
 import dev.unzor.nexus.apikeys.domain.exception.ApiKeyInvalidException;
+import dev.unzor.nexus.apikeys.domain.exception.ApiKeyProjectNotOperationalException;
 import dev.unzor.nexus.apikeys.persistence.repository.ProjectApiKeyRepository;
+import dev.unzor.nexus.projects.application.service.ProjectLookupService;
+import dev.unzor.nexus.projects.domain.exception.ProjectNotOperationalException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,10 +28,16 @@ public class ApiKeyResolver {
 
     private final ProjectApiKeyRepository repository;
     private final ApiKeyHasher hasher;
+    private final ProjectLookupService projectLookupService;
 
-    public ApiKeyResolver(ProjectApiKeyRepository repository, ApiKeyHasher hasher) {
+    public ApiKeyResolver(
+            ProjectApiKeyRepository repository,
+            ApiKeyHasher hasher,
+            ProjectLookupService projectLookupService
+    ) {
         this.repository = repository;
         this.hasher = hasher;
+        this.projectLookupService = projectLookupService;
     }
 
     @Transactional
@@ -49,6 +58,12 @@ public class ApiKeyResolver {
         }
         if (matched.isExpired()) {
             throw new ApiKeyExpiredException(matched.getId(), matched.getProjectId());
+        }
+        try {
+            projectLookupService.requireOperationalById(matched.getProjectId());
+        } catch (ProjectNotOperationalException exception) {
+            throw new ApiKeyProjectNotOperationalException(
+                    matched.getId(), matched.getProjectId(), exception);
         }
         matched.touchUsed();
         repository.save(matched);

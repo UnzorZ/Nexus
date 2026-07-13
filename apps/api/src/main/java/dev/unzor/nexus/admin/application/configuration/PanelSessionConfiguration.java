@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.session.FindByIndexNameSessionRepository;
+import org.springframework.session.FlushMode;
 import org.springframework.session.IndexResolver;
 import org.springframework.session.Session;
 import org.springframework.session.config.SessionRepositoryCustomizer;
@@ -67,7 +68,14 @@ public class PanelSessionConfiguration {
         if (timeout.isZero() || timeout.isNegative()) {
             throw new IllegalArgumentException("nexus.session.timeout must be positive");
         }
-        return repository -> repository.setDefaultMaxInactiveInterval(timeout);
+        return repository -> {
+            repository.setDefaultMaxInactiveInterval(timeout);
+            // El archivado serializa contra el login mediante un lock PostgreSQL.
+            // IMMEDIATE garantiza que atributos, índice y SecurityContext lleguen a
+            // Redis antes de liberar ese lock; ON_SAVE permitiría que el filtro los
+            // persistiera después del barrido de sesiones del archivado.
+            repository.setFlushMode(FlushMode.IMMEDIATE);
+        };
     }
 
     /**

@@ -59,7 +59,9 @@ public class ProjectRealmIsolationFilter extends OncePerRequestFilter {
 
     private UUID resolveQuietly(String slug) {
         try {
-            return slugResolver.resolve(slug).projectId();
+            // El aislamiento M1 debe seguir comparando realms aunque el proyecto esté
+            // suspendido o archivado; el gate operacional se aplica después.
+            return slugResolver.resolveExisting(slug).projectId();
         } catch (RuntimeException unknown) {
             return null;
         }
