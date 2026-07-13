@@ -14,21 +14,23 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Endpoint de <b>back-channel logout</b> (OIDC RFC 8417). Nexus POSTea aquí
+ * Endpoint de <b>back-channel logout</b> (OIDC Back-Channel Logout 1.0). Nexus POSTea aquí
  * {@code logout_token=<jwt>} (form) cuando la sesión de un usuario termina; el
  * controlador valida el token y publica {@link NexusBackChannelLogoutEvent} para
  * que la app invalide la sesión local del {@code sub}.
  *
- * <p>Validación (RFC 8417 §2.4): firma RS256 contra el JWKS del realm (vía
- * {@link JwtDecoder}), {@code iss}, {@code exp}, presencia del claim {@code events}
- * con el evento de back-channel-logout, <b>ausencia</b> de {@code nonce}, y
- * dedupe de {@code jti} (anti-replay). Responde 200 si el token es válido; los
- * fallos de validación responden 400 (Nexus no reintenta 4xx — entrega
- * best-effort).</p>
+ * <p>Validación (spec §2.5): firma RS256 contra el JWKS del realm (vía
+ * {@link JwtDecoder}), {@code iss}, {@code aud} (contra el {@code client_id} de la
+ * app), {@code exp}, {@code iat}, {@code jti} (obligatorio), presencia del claim
+ * {@code events} con el evento de back-channel-logout, <b>ausencia</b> de
+ * {@code nonce}, y dedupe de {@code jti} (anti-replay). Responde 200 si el token
+ * es válido; los fallos de validación responden 400 (Nexus no reintenta 4xx —
+ * entrega best-effort).</p>
  */
 @RestController
 public class NexusBackChannelLogoutController {
@@ -65,11 +67,24 @@ public class NexusBackChannelLogoutController {
             log.warn("Back-channel logout iss inesperado: {}", tokenIss);
             return ResponseEntity.badRequest().build();
         }
+        // aud (spec §2.5): si la app declara su client_id, el token debe ir dirigido a ella —
+        // descarta tokens emitidos para otro RP del mismo realm (clave de firma compartida).
+        String expectedAudience = properties.getSecurity().getClient().getClientId();
+        List<String> audiences = jwt.getAudience();
+        if (expectedAudience != null && !expectedAudience.isBlank()
+                && (audiences == null || !audiences.contains(expectedAudience))) {
+            log.warn("Back-channel logout aud inesperado: {}", audiences);
+            return ResponseEntity.badRequest().build();
+        }
         if (jwt.getExpiresAt() == null || jwt.getExpiresAt().isBefore(Instant.now())) {
             return ResponseEntity.badRequest().build();
         }
+        if (jwt.getIssuedAt() == null) {
+            // spec §2.5: iat obligatorio.
+            return ResponseEntity.badRequest().build();
+        }
         if (jwt.getClaimAsString("nonce") != null) {
-            // RFC 8417 §2.4: un logout token NO debe llevar nonce.
+            // spec §2.4: un logout token NO debe llevar nonce.
             return ResponseEntity.badRequest().build();
         }
         Object events = jwt.getClaims().get("events");
@@ -81,7 +96,11 @@ public class NexusBackChannelLogoutController {
             return ResponseEntity.badRequest().build();
         }
         String jti = jwt.getId();
-        if (jti != null && seenJtis.putIfAbsent(jti, Instant.now()) != null) {
+        if (jti == null || jti.isBlank()) {
+            // spec §2.5: jti obligatorio (habilita el anti-replay).
+            return ResponseEntity.badRequest().build();
+        }
+        if (seenJtis.putIfAbsent(jti, Instant.now()) != null) {
             // Replay del mismo jti — idempotente: respondemos 200 sin re-publicar.
             log.debug("Back-channel logout jti duplicado ignorado: {}", jti);
             return ResponseEntity.ok().build();

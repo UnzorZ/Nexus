@@ -39,7 +39,7 @@ class BackChannelLogoutServiceTest {
         BackChannelLogoutService service = newService(builder.build());
 
         when(resolver.resolve(anyString(), any())).thenReturn(List.of(client()));
-        when(tokenIssuer.issue(anyString(), anyString())).thenReturn(jwt());
+        when(tokenIssuer.issue(anyString(), anyString(), anyString())).thenReturn(jwt());
 
         // 500, 504, luego 200: el servicio reintenta los fallos transitorios y entrega.
         server.expect(requestTo(BACKCHANNEL_URI)).andRespond(withServerError());
@@ -58,7 +58,7 @@ class BackChannelLogoutServiceTest {
         BackChannelLogoutService service = newService(builder.build());
 
         when(resolver.resolve(anyString(), any())).thenReturn(List.of(client()));
-        when(tokenIssuer.issue(anyString(), anyString())).thenReturn(jwt());
+        when(tokenIssuer.issue(anyString(), anyString(), anyString())).thenReturn(jwt());
 
         // Un 4xx es un rechazo definitivo del RP (token inválido para él): no se reintenta.
         server.expect(requestTo(BACKCHANNEL_URI)).andRespond(withBadRequest());
@@ -75,7 +75,7 @@ class BackChannelLogoutServiceTest {
         BackChannelLogoutService service = newService(builder.build());
 
         when(resolver.resolve(anyString(), any())).thenReturn(List.of(client()));
-        when(tokenIssuer.issue(anyString(), anyString())).thenReturn(jwt());
+        when(tokenIssuer.issue(anyString(), anyString(), anyString())).thenReturn(jwt());
 
         // 3 fallos transitorios seguidos: agota MAX_ATTEMPTS y cede (sin lanzar; el RP
         // recuperará consistencia al re-emitir en su próximo login).
