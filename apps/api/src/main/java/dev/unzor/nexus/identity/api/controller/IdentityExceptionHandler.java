@@ -6,6 +6,7 @@ import dev.unzor.nexus.identity.domain.exception.ProjectUserEmailAlreadyExistsEx
 import dev.unzor.nexus.identity.domain.exception.ProjectUserNotFoundException;
 import dev.unzor.nexus.identity.domain.exception.SessionNotFoundException;
 import dev.unzor.nexus.projects.domain.exception.ProjectAccessDeniedException;
+import dev.unzor.nexus.projects.domain.exception.ProjectNotOperationalException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -72,6 +73,15 @@ class IdentityExceptionHandler {
                 HttpStatus.FORBIDDEN, "You do not have access to this project.");
         problem.setTitle("Forbidden");
         problem.setProperty("code", "permission_denied");
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(problem);
+    }
+
+    @ExceptionHandler(ProjectNotOperationalException.class)
+    ResponseEntity<ProblemDetail> handleProjectNotOperational(ProjectNotOperationalException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.FORBIDDEN, "Project is not operational.");
+        problem.setTitle("Forbidden");
+        problem.setProperty("code", "project_not_operational");
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(problem);
     }
 

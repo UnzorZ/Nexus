@@ -37,6 +37,13 @@ public interface ProjectUserRepository extends Repository<ProjectUser, UUID> {
     List<ProjectUser> findAllByProjectId(UUID projectId);
 
     /**
+     * Proyección fina usada para revocar las sesiones Redis de todo un proyecto sin
+     * hidratar las entidades de usuario.
+     */
+    @Query("select u.id from ProjectUser u where u.projectId = :projectId")
+    List<UUID> findIdsByProjectId(@Param("projectId") UUID projectId);
+
+    /**
      * Búsqueda por token de verificación de email, acotada al proyecto. El token es
      * un secreto único (no permite enumeración); el projectId refuerza el aislamiento
      * entre realms. {@code null} si no hay token pendiente o ya fue consumido.

@@ -71,4 +71,24 @@ public class ProjectUserOAuthRevocationService {
         logoutPlans.forEach(plan -> eventPublisher.publishEvent(new BackChannelLogoutRequested(
                 plan.principalName(), projectId, plan.issuer(), plan.targets())));
     }
+
+    /**
+     * Borra todas las autorizaciones OAuth emitidas para clientes del proyecto.
+     * Los destinos de back-channel se materializan antes del borrado para que los
+     * eventos no dependan de filas que ya no existen. La operación es idempotente.
+     */
+    public void revokeForProject(UUID projectId) {
+        var logoutPlans = logoutClientResolver.resolveForProject(projectId);
+        int deleted = jdbcTemplate.update(
+                // oauth2_authorization.registered_client_id es VARCHAR(100),
+                // mientras project_oauth_clients.id es UUID.
+                "DELETE FROM oauth2_authorization WHERE registered_client_id IN "
+                        + "(SELECT CAST(id AS TEXT) FROM project_oauth_clients WHERE project_id = ?)",
+                projectId);
+        if (deleted > 0) {
+            log.info("Revoked {} OAuth authorization(s) for archived project {}.", deleted, projectId);
+        }
+        logoutPlans.forEach(plan -> eventPublisher.publishEvent(new BackChannelLogoutRequested(
+                plan.principalName(), projectId, plan.issuer(), plan.targets())));
+    }
 }

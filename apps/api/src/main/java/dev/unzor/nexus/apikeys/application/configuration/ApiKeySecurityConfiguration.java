@@ -5,6 +5,7 @@ import dev.unzor.nexus.apikeys.security.ApiKeyAuthenticationFilter;
 import dev.unzor.nexus.apikeys.security.ApiKeyResolver;
 import dev.unzor.nexus.apikeys.security.InstanceTokenService;
 import dev.unzor.nexus.apikeys.security.ProjectApiProblemWriter;
+import dev.unzor.nexus.projects.application.service.ProjectLookupService;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -39,6 +40,7 @@ public class ApiKeySecurityConfiguration implements WebMvcConfigurer {
             HttpSecurity http,
             ApiKeyResolver resolver,
             InstanceTokenService instanceTokenService,
+            ProjectLookupService projectLookupService,
             ProjectApiProblemWriter problemWriter,
             ApplicationEventPublisher eventPublisher
     ) throws Exception {
@@ -47,7 +49,8 @@ public class ApiKeySecurityConfiguration implements WebMvcConfigurer {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .addFilterBefore(
-                        new ApiKeyAuthenticationFilter(resolver, instanceTokenService, problemWriter, eventPublisher),
+                        new ApiKeyAuthenticationFilter(
+                                resolver, instanceTokenService, projectLookupService, problemWriter, eventPublisher),
                         UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(authorize -> authorize.anyRequest().authenticated());
         return http.build();

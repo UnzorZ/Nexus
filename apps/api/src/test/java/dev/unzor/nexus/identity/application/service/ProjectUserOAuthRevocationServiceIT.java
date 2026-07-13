@@ -16,6 +16,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -98,6 +99,30 @@ class ProjectUserOAuthRevocationServiceIT {
         service.revokeForProjectUser(PROJECT_A, UUID.randomUUID());
         assertThat(authorizationExists("auth-a")).isTrue();
         verifyNoInteractions(eventPublisher);
+    }
+
+    @Test
+    void revokesAllAuthorizationsForTheProjectOnlyUsingTheUuidTextCast() {
+        service.revokeForProject(PROJECT_A);
+
+        assertThat(authorizationExists("auth-a")).isFalse();
+        assertThat(authorizationExists("auth-other")).isFalse();
+        assertThat(authorizationExists("auth-b")).isTrue();
+
+        var eventCaptor = forClass(BackChannelLogoutRequested.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        BackChannelLogoutRequested event = eventCaptor.getValue();
+        assertThat(event.principalName()).isEqualTo(SHARED_PRINCIPAL_NAME);
+        assertThat(event.projectId()).isEqualTo(PROJECT_A);
+        assertThat(event.issuer()).isEqualTo("https://nexus.example/p/project-a");
+        assertThat(event.targets())
+                .extracting(BackChannelLogoutTarget::id)
+                .containsExactly(CLIENT_A);
+
+        reset(eventPublisher);
+        service.revokeForProject(PROJECT_A);
+        verifyNoInteractions(eventPublisher);
+        assertThat(authorizationExists("auth-b")).isTrue();
     }
 
     private void seedProjectClient(UUID projectId, UUID clientId) {

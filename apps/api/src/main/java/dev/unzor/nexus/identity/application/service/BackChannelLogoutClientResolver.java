@@ -87,6 +87,33 @@ public class BackChannelLogoutClientResolver {
                                 rs.getString("backchannel_logout_uri"))),
                 projectId, userId.toString());
 
+        return groupByLogoutIdentity(rows);
+    }
+
+    /**
+     * Captura todos los destinos de back-channel de un proyecto antes de eliminar
+     * masivamente sus autorizaciones. Se agrupa por sujeto e issuer porque cada
+     * combinación requiere su propio logout token.
+     */
+    public List<ResolvedLogout> resolveForProject(UUID projectId) {
+        List<AuthorizationTargetRow> rows = jdbc.query(
+                "SELECT DISTINCT a.principal_name, a.oidc_id_token_value, "
+                        + "c.id, c.client_id, c.backchannel_logout_uri "
+                        + "FROM oauth2_authorization a "
+                        + "JOIN project_oauth_clients c ON CAST(c.id AS TEXT) = a.registered_client_id "
+                        + "WHERE c.project_id = ? AND c.backchannel_logout_uri IS NOT NULL",
+                (rs, rowNum) -> new AuthorizationTargetRow(
+                        rs.getString("principal_name"),
+                        rs.getString("oidc_id_token_value"),
+                        new BackChannelLogoutTarget(
+                                rs.getObject("id", UUID.class),
+                                rs.getString("client_id"),
+                                rs.getString("backchannel_logout_uri"))),
+                projectId);
+        return groupByLogoutIdentity(rows);
+    }
+
+    private List<ResolvedLogout> groupByLogoutIdentity(List<AuthorizationTargetRow> rows) {
         Map<LogoutIdentity, Set<BackChannelLogoutTarget>> grouped = new LinkedHashMap<>();
         for (AuthorizationTargetRow row : rows) {
             String issuer = issuerOf(row.idToken());
