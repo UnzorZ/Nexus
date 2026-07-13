@@ -22,15 +22,18 @@ public class DeleteProjectUserService {
     private final ProjectUserRepository repository;
     private final ApplicationEventPublisher eventPublisher;
     private final ProjectUserSessionService sessions;
+    private final ProjectUserOAuthRevocationService oauthRevocation;
 
     public DeleteProjectUserService(
             ProjectUserRepository repository,
             ApplicationEventPublisher eventPublisher,
-            ProjectUserSessionService sessions
+            ProjectUserSessionService sessions,
+            ProjectUserOAuthRevocationService oauthRevocation
     ) {
         this.repository = repository;
         this.eventPublisher = eventPublisher;
         this.sessions = sessions;
+        this.oauthRevocation = oauthRevocation;
     }
 
     @Transactional
@@ -40,6 +43,7 @@ public class DeleteProjectUserService {
         UUID id = user.getId();
         String email = user.getEmail();
         repository.delete(user);
+        oauthRevocation.revokeForProjectUser(projectId, id);
         // El usuario ya no existe: sus sesiones activas tampoco deben valer.
         sessions.revokeAll(id);
         eventPublisher.publishEvent(AuditEvent.byAccount(

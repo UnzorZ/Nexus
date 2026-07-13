@@ -77,6 +77,21 @@ class PermissionSnapshotCacheTest {
         verify(client, times(1)).snapshot(userId);
     }
 
+    @Test
+    void deniesWhenSnapshotIsDenyMarkerEvenWithPermissions() {
+        // authzVersion < 0 = usuario inexistente/eliminado: denegación explícita aunque el
+        // snapshot trajese permisos (remediación #3c; el backend ya los devuelve vacíos,
+        // esto es defense-in-depth en el cliente).
+        PermissionSnapshotCache cache = new PermissionSnapshotCache(client, Duration.ofSeconds(30), true);
+        UUID userId = UUID.randomUUID();
+        when(client.snapshot(userId)).thenReturn(
+                new AuthorizationSnapshot(userId, UUID.randomUUID(), -1L, List.of("role"), List.of("orders.read"),
+                        Instant.now().plusSeconds(30)));
+
+        assertThat(cache.can(userId, "orders.read")).isFalse();
+        assertThat(cache.permissions(userId)).isEmpty();
+    }
+
     private static AuthorizationSnapshot snapshot(UUID userId, List<String> permissions, Instant expiresAt) {
         return new AuthorizationSnapshot(userId, UUID.randomUUID(), 1L, List.of("role"), permissions, expiresAt);
     }

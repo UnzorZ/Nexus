@@ -6,6 +6,7 @@ import dev.unzor.nexus.permissions.application.dto.EffectiveAuthorities;
 import dev.unzor.nexus.permissions.application.service.EffectiveAuthoritiesService;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
 import java.util.Optional;
@@ -68,6 +69,7 @@ class ProjectUserUserDetailsServiceImplTests {
 
     private static ProjectUser activeUser(UUID projectId, String email) {
         ProjectUser user = new ProjectUser(projectId, email, "$2a$10$hash", "Neo");
+        ReflectionTestUtils.setField(user, "id", UUID.randomUUID());
         user.verifyEmail(Instant.parse("2026-01-01T00:00:00Z"));
         return user;
     }

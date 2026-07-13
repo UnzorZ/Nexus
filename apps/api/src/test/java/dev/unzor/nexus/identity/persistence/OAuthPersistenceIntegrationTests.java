@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -44,6 +45,9 @@ class OAuthPersistenceIntegrationTests {
 
     @Autowired
     private NexusOAuthBootstrapProperties bootstrapProperties;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @Test
     void loadsPersistedRegisteredClientByClientId() {
@@ -87,8 +91,9 @@ class OAuthPersistenceIntegrationTests {
         // ProjectUserPrincipal (o java.lang.Long), findByToken lanza
         // "BasicPolymorphicTypeValidator denied resolution" y rompe consent/token/introspect.
         RegisteredClient client = registeredClientRepository.findByClientId(bootstrapProperties.clientId());
+        UUID userId = UUID.randomUUID();
         ProjectUserPrincipal principal = new ProjectUserPrincipal(
-                UUID.randomUUID(), UUID.randomUUID(), "alice", null,
+                UUID.randomUUID(), userId, "alice", null,
                 List.of(new SimpleGrantedAuthority("ROLE_PROJECT_USER")), true, 0L);
         Authentication authentication = new UsernamePasswordAuthenticationToken(
                 principal, null, principal.getAuthorities());
@@ -114,6 +119,13 @@ class OAuthPersistenceIntegrationTests {
         assertThat(reloadedAuthentication).isNotNull();
         assertThat(reloadedAuthentication.getPrincipal()).isInstanceOf(ProjectUserPrincipal.class);
         assertThat(reloaded.<Long>getAttribute("authz_version")).isEqualTo(0L);
+        Boolean discoverableByStableUserId = jdbcTemplate.queryForObject(
+                "SELECT jsonb_path_exists(CAST(attributes AS JSONB), "
+                        + "'strict $.**.userId ? (@ == $uid)', "
+                        + "jsonb_build_object('uid', CAST(? AS TEXT))) "
+                        + "FROM oauth2_authorization WHERE id = ?",
+                Boolean.class, userId.toString(), "principal-roundtrip");
+        assertThat(discoverableByStableUserId).isTrue();
     }
 
     @Test

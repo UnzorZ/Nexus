@@ -8,6 +8,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -20,7 +21,7 @@ import java.util.UUID;
  *
  * @param projectId proyecto al que pertenece la identidad autenticada
  * @param userId identificador del usuario dentro de Nexus
- * @param username username del proyecto o, si no existe, email del usuario
+ * @param username nombre de login y sujeto OIDC (username o email)
  * @param password hash de la contraseña almacenada
  * @param authorities permisos y roles efectivos dentro del proyecto
  * @param enabled si el estado del usuario permite autenticarse
@@ -46,6 +47,8 @@ public record ProjectUserPrincipal(
      * esa lista, mientras que {@code Collections$UnmodifiableRandomAccessList} sí.
      */
     public ProjectUserPrincipal {
+        Objects.requireNonNull(userId, "userId");
+        Objects.requireNonNull(username, "username");
         authorities = Collections.unmodifiableList(new ArrayList<>(authorities));
     }
 
@@ -61,17 +64,19 @@ public record ProjectUserPrincipal(
             ProjectUser user,
             Collection<? extends GrantedAuthority> authorities
     ) {
-        String login = user.getUsername() == null ? user.getEmail() : user.getUsername();
-
         return new ProjectUserPrincipal(
                 user.getProjectId(),
                 user.getId(),
-                login,
+                loginOf(user),
                 user.getPasswordHash(),
                 authorities,
                 user.canAuthenticate(),
                 user.getAuthzVersion()
         );
+    }
+
+    public static String loginOf(ProjectUser user) {
+        return user.getUsername() == null ? user.getEmail() : user.getUsername();
     }
 
     @Override
