@@ -6,7 +6,7 @@ import java.util.UUID;
 /**
  * Metadatos de un secreto del vault ({@code GET /api/v1/vault/secrets}, scope
  * {@code vault:read}). El listado NO expone el valor — sólo metadatos + el
- * cifrado usado (p. ej. {@code AES_256_GCM}). Usa {@link VaultSecret#get(String)}
+ * cifrado usado (p. ej. {@code AES_256_GCM}). Usa {@code VaultClient.get(key)}
  * para revelar el valor.
  */
 public record VaultSecretSummary(
