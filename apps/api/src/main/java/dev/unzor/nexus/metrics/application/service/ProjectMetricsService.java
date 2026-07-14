@@ -5,6 +5,7 @@ import dev.unzor.nexus.metrics.api.dto.MetricSeries;
 import dev.unzor.nexus.metrics.domain.entity.ProjectMetric;
 import dev.unzor.nexus.metrics.persistence.repository.ProjectMetricRepository;
 import dev.unzor.nexus.projects.application.service.ProjectLookupService;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,12 +42,23 @@ public class ProjectMetricsService {
         return MetricPoint.from(saved);
     }
 
+    /**
+     * Retención: borra los puntos anteriores al {@code cutoff} (todos los proyectos).
+     * Lo invoca el job programado de retención; el borrado es global porque es una
+     * preocupación de tamaño de la tabla, no de aislamiento.
+     */
+    @Transactional
+    public long purgeOlderThan(Instant cutoff) {
+        return repository.deleteOlderThan(cutoff);
+    }
+
     @Transactional(readOnly = true)
     public List<MetricSeries> seriesForProject(UUID projectId) {
         projectLookupService.requireById(projectId);
         // Top N reciente (DESC); se agrupa por nombre preservando el orden de
         // primera aparición (el más reciente primero).
-        List<ProjectMetric> recent = repository.findTop100ByProjectIdOrderByRecordedAtDesc(projectId);
+        List<ProjectMetric> recent = repository.findByProjectIdOrderByRecordedAtDesc(
+                projectId, PageRequest.of(0, RECENT_WINDOW));
         Map<String, List<ProjectMetric>> byName = new LinkedHashMap<>();
         for (ProjectMetric metric : recent) {
             byName.computeIfAbsent(metric.getName(), k -> new ArrayList<>()).add(metric);

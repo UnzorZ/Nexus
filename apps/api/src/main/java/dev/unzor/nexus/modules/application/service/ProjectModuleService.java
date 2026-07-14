@@ -65,11 +65,16 @@ public class ProjectModuleService {
                         (left, right) -> right
                 ));
 
+        // Carga los defaults del operador UNA sola vez (antes se llamaba a
+        // instanceSettings.defaultModuleKeys() dos veces por módulo, y el default se
+        // evaluaba eager dentro de getOrDefault aunque el módulo tuviera fila).
+        Optional<Set<String>> configuredDefaults = instanceSettings.defaultModuleKeys();
         return Arrays.stream(NexusModule.values())
-                .map(module -> new ProjectModuleStatus(
-                        module.key(),
-                        stored.getOrDefault(module, effectiveDefault(module)),
-                        effectiveDefault(module)))
+                .map(module -> {
+                    boolean effectiveDefault = effectiveDefault(module, configuredDefaults);
+                    boolean enabled = stored.getOrDefault(module, effectiveDefault);
+                    return new ProjectModuleStatus(module.key(), enabled, effectiveDefault);
+                })
                 .toList();
     }
 
@@ -94,8 +99,12 @@ public class ProjectModuleService {
      * si la ha definido, si no el del catálogo ({@link NexusModule#enabledByDefault()}).
      */
     private boolean effectiveDefault(NexusModule module) {
-        Optional<Set<String>> configured = instanceSettings.defaultModuleKeys();
-        return configured.map(keys -> keys.contains(module.key()))
+        return effectiveDefault(module, instanceSettings.defaultModuleKeys());
+    }
+
+    /** Igual que {@link #effectiveDefault(NexusModule)} reutilizando los defaults ya cargados. */
+    private boolean effectiveDefault(NexusModule module, Optional<Set<String>> configuredDefaults) {
+        return configuredDefaults.map(keys -> keys.contains(module.key()))
                 .orElseGet(module::enabledByDefault);
     }
 

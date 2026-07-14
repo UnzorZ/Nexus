@@ -5,6 +5,7 @@ import dev.unzor.nexus.admin.directory.AccountSummary;
 import dev.unzor.nexus.audit.api.dto.AuditEventView;
 import dev.unzor.nexus.audit.domain.entity.AuditLogEntry;
 import dev.unzor.nexus.audit.persistence.repository.AuditLogRepository;
+import jakarta.persistence.EntityManager;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -46,12 +47,14 @@ public class AuditQueryService {
     private final AuditLogRepository repository;
     private final AccountDirectory accountDirectory;
     private final ObjectMapper objectMapper;
+    private final EntityManager entityManager;
 
     public AuditQueryService(AuditLogRepository repository, AccountDirectory accountDirectory,
-                             ObjectMapper objectMapper) {
+                             ObjectMapper objectMapper, EntityManager entityManager) {
         this.repository = repository;
         this.objectMapper = objectMapper;
         this.accountDirectory = accountDirectory;
+        this.entityManager = entityManager;
     }
 
     @Transactional(readOnly = true)
@@ -89,23 +92,39 @@ public class AuditQueryService {
     /**
      * Exporta el log de un proyecto como NDJSON (un objeto JSON por línea, más
      * recientes primero) escribiendo directamente al {@link OutputStream} de la
-     * respuesta. Pagina internamente ({@link #EXPORT_SLICE_SIZE}) para acotar
-     * memoria; el {@code since} opcional acota por fecha. Cada línea es un
+     * respuesta. Pagina por <b>keyset</b> ({@link #EXPORT_SLICE_SIZE}) para acotar
+     * memoria y evitar el coste creciente del OFFSET en exports largos; entre
+     * slices se libera el contexto de persistencia (los puntos ya están
+     * serializados). El {@code since} opcional acota por fecha. Cada línea es un
      * {@link AuditEventView} sin enriquecer (registro crudo y portable).
      */
     @Transactional(readOnly = true)
     public void exportForProject(UUID projectId, Instant since, OutputStream out) throws IOException {
-        int page = 0;
+        Instant cursorAt = null;
+        UUID cursorId = null;
         List<AuditLogEntry> slice;
         do {
-            slice = since == null
-                    ? repository.findExportSliceByProject(projectId, PageRequest.of(page, EXPORT_SLICE_SIZE))
-                    : repository.findExportSliceByProjectAndSince(projectId, since, PageRequest.of(page, EXPORT_SLICE_SIZE));
+            Pageable page = PageRequest.of(0, EXPORT_SLICE_SIZE);
+            slice = cursorAt == null
+                    ? (since == null
+                            ? repository.findExportSliceByProject(projectId, page)
+                            : repository.findExportSliceByProjectAndSince(projectId, since, page))
+                    : (since == null
+                            ? repository.findExportSliceAfter(projectId, cursorAt, cursorId, page)
+                            : repository.findExportSliceAfterAndSince(projectId, since, cursorAt, cursorId, page));
             for (AuditLogEntry entry : slice) {
                 out.write(objectMapper.writeValueAsBytes(AuditEventView.from(entry)));
                 out.write('\n');
             }
-            page++;
+            if (slice.size() == EXPORT_SLICE_SIZE) {
+                // Avanza el cursor al último punto leído y libera el L1 cache: las
+                // entidades ya están serializadas al stream y no deben acumularse
+                // durante un export de miles de filas.
+                AuditLogEntry last = slice.get(slice.size() - 1);
+                cursorAt = last.getOccurredAt();
+                cursorId = last.getId();
+                entityManager.clear();
+            }
         } while (slice.size() == EXPORT_SLICE_SIZE);
         out.flush();
     }
