@@ -63,4 +63,30 @@ public interface AuditLogRepository extends Repository<AuditLogEntry, UUID> {
     List<AuditLogEntry> findExportSliceByProjectAndSince(@Param("projectId") UUID projectId,
                                                          @Param("since") Instant since,
                                                          Pageable pageable);
+
+    /**
+     * Export NDJSON con paginación <b>keyset</b>: la página siguiente empieza justo
+     * después del último punto leído, evitando el coste creciente del OFFSET en
+     * exports largos. El cursor {@code (cursorAt, cursorId)} va siempre no-null
+     * (la primera página usa {@link #findExportSliceByProject}); así Postgres tipa
+     * los parámetros por la comparación y no choca con el error de inferencia de
+     * tipos del patrón {@code :param IS NULL}.
+     */
+    @Query("SELECT e FROM AuditLogEntry e WHERE e.projectId = :projectId "
+            + "AND (e.occurredAt < :cursorAt OR (e.occurredAt = :cursorAt AND e.id < :cursorId)) "
+            + "ORDER BY e.occurredAt DESC, e.id DESC")
+    List<AuditLogEntry> findExportSliceAfter(@Param("projectId") UUID projectId,
+                                             @Param("cursorAt") Instant cursorAt,
+                                             @Param("cursorId") UUID cursorId,
+                                             Pageable pageable);
+
+    @Query("SELECT e FROM AuditLogEntry e "
+            + "WHERE e.projectId = :projectId AND e.occurredAt >= :since "
+            + "AND (e.occurredAt < :cursorAt OR (e.occurredAt = :cursorAt AND e.id < :cursorId)) "
+            + "ORDER BY e.occurredAt DESC, e.id DESC")
+    List<AuditLogEntry> findExportSliceAfterAndSince(@Param("projectId") UUID projectId,
+                                                     @Param("since") Instant since,
+                                                     @Param("cursorAt") Instant cursorAt,
+                                                     @Param("cursorId") UUID cursorId,
+                                                     Pageable pageable);
 }
