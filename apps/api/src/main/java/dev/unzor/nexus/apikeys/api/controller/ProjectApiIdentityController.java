@@ -1,5 +1,6 @@
 package dev.unzor.nexus.apikeys.api.controller;
 
+import dev.unzor.nexus.apikeys.api.ScopeFree;
 import dev.unzor.nexus.apikeys.security.ResolvedApiKey;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,6 +19,7 @@ import java.util.Map;
 class ProjectApiIdentityController {
 
     @GetMapping("/whoami")
+    @ScopeFree
     Map<String, Object> whoami(@AuthenticationPrincipal ResolvedApiKey apiKey) {
         return Map.of(
                 "projectId", apiKey.projectId(),
