@@ -1,0 +1,108 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'signing'
+    id 'org.springframework.boot' version '4.0.6'
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'dev.unzor.nexus.sdk'
+version = '0.0.1-SNAPSHOT'
+
+java {
+    toolchain { languageVersion = JavaLanguageVersion.of(21) }
+    withJavadocJar()
+    withSourcesJar()
+}
+
+repositories { mavenCentral() }
+
+// Es una librería (starter) consumida por apps cliente: el bootJar no aplica.
+// El plugin de Boot se aplica sólo para alinear la BOM (Spring Boot 4.0.6) y el
+// configuration-processor (@ConfigurationProperties metadata). Las deps van como
+// `api` para que el starter sea "one-stop": la app consume un único artefacto.
+bootJar { enabled = false }
+// El plugin de Boot pone classifier 'plain' al jar para no chocar con bootJar;
+// como publicamos el jar (no el bootJar), le quitamos el classifier para que el
+// artefacto principal sea nexus-spring-boot-sdk-<version>.jar (sin -plain).
+jar { enabled = true; archiveClassifier = '' }
+
+dependencies {
+    annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+
+    api 'org.springframework.boot:spring-boot-autoconfigure'
+    api 'org.springframework.boot:spring-boot-starter-webmvc'
+    api 'org.springframework.boot:spring-boot-starter-security'
+    api 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+    api 'org.springframework.boot:spring-boot-starter-oauth2-client'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+// Las dependencias vienen sin versión (las resuelve el BOM de Spring Boot vía
+// io.spring.dependency-management, que las vuelca al <dependencyManagement> del
+// POM). Desactivamos el .module de Gradle para publicar sólo el POM (patrón
+// habitual en starters de Spring Boot publicados a Maven Central): los
+// consumidores resuelven las versiones a través del BOM importado en el POM.
+tasks.withType(GenerateModuleMetadata).configureEach {
+    enabled = false
+}
+
+// --- Publicación a Maven Central (Sonatype Central Portal) ------------------
+// El POM lleva los metadatos que Central exige (name/description/url/license/
+// developers/scm); sources + javadoc jars via withSourcesJar/withJavadocJar.
+// La firma PGP y el upload a Central sólo se configuran cuando hay credenciales
+// (env o ~/.gradle/gradle.properties), para que los builds locales sigan sin ellas.
+publishing {
+    publications {
+        nexusSdk(MavenPublication) {
+            from components.java
+            // artifactId coincide con el nombre del módulo (nexus-spring-boot-sdk).
+            pom {
+                name = 'nexus-spring-boot-sdk'
+                description = 'One-stop Spring Boot SDK for apps that integrate with a Nexus control plane: OIDC login, resource-server JWT auth, permission authz (@perm), back-channel logout, heartbeat, permission snapshot cache, and typed clients.'
+                url = 'https://github.com/UnzorZ/Nexus'
+                licenses {
+                    license {
+                        // El SDK se publica bajo Apache-2.0 (permisiva) aunque el
+                        // servidor apps/api sea AGPL-3.0: maximiza la adopción del
+                        // cliente. LICENSE Apache-2.0 propia en este módulo.
+                        name = 'Apache License, Version 2.0'
+                        url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+                    }
+                }
+                developers {
+                    developer {
+                        id = 'UnzorZ'
+                        name = findProperty('nexusDeveloperName') ?: 'Unzor'
+                        email = findProperty('nexusDeveloperEmail') ?: ''
+                    }
+                }
+                scm {
+                    connection = 'scm:git:https://github.com/UnzorZ/Nexus.git'
+                    developerConnection = 'scm:git:ssh://git@github.com/UnzorZ/Nexus.git'
+                    url = 'https://github.com/UnzorZ/Nexus'
+                }
+            }
+        }
+    }
+}
+
+// Firma PGP sólo si hay clave (in-memory, apta para CI). Sin SIGNING_KEY, el
+// `publishToMavenLocal` sigue funcionando sin firmar.
+if (System.getenv('SIGNING_KEY') != null || project.hasProperty('signingKey')) {
+    signing {
+        useInMemoryPgpKeys(
+                System.getenv('SIGNING_KEY') ?: findProperty('signingKey'),
+                System.getenv('SIGNING_PASSWORD') ?: findProperty('signingPassword')
+        )
+        sign publishing.publications.nexusSdk
+    }
+}
+

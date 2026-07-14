@@ -1,4 +1,4 @@
-# Nexus reference client app — consumes the nexus-spring-boot-starter.
+# Nexus reference client app — consumes the nexus-spring-boot-sdk.
 #
 # Configure against a Nexus project:
 #   - an API key with scopes: registry:heartbeat, authz:snapshot,
@@ -43,4 +43,4 @@ nexus:
 logging:
   level:
     org.springframework.security: INFO
-    io.nexus.client: INFO
+    dev.unzor.nexus.sdk: INFO

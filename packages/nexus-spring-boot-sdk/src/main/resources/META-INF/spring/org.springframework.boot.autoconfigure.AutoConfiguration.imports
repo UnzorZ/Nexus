@@ -1,0 +1,2 @@
+dev.unzor.nexus.sdk.NexusAutoConfiguration
+dev.unzor.nexus.sdk.security.NexusSecurityAutoConfiguration
