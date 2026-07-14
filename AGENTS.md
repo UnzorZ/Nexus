@@ -552,6 +552,37 @@ Gradle wrapper files.
 
 Do not edit wrapper files manually unless intentionally upgrading Gradle.
 
+## Versioning
+
+All modules publish under the **`dev.unzor.nexus`** groupId umbrella (verifiable on
+Maven Central via the `unzor.dev` domain — once `dev.unzor` is verified, the whole
+`dev.unzor.nexus.*` subtree is covered). The `dev.unzor.nexus` prefix is shared
+across this and other projects to avoid coordinate collisions.
+
+**Each module is versioned independently.** There is no shared release train: in a
+given iteration, bump only the module(s) whose code actually changed. If a change
+touches only `apps/api` and the starter, only those two bump — `examples/` stays
+put. Each module keeps its own `version` in its `build.gradle`.
+
+Version scheme is **Semantic Versioning** (`MAJOR.MINOR.PATCH`):
+
+- **MAJOR** — incompatible / breaking change (e.g. a published API/contract change,
+  a removed method, a changed behavior consumers depend on).
+- **MINOR** — new, backwards-compatible feature.
+- **PATCH** — bugfix / hotfix (no new surface, no breakage).
+
+Until the public surfaces stabilize, modules stay on **`0.x`** (pre-1.0): `0.x`
+allows breaking changes between minors without a MAJOR bump, so iterate freely and
+cut `1.0.0` per module only when that module's API is considered stable.
+
+Only **`dev.unzor.nexus.client:nexus-spring-boot-starter`** is published to Maven Central.
+`apps/api` (`dev.unzor.nexus:nexus-api`) is the self-hosted server and
+`examples/spring-client-app` (`dev.unzor.nexus.example:nexus-spring-client-app`) are
+not published — they keep internal `0.0.x-SNAPSHOT` versions until/unless published.
+
+When you change a module in an iteration, update its `version` per the rules above
+before committing/merging. Do not bump unchanged modules.
+
 ## Root Files
 
 ### settings.gradle
