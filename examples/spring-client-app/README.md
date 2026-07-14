@@ -1,10 +1,10 @@
-# Nexus — Spring Boot 4 reference client app (uses `nexus-spring-boot-starter`)
+# Nexus — Spring Boot 4 reference client app (uses `nexus-spring-boot-sdk`)
 
 A self-contained reference application that integrates with a **Nexus** project as
 both an **OIDC client** (logs users in via Nexus) **and a resource server**
 (protects its own `/api/**` with Nexus-issued JWTs) **and a managed instance**
 (heartbeats, declares its permissions, caches permission snapshots, receives
-back-channel logout). It consumes the [`nexus-spring-boot-starter`](../../packages/nexus-spring-boot-starter)
+back-channel logout). It consumes the [`nexus-spring-boot-sdk`](../../packages/nexus-spring-boot-sdk)
 — one dependency — instead of hand-wiring Spring Security.
 
 > The app itself is ~6 controllers + a couple of beans; **all** the integration
@@ -138,6 +138,6 @@ empty / missing / unrelated → 403).
 
 ## Further reading
 
-- Starter: [`packages/nexus-spring-boot-starter`](../../packages/nexus-spring-boot-starter)
+- Starter: [`packages/nexus-spring-boot-sdk`](../../packages/nexus-spring-boot-sdk)
 - Spec §14.3 (permission glob), §14.11 (snapshot), §18 (SDK)
 - ADR-0003 (permission model), ADR-0016 (multi-issuer OAuth)

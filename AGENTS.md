@@ -12,7 +12,7 @@ Use this file as the source of truth for where new code and documents should liv
 │   ├── api/
 │   └── web/
 ├── packages/
-│   └── nexus-spring-boot-starter/
+│   └── nexus-spring-boot-sdk/
 ├── docs/
 │   ├── adr/
 │   ├── api/
@@ -451,14 +451,14 @@ Reusable packages, SDKs, and framework integrations that are consumed by applica
 
 Packages are not product modules. Product behavior belongs in `apps/api`; integration helpers belong here.
 
-### packages/nexus-spring-boot-starter
+### packages/nexus-spring-boot-sdk
 
 One-stop Java SDK / Spring Boot starter for applications that integrate with Nexus.
 A single dependency autoconfigures both halves: **security** (OIDC login, local JWT
 validation, `@perm` permission authz, RP-initiated + back-channel logout) and
 **management** (heartbeat, permission declaration sync, permission snapshot cache,
 notify) from the `nexus.*` properties. Root Gradle module
-(`:packages:nexus-spring-boot-starter`), library (bootJar disabled), zero dependency
+(`:packages:nexus-spring-boot-sdk`), library (bootJar disabled), zero dependency
 on the backend (Nexus reached only over HTTP). The `examples/spring-client-app` is a
 root module too and consumes this starter.
 
@@ -520,7 +520,7 @@ Example apps that consume Nexus.
 
 Reference Spring Boot 4 app connected to Nexus — a root Gradle module
 (`:examples:nexus-spring-client-app`) that consumes the
-`nexus-spring-boot-starter` and demos every feature: OIDC login, resource-server
+`nexus-spring-boot-sdk` and demos every feature: OIDC login, resource-server
 JWT authz (`@perm`), permission snapshot, heartbeat, permission declaration,
 notify, and back-channel logout. See its `README.md` for the capability matrix
 and the end-to-end walkthrough.
@@ -551,6 +551,37 @@ Do not put application logic in scripts. If code is required at runtime, it belo
 Gradle wrapper files.
 
 Do not edit wrapper files manually unless intentionally upgrading Gradle.
+
+## Versioning
+
+All modules publish under the **`dev.unzor.nexus`** groupId umbrella (verifiable on
+Maven Central via the `unzor.dev` domain — once `dev.unzor` is verified, the whole
+`dev.unzor.nexus.*` subtree is covered). The `dev.unzor.nexus` prefix is shared across
+this and other projects to avoid coordinate collisions.
+
+Module coordinates:
+
+- **`dev.unzor.nexus:nexus-api`** — the self-hosted server (`apps/api`), package `dev.unzor.nexus.*`.
+- **`dev.unzor.nexus.sdk:nexus-spring-boot-sdk`** — the client SDK/starter (`packages/nexus-spring-boot-sdk`), package `dev.unzor.nexus.sdk` (groupId = base package).
+- **`dev.unzor.nexus.example:nexus-spring-client-app`** — the reference app (`examples/spring-client-app`).
+
+**Each module is versioned independently.** There is no shared release train: in a
+given iteration, bump only the module(s) whose code actually changed. Each module
+keeps its own `version` in its `build.gradle`.
+
+Version scheme is **Semantic Versioning** (`MAJOR.MINOR.PATCH`):
+
+- **MAJOR** — incompatible / breaking change.
+- **MINOR** — new, backwards-compatible feature.
+- **PATCH** — bugfix / hotfix.
+
+Until the public surfaces stabilize, modules stay on **`0.x`** (pre-1.0); cut `1.0.0`
+per module only when that module's API is considered stable.
+
+Only **`dev.unzor.nexus.sdk:nexus-spring-boot-sdk`** is published to Maven Central;
+the server and the example keep internal `0.0.x-SNAPSHOT` versions. When you change a
+module in an iteration, update its `version` per the rules above; do not bump
+unchanged modules.
 
 ## Root Files
 
