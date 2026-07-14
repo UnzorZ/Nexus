@@ -80,7 +80,7 @@ public class BackChannelLogoutService {
     private void send(BackChannelLogoutTarget client, BackChannelLogoutRequested event) {
         String logoutToken;
         try {
-            logoutToken = tokenIssuer.issue(event.issuer(), event.principalName()).getTokenValue();
+            logoutToken = tokenIssuer.issue(event.issuer(), event.principalName(), client.clientId()).getTokenValue();
         } catch (Exception e) {
             log.warn("Back-channel logout: no se pudo emitir el token para el cliente {}: {}",
                     client.clientId(), e.getMessage());
