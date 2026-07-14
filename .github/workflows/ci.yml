@@ -45,7 +45,7 @@ jobs:
           java-version: '21'
           cache: gradle
       - name: Starter + example compile + tests
-        run: ./gradlew :packages:nexus-spring-boot-starter:test :examples:nexus-spring-client-app:test --no-daemon --console=plain
+        run: ./gradlew :packages:nexus-spring-boot-sdk:test :examples:nexus-spring-client-app:test --no-daemon --console=plain
 
   web:
     name: Dashboard (lint + build)

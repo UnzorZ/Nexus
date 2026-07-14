@@ -245,7 +245,7 @@ Permissions are positive-only in MVP.
                        └──────────────┘
 
          ┌─────────────────────────────────────────────┐
-         │ Java apps with nexus-spring-boot-starter    │
+         │ Java apps with nexus-spring-boot-sdk    │
          │ API key + heartbeat + authz snapshot cache  │
          └─────────────────────────────────────────────┘
 ```
@@ -255,7 +255,7 @@ Permissions are positive-only in MVP.
 Recommended package structure:
 
 ```text
-com.unzor.nexus
+dev.unzor.nexus
 ├── NexusApplication.java
 ├── shared
 │   ├── api
@@ -1360,14 +1360,14 @@ Panel session is established on the API host (`/panel/login`). The dashboard cal
 
 ### 18.1 Artifact
 
-The starter lives at `packages/nexus-spring-boot-starter/` (root Gradle module,
-`group = com.unzor`). In the monorepo, apps depend on it directly:
+The starter lives at `packages/nexus-spring-boot-sdk/` (root Gradle module,
+`group = dev.unzor.nexus.sdk`). In the monorepo, apps depend on it directly:
 
 ```groovy
-implementation project(':packages:nexus-spring-boot-starter')
+implementation project(':packages:nexus-spring-boot-sdk')
 ```
 
-When published (future), the coordinate is `com.unzor:nexus-spring-boot-starter`
+When published (future), the coordinate is `dev.unzor.nexus.sdk:nexus-spring-boot-sdk`
 (currently `0.0.1-SNAPSHOT`). The example app `examples/spring-client-app` consumes it.
 
 ### 18.2 Configuration
@@ -1393,7 +1393,7 @@ nexus:
 
 ### 18.3 SDK Responsibilities
 
-The starter (`nexus-spring-boot-starter`, **implemented**) autoconfigures two halves from `nexus.*`:
+The starter (`nexus-spring-boot-sdk`, **implemented**) autoconfigures two halves from `nexus.*`:
 
 **Management** (active on `nexus.url`):
 
@@ -1781,14 +1781,14 @@ Deliverables:
 
 ### Phase 5: Java SDK
 
-> **Status: ✅ DONE.** The `nexus-spring-boot-starter` (see §18) and the
+> **Status: ✅ DONE.** The `nexus-spring-boot-sdk` (see §18) and the
 > reference app `examples/spring-client-app` are implemented and tested.
 
 Goal: make Java app integration easy.
 
 Deliverables:
 
-- `nexus-spring-boot-starter`.
+- `nexus-spring-boot-sdk`.
 - Auto-configuration.
 - API key configuration.
 - Heartbeat client.
