@@ -4,9 +4,9 @@ plugins {
     id 'io.spring.dependency-management' version '1.1.7'
 }
 
-group = 'io.nexus.example'
+group = 'dev.unzor.nexus.example'
 version = '0.0.1-SNAPSHOT'
-description = 'Nexus reference client app (uses the nexus-spring-boot-starter)'
+description = 'Nexus reference client app (uses the nexus-spring-boot-sdk)'
 
 java {
     toolchain { languageVersion = JavaLanguageVersion.of(21) }
@@ -17,7 +17,7 @@ repositories { mavenCentral() }
 dependencies {
     // El starter aporta Spring Security OAuth2 (client + resource server) +
     // webmvc + el cliente de gestión de Nexus. La app sólo añade Thymeleaf.
-    implementation project(':packages:nexus-spring-boot-starter')
+    implementation project(':packages:nexus-spring-boot-sdk')
     implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
