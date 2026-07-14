@@ -68,11 +68,22 @@ function ProjectCard({
   const tone = toneMap[project.status];
   const router = useRouter();
 
+  const open = () => router.push(`/projects/${project.id}`);
+
   return (
     <motion.div
       variants={fadeUp}
-      onClick={() => router.push(`/projects/${project.id}`)}
-      className="group cursor-pointer"
+      role="link"
+      tabIndex={0}
+      aria-label={`Open project ${project.name}`}
+      onClick={open}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          open();
+        }
+      }}
+      className="group cursor-pointer rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     >
       <Card className="h-full transition-[border-color,box-shadow] duration-150 hover:border-primary/30 hover:shadow-sm">
         <CardHeader>
