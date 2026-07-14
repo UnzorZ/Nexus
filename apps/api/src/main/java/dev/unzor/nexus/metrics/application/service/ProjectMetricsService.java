@@ -55,22 +55,23 @@ public class ProjectMetricsService {
     @Transactional(readOnly = true)
     public List<MetricSeries> seriesForProject(UUID projectId) {
         projectLookupService.requireById(projectId);
-        // Top N reciente (DESC); se agrupa por nombre preservando el orden de
-        // primera aparición (el más reciente primero).
+        // Top N reciente (DESC); se agrupa por (nombre + tags) para que cada tagset
+        // sea su propia serie (M7c2). Orden de primera aparición = el más reciente primero.
         List<ProjectMetric> recent = repository.findByProjectIdOrderByRecordedAtDesc(
                 projectId, PageRequest.of(0, RECENT_WINDOW));
-        Map<String, List<ProjectMetric>> byName = new LinkedHashMap<>();
+        Map<String, List<ProjectMetric>> bySeries = new LinkedHashMap<>();
         for (ProjectMetric metric : recent) {
-            byName.computeIfAbsent(metric.getName(), k -> new ArrayList<>()).add(metric);
+            bySeries.computeIfAbsent(seriesKey(metric), k -> new ArrayList<>()).add(metric);
         }
         List<MetricSeries> series = new ArrayList<>();
-        for (Map.Entry<String, List<ProjectMetric>> entry : byName.entrySet()) {
-            List<ProjectMetric> desc = entry.getValue(); // DESC: el primero es el más reciente
+        for (List<ProjectMetric> group : bySeries.values()) {
+            List<ProjectMetric> desc = group; // DESC: el primero es el más reciente
             List<MetricPoint> asc = new ArrayList<>(desc.stream().map(MetricPoint::from).toList());
             Collections.reverse(asc); // cronológico para graficar
             ProjectMetric latest = desc.get(0);
             series.add(new MetricSeries(
-                    entry.getKey(),
+                    latest.getName(),
+                    latest.getTags(),
                     latest.getValue(),
                     latest.getRecordedAt(),
                     desc.size(),
@@ -78,5 +79,20 @@ public class ProjectMetricsService {
             ));
         }
         return series;
+    }
+
+    /** Clave estable (nombre + tags ordenados) para agrupar puntos en una serie. */
+    private static String seriesKey(ProjectMetric metric) {
+        Map<String, String> tags = metric.getTags();
+        if (tags == null || tags.isEmpty()) {
+            return metric.getName();
+        }
+        List<String> keys = new ArrayList<>(tags.keySet());
+        Collections.sort(keys);
+        StringBuilder sb = new StringBuilder(metric.getName());
+        for (String k : keys) {
+            sb.append(',').append(k).append('=').append(tags.get(k));
+        }
+        return sb.toString();
     }
 }

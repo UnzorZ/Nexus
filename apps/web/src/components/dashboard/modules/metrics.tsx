@@ -41,9 +41,22 @@ function chartData(series: MetricSeries) {
     .reverse();
 }
 
+/** Clave estable (nombre + tags ordenados): distingue series del mismo nombre con
+ *  tagsets distintos (M7c2) — usada como React key y para el id del gradient SVG. */
+function seriesKey(series: MetricSeries): string {
+  const tags = series.tags ?? {};
+  const tagPart = Object.keys(tags)
+    .sort()
+    .map((k) => `${k}=${tags[k]}`)
+    .join(",");
+  return tagPart ? `${series.name}|${tagPart}` : series.name;
+}
+
 function MetricSeriesCard({ series }: { series: MetricSeries }) {
   const data = chartData(series);
-  const gradientId = `metric-grad-${series.name.replace(/[^a-z0-9]/gi, "")}`;
+  const gradientId = `metric-grad-${seriesKey(series).replace(/[^a-z0-9]/gi, "")}`;
+  const tags = series.tags ?? {};
+  const tagEntries = Object.keys(tags).sort().map((k) => [k, tags[k]] as const);
   return (
     <Panel>
       <div className="flex items-start justify-between gap-3">
@@ -51,6 +64,18 @@ function MetricSeriesCard({ series }: { series: MetricSeries }) {
           <code className="truncate font-mono text-sm font-semibold text-foreground">
             {series.name}
           </code>
+          {tagEntries.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {tagEntries.map(([k, v]) => (
+                <span
+                  key={k}
+                  className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
+                >
+                  {k}={v}
+                </span>
+              ))}
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <StatusBadge tone="emerald" dot>
               {formatValue(series.lastValue)}
@@ -167,7 +192,7 @@ export function MetricsModule() {
           />
         </Panel>
       ) : (
-        series.map((s) => <MetricSeriesCard key={s.name} series={s} />)
+        series.map((s) => <MetricSeriesCard key={seriesKey(s)} series={s} />)
       )}
     </Stagger>
   );
