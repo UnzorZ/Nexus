@@ -9,13 +9,14 @@ export type MetricPoint = {
 
 export type MetricSeries = {
   name: string;
+  tags: Record<string, string>;
   lastValue: number;
   lastRecordedAt: string;
   pointCount: number;
   points: MetricPoint[];
 };
 
-/** Series de métricas agregadas por nombre (panel). */
+/** Series de métricas agregadas por (nombre + tags) — cada tagset es su propia serie. */
 export async function fetchMetrics(
   projectId: string,
 ): Promise<MetricSeries[]> {

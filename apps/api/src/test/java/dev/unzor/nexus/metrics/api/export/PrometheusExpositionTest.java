@@ -13,26 +13,24 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PrometheusExpositionTest {
 
     @Test
-    void emitsHelpAndTypeGaugeWithLatestValuePerTagset() {
-        Instant t1 = Instant.parse("2026-07-10T10:00:00Z");
+    void emitsHelpTypeAndLatestValueForSingleSeries() {
         Instant t2 = Instant.parse("2026-07-10T10:01:00Z");
-        MetricSeries series = new MetricSeries("demo_requests", 7, t2, 2,
-                List.of(new MetricPoint(5, Map.of(), t1), new MetricPoint(7, Map.of(), t2)));
+        // lastValue ya es el más reciente; el formatter no rederiva desde los puntos.
+        MetricSeries series = new MetricSeries("demo_requests", Map.of(), 7, t2, 2,
+                List.of(new MetricPoint(5, Map.of(), Instant.parse("2026-07-10T10:00:00Z")),
+                        new MetricPoint(7, Map.of(), t2)));
 
         String out = PrometheusExposition.format(List.of(series));
 
-        // Una sola muestra (la más reciente) por tagset, sin timestamp.
         assertThat(out).contains("# HELP demo_requests demo_requests");
         assertThat(out).contains("# TYPE demo_requests gauge");
         assertThat(out).contains("demo_requests 7.0\n");
-        // El punto viejo no se emite por separado (dedupe).
-        assertThat(out).doesNotContain("demo_requests 5.0");
     }
 
     @Test
     void mapsTagsToSortedLabelsAndEscapesValues() {
-        MetricSeries series = new MetricSeries("queue.depth", 3, Instant.EPOCH, 1,
-                List.of(new MetricPoint(3, Map.of("region", "eu", "env", "prod"), Instant.EPOCH)));
+        MetricSeries series = new MetricSeries("queue.depth", Map.of("region", "eu", "env", "prod"), 3,
+                Instant.EPOCH, 1, List.of(new MetricPoint(3, Map.of("region", "eu", "env", "prod"), Instant.EPOCH)));
 
         String out = PrometheusExposition.format(List.of(series));
 
@@ -42,8 +40,8 @@ class PrometheusExpositionTest {
 
     @Test
     void sanitizesMetricAndLabelNames() {
-        MetricSeries series = new MetricSeries("orders.created.total", 1, Instant.EPOCH, 1,
-                List.of(new MetricPoint(1, Map.of("http.status", "200"), Instant.EPOCH)));
+        MetricSeries series = new MetricSeries("orders.created.total", Map.of("http.status", "200"), 1,
+                Instant.EPOCH, 1, List.of(new MetricPoint(1, Map.of("http.status", "200"), Instant.EPOCH)));
 
         String out = PrometheusExposition.format(List.of(series));
 
@@ -53,7 +51,7 @@ class PrometheusExpositionTest {
 
     @Test
     void escapesSpecialCharsInLabelValues() {
-        MetricSeries series = new MetricSeries("m", 1, Instant.EPOCH, 1,
+        MetricSeries series = new MetricSeries("m", Map.of("k", "a\"b\\c\nd"), 1, Instant.EPOCH, 1,
                 List.of(new MetricPoint(1, Map.of("k", "a\"b\\c\nd"), Instant.EPOCH)));
 
         String out = PrometheusExposition.format(List.of(series));
@@ -62,29 +60,29 @@ class PrometheusExpositionTest {
     }
 
     @Test
-    void emptySeriesProducesEmptyBody() {
-        assertThat(PrometheusExposition.format(List.of())).isEqualTo("");
-        assertThat(PrometheusExposition.format(null)).isEqualTo("");
+    void multipleSeriesSameNameEmitHelpTypeOnceAndOneSamplePerTagset() {
+        Instant t2 = Instant.parse("2026-07-10T10:01:00Z");
+        // Mismo nombre, dos tagsets → dos series (M7c2). HELP/TYPE una sola vez por nombre.
+        MetricSeries a = new MetricSeries("temp", Map.of("host", "a"), 88, t2, 2,
+                List.of(new MetricPoint(80, Map.of("host", "a"), Instant.parse("2026-07-10T10:00:00Z")),
+                        new MetricPoint(88, Map.of("host", "a"), t2)));
+        MetricSeries b = new MetricSeries("temp", Map.of("host", "b"), 90, t2, 2,
+                List.of(new MetricPoint(85, Map.of("host", "b"), Instant.parse("2026-07-10T10:00:00Z")),
+                        new MetricPoint(90, Map.of("host", "b"), t2)));
+
+        String out = PrometheusExposition.format(List.of(a, b));
+
+        assertThat(out.chars().filter(c -> c == '\n').count()).as("HELP + TYPE + 2 samples = 4 lines").isEqualTo(4L);
+        // HELP/TYPE una sola vez
+        assertThat(out.indexOf("# TYPE temp gauge")).isEqualTo(out.lastIndexOf("# TYPE temp gauge"));
+        assertThat(out).contains("temp{host=\"a\"} 88.0");
+        assertThat(out).contains("temp{host=\"b\"} 90.0");
     }
 
     @Test
-    void dedupesByTagsetKeepingLatestAcrossTagsets() {
-        Instant t1 = Instant.parse("2026-07-10T10:00:00Z");
-        Instant t2 = Instant.parse("2026-07-10T10:01:00Z");
-        // Misma métrica, dos tagsets distintos, varios puntos cada uno.
-        MetricSeries series = new MetricSeries("temp", 90, t2, 4, List.of(
-                new MetricPoint(80, Map.of("host", "a"), t1),
-                new MetricPoint(85, Map.of("host", "b"), t1),
-                new MetricPoint(88, Map.of("host", "a"), t2),
-                new MetricPoint(90, Map.of("host", "b"), t2)));
-
-        String out = PrometheusExposition.format(List.of(series));
-
-        // Un valor latest por host (a=88, b=90), no los viejos.
-        assertThat(out).contains("temp{host=\"a\"} 88.0");
-        assertThat(out).contains("temp{host=\"b\"} 90.0");
-        assertThat(out).doesNotContain("temp{host=\"a\"} 80.0");
-        assertThat(out).doesNotContain("temp{host=\"b\"} 85.0");
+    void emptySeriesProducesEmptyBody() {
+        assertThat(PrometheusExposition.format(List.of())).isEqualTo("");
+        assertThat(PrometheusExposition.format(null)).isEqualTo("");
     }
 
     @Test
