@@ -168,6 +168,23 @@ class ProjectApiRuntimeTests {
                 .andExpect(jsonPath("$.ok").value(true));
     }
 
+    @Test
+    void unannotatedEndpointIsDeniedByDefaultForAnyValidKey() throws Exception {
+        String ownerEmail = unique("rt-deny");
+        registerAccount(ownerEmail);
+        LoginSession owner = login(ownerEmail);
+        String projectId = createProject(owner, randomSlug("rt"));
+        // Deny-by-default (M5): un endpoint /api/v1/** sin @RequiredScope ni
+        // @ScopeFree se deniega para una key autenticada válida — depende del
+        // endpoint, no de los scopes de la key.
+        String key = createKey(owner, projectId,
+                "{\"name\":\"CI\",\"scopes\":[\"other:thing\"],\"expiresAt\":null}");
+
+        mockMvc.perform(get("/api/v1/test/unscoped").header("X-Nexus-Api-Key", key))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("scope_required"));
+    }
+
     // --- helpers -----------------------------------------------------------------
 
     private record CreatedKey(String id, String key) {
