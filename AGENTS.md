@@ -459,8 +459,12 @@ validation, `@perm` permission authz, RP-initiated + back-channel logout) and
 **management** (heartbeat, permission declaration sync, permission snapshot cache,
 notify) from the `nexus.*` properties. Root Gradle module
 (`:packages:nexus-spring-boot-sdk`), library (bootJar disabled), zero dependency
-on the backend (Nexus reached only over HTTP). The `examples/spring-client-app` is a
-root module too and consumes this starter.
+on the backend (Nexus reached only over HTTP).
+
+**Published on Maven Central** as `dev.unzor.nexus.sdk:nexus-spring-boot-sdk`
+(Apache-2.0; the server `apps/api` stays AGPL-3.0). The `examples/spring-client-app`
+consumes it from Central (not the local project) to model a real integration; the
+example's Spring Boot BOM resolves the SDK's transitive versions.
 
 Put here:
 
