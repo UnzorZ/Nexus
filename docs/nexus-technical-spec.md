@@ -1,12 +1,20 @@
 # Nexus Technical Specification
 
 Version: 0.1  
-Status: Draft for implementation planning  
+Status: Design specification — implementation is live (see note below)  
 Primary audience: project owner, future contributors, future SDK implementers
 
 ## 1. Executive Summary
 
-Nexus is a personal control plane for backend projects. It centralizes common platform capabilities that would otherwise be duplicated across applications: project registry, API keys, isolated project authentication, permission management, notifications, audit, module configuration, and future shared infrastructure services.
+> **Implementation status.** This document is the **original design specification** for
+> Nexus. It captures intent and scope; many "MVP"/"future" statements below are scope
+> framing rather than open work. For what is actually built today, see
+> [`AGENTS.md`](../AGENTS.md) (module list, §Versioning, §SDK) and the root
+> [`README.md`](../README.md). The client SDK (`dev.unzor.nexus.sdk:nexus-spring-boot-sdk`)
+> is **published on Maven Central**; the server is at v0.1.0 with the full control plane
+> implemented and security-audited.
+
+Nexus is a personal control plane for backend projects. It centralizes common platform capabilities that would otherwise be duplicated across applications: project registry, API keys, isolated project authentication, permission management, notifications, audit, module configuration, an encrypted secrets vault, app metrics, and other shared infrastructure services.
 
 The initial deployment target is personal use, but the architecture must remain clean enough to become open source later. Nexus will run without Kubernetes, preferably with Docker or a local server installation. The first supported application stack is Java/Spring Boot, but all public integration contracts must be HTTP/OpenAPI-first so SDKs can later be created for other languages.
 
@@ -54,7 +62,7 @@ Nexus manages:
 - authorization checks,
 - audit events,
 - health and heartbeat status,
-- future modules such as Notify, Storage, Vault, Config, Metrics, Backups, and Document Generation.
+- operational modules — Notify, Vault, Config, and Metrics are implemented today; Storage, Backups, and Document Generation remain future candidates (see §23 Roadmap).
 
 ### 3.2 What Nexus Is Not
 
@@ -103,7 +111,7 @@ Nexus Instance
 
 ### 5.1 Nexus Instance
 
-A single running installation of Nexus. For personal use, there will usually be one production instance at a stable domain such as `nexus.unzor.xyz`.
+A single running installation of Nexus. For personal use, there will usually be one production instance at a stable domain such as `nexus.example.com`.
 
 ### 5.2 Nexus Account
 
@@ -1183,7 +1191,7 @@ https://nexus.example.com/p/{projectSlug}
 Example:
 
 ```text
-https://nexus.unzor.xyz/p/f-shop
+https://nexus.example.com/p/f-shop
 ```
 
 Recommended endpoints:
@@ -1201,7 +1209,7 @@ JWT claims:
 
 ```json
 {
-  "iss": "https://nexus.unzor.xyz/p/f-shop",
+  "iss": "https://nexus.example.com/p/f-shop",
   "sub": "usr_123",
   "aud": "fshop-api",
   "exp": 1770000000,
@@ -1360,21 +1368,24 @@ Panel session is established on the API host (`/panel/login`). The dashboard cal
 
 ### 18.1 Artifact
 
-The starter lives at `packages/nexus-spring-boot-sdk/` (root Gradle module,
-`group = dev.unzor.nexus.sdk`). In the monorepo, apps depend on it directly:
+The SDK lives at `packages/nexus-spring-boot-sdk/` (root Gradle module,
+`group = dev.unzor.nexus.sdk`). It is **published on Maven Central** as
+`dev.unzor.nexus.sdk:nexus-spring-boot-sdk` (current release **`0.1.0`**, Apache-2.0):
 
 ```groovy
-implementation project(':packages:nexus-spring-boot-sdk')
+implementation 'dev.unzor.nexus.sdk:nexus-spring-boot-sdk:0.1.0'
 ```
 
-When published (future), the coordinate is `dev.unzor.nexus.sdk:nexus-spring-boot-sdk`
-(currently `0.0.1-SNAPSHOT`). The example app `examples/spring-client-app` consumes it.
+Within the monorepo, modules may instead depend on the Gradle project directly
+(`implementation project(':packages:nexus-spring-boot-sdk')`). The reference app
+`examples/spring-client-app` consumes the **published** coordinate from Central — to
+model a real external integration rather than a local project link.
 
 ### 18.2 Configuration
 
 ```yaml
 nexus:
-  url: https://nexus.unzor.xyz
+  url: https://nexus.example.com
   api-key: ${NEXUS_API_KEY}
   app-name: F-Shop API
   instance-id: fshop-api-main-01
@@ -1438,8 +1449,9 @@ heartbeat — needs no `nexus.url`):
   the logout token and publishes a `NexusBackChannelLogoutEvent` for the app to
   invalidate the session.
 
-The starter reaches Nexus over four project-API endpoints (API-key auth,
-`@RequiredScope`-enforced):
+The SDK reaches Nexus over the project-API endpoints below (API-key auth,
+`@RequiredScope`-enforced). The API key is also accepted as `Authorization: Bearer
+<key>` anywhere under `/api/v1/**`, which is how Prometheus scrapes the metrics export.
 
 | Endpoint | Scope | Purpose |
 |---|---|---|
@@ -1447,6 +1459,12 @@ The starter reaches Nexus over four project-API endpoints (API-key auth,
 | `GET /api/v1/authz/users/{userId}/snapshot` | `authz:snapshot` | effective permissions + `authzVersion` (§14.11) |
 | `POST /api/v1/permissions/declare` | `permissions:declare` | app-declared permission-catalog sync |
 | `POST /api/v1/notify/send` | `notify:send` | outbound notifications |
+| `GET /api/v1/config/values[/{key}]` | `config:read` | read project config values |
+| `GET /api/v1/vault/secrets[/{key}]` | `vault:read` | list secret metadata / reveal a secret |
+| `POST /api/v1/metrics/record` | `metrics:write` | append a metric point |
+
+(The Prometheus export `GET /api/v1/metrics/export`, scope `metrics:read`, is scraped
+directly by Prometheus — not via the SDK.)
 
 Permission declaration is **app-scoped**: the SDK sends `X-Nexus-App: <app-name>`,
 so a declare call only reconciles (marks missing) the permissions that app owns
@@ -1696,6 +1714,11 @@ ADRs should document decisions, not obvious implementation details. Good ADR top
 
 ## 23. Roadmap
 
+> **Status (v0.1.0).** Phases 0–6 are **implemented and shipped**, and the Java SDK
+> (`nexus-spring-boot-sdk`) is published on Maven Central (§18). Phase 7 lists
+> additional shared services: **Vault, Config, and Metrics are implemented**; the rest
+> remain future candidates.
+
 ### Phase 0: Bootstrap
 
 Goal: create a runnable foundation.
@@ -1800,6 +1823,9 @@ Deliverables:
 
 ### Phase 6: Notify
 
+> **Status: ✅ DONE.** The `notify` module (templates, per-project + instance SMTP,
+> send endpoint, history, audit) and the SDK `NotifyClient` are implemented.
+
 Goal: centralize notifications.
 
 Deliverables:
@@ -1813,12 +1839,13 @@ Deliverables:
 
 ### Phase 7: Future Shared Services
 
+> **Status: partially done.** **Vault**, **Config**, and **Metrics** are implemented
+> (see §18.3 for the SDK clients and the Prometheus export). The candidates below
+> remain unbuilt future work.
+
 Candidate modules:
 
 - Storage,
-- Secrets Vault,
-- Config,
-- Metrics/Uptime,
 - Backup/Snapshot,
 - Document Generator,
 - Agent Hub,
@@ -1943,6 +1970,11 @@ npm run build
 - Do not add microservices before the modular monolith is under real pressure.
 
 ## 27. MVP Cut Line
+
+> **Status: ✅ met and exceeded (v0.1.0).** Everything below is implemented, plus
+> Notify, Vault, Config, Metrics, per-project OAuth/OIDC realms, TOTP MFA, the full
+> Next.js dashboard, and the published Java SDK. This is the first open-source release
+> baseline.
 
 The minimum useful Nexus should include:
 
