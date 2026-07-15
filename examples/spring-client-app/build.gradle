@@ -15,9 +15,10 @@ java {
 repositories { mavenCentral() }
 
 dependencies {
-    // El starter aporta Spring Security OAuth2 (client + resource server) +
-    // webmvc + el cliente de gestión de Nexus. La app sólo añade Thymeleaf.
-    implementation project(':packages:nexus-spring-boot-sdk')
+    // El SDK publicado en Maven Central aporta Spring Security OAuth2 (client +
+    // resource server) + webmvc + el cliente de gestión de Nexus. Sus versiones
+    // transitivas resuelven vía el BOM de Spring Boot (dependency-management).
+    implementation 'dev.unzor.nexus.sdk:nexus-spring-boot-sdk:0.1.0'
     implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'

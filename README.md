@@ -30,6 +30,34 @@ truth, and Redis for revocable sessions and bounded ephemeral state.
 
 ---
 
+## Integrate your apps — the client SDK
+
+Spring Boot apps integrate with Nexus via **`nexus-spring-boot-sdk`**, published on
+Maven Central. One dependency auto-configures OIDC login, resource-server JWT
+validation, `@perm` authorization, back-channel logout, heartbeat, permission
+snapshot cache, and typed clients (config / vault / metrics) — no backend
+dependency.
+
+**Gradle**
+```groovy
+implementation 'dev.unzor.nexus.sdk:nexus-spring-boot-sdk:0.1.0'
+```
+
+**Maven**
+```xml
+<dependency>
+  <groupId>dev.unzor.nexus.sdk</groupId>
+  <artifactId>nexus-spring-boot-sdk</artifactId>
+  <version>0.1.0</version>
+</dependency>
+```
+
+See [`packages/nexus-spring-boot-sdk`](packages/nexus-spring-boot-sdk) for the SDK
+README and [`examples/spring-client-app`](examples/spring-client-app) for a runnable
+reference app. (SDK = Apache-2.0; the Nexus server remains AGPL-3.0.)
+
+---
+
 ## Who is this for
 
 - **Teams running several apps/services** that want shared, project-scoped
