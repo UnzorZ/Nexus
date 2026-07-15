@@ -53,6 +53,29 @@ What we are protecting:
 | **Misconfigured production** | Fail-closed startup guard + VaultCrypto abort when dev keystore / dev master key are used outside dev profiles | `IdentityStartupGuard`, `VaultCrypto` |
 | **Information disclosure via Actuator** | Only `health` (+ liveness/readiness) and `prometheus` are public; the rest require HTTP Basic | `SecurityConfiguration` |
 
+## Security Audit & Remediation
+
+A focused security audit (2026-07-13) reviewed this threat model against the
+implementation and produced twelve findings (M1–M7, F1, plus frontend/follow-up
+items). As of **v0.1.0**, **all audit findings are remediated on `master`**:
+
+- cross-project **realm isolation** hardening (iss validation, key sharing model);
+- **user/session revocation** completeness (account lifecycle → Redis teardown);
+- **archived-project** teardown paths — logout / session-revoke stay operational when
+  a realm is archived (F1);
+- **back-channel logout token** validation (`aud` bound to the client, required
+  `iat` + `jti`);
+- API-key scope **deny-by-default** — every project-API endpoint requires a scope,
+  with an explicit opt-out annotation (M5);
+- **forwarded-headers / reverse-proxy trust** (`server.forward-headers-strategy=native`,
+  see `docs/deployment/reverse-proxy.md`);
+- **audit export performance** (keyset pagination) and **metrics** tag-grouping +
+  Prometheus exposition + retention (M7).
+
+Frontend **a11y** and a **vitest** test baseline landed alongside. The single
+deferred item (#3b) is a cross-module validation seam with no security impact.
+Tracking: PRs #70–#83.
+
 ## Open / Accepted Risks
 
 - `/actuator/prometheus` is public by default to ease scraping from a trusted network.
