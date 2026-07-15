@@ -4,9 +4,10 @@
 
 # Nexus
 
-**A self-hosted control plane for multi-tenant apps: project-scoped OAuth2/OIDC, permissions, API keys, audit, and encrypted secrets — in one modular monolith.**
+**A self-hosted control plane for multi-tenant apps: project-scoped OAuth2/OIDC, permissions, API keys, audit, and encrypted secrets.**
 
 [![CI](https://github.com/UnzorZ/Nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/UnzorZ/Nexus/actions/workflows/ci.yml)
+[![Maven Central SDK](https://img.shields.io/maven-central/v/dev.unzor.nexus.sdk/nexus-spring-boot-sdk.svg?label=SDK%20on%20Maven%20Central)](https://central.sonatype.com/artifact/dev.unzor.nexus.sdk/nexus-spring-boot-sdk)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
 ![Java](https://img.shields.io/badge/Java-21-orange.svg)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.0.6-6DB33F.svg)
@@ -14,29 +15,24 @@
 
 </div>
 
-Nexus is the identity, authorization, and operational backbone for a family of
-project-scoped applications. Each **project** is its own tenant: its own users,
-OAuth/OIDC realm (with its own issuer), roles & permissions, API keys, audit
-trail, encrypted secrets, and runtime registry. You run it on your own
-infrastructure; your apps integrate over standard OAuth2/OIDC.
+Nexus is a control plane for project-scoped apps. Each **project** is its own
+tenant, with its own users, OAuth/OIDC realm, roles, API keys, and audit trail.
+You run it on your own infrastructure, and your apps integrate over standard
+OAuth2/OIDC.
 
-It ships as a **modular monolith**: one Spring Boot backend with strict module
-boundaries (Spring Modulith), one Next.js dashboard, PostgreSQL as the source of
-truth, and Redis for revocable sessions and bounded ephemeral state.
-
-> **Status:** active development. Useful for local exploration and self-hosting
-> today; production deployments still need real secrets/keystore setup and the
-> usual operational hardening (see [Self-Hosting](#self-hosting-production)).
+> **Status:** active development, self-hostable today. The client SDK
+> ([`nexus-spring-boot-sdk`](https://central.sonatype.com/artifact/dev.unzor.nexus.sdk/nexus-spring-boot-sdk))
+> is on Maven Central. Production deployments still need real secrets/keystore
+> setup and the usual operational hardening (see
+> [Self-Hosting](#self-hosting-production)).
 
 ---
 
 ## Integrate your apps — the client SDK
 
-Spring Boot apps integrate with Nexus via **`nexus-spring-boot-sdk`**, published on
-Maven Central. One dependency auto-configures OIDC login, resource-server JWT
-validation, `@perm` authorization, back-channel logout, heartbeat, permission
-snapshot cache, and typed clients (config / vault / metrics) — no backend
-dependency.
+Spring Boot apps integrate with Nexus through **`nexus-spring-boot-sdk`** (on
+Maven Central). Add the dependency, set a few `nexus.*` properties, and you're
+done — there's no dependency on the backend.
 
 **Gradle**
 ```groovy
