@@ -12,9 +12,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ActivityIcon } from "@/components/ui/activity";
+import { BellIcon } from "@/components/ui/bell";
 import { BoxIcon } from "@/components/ui/box";
 import { ChevronDownIcon } from "@/components/ui/chevron-down";
 import { ClipboardCheckIcon } from "@/components/ui/clipboard-check";
+import { ConnectIcon } from "@/components/ui/connect";
+import { GaugeIcon } from "@/components/ui/gauge";
 import { KeyCircleIcon } from "@/components/ui/key-circle";
 import { LayoutGridIcon } from "@/components/ui/layout-grid";
 import { LockIcon } from "@/components/ui/lock";
@@ -25,6 +28,7 @@ import { UserIcon } from "@/components/ui/user";
 import { UsersRoundIcon } from "@/components/ui/users-round";
 import { SPRING, animHandlers, type AnimIconHandle } from "./anim";
 import { useProject } from "@/app/projects/[projectId]/useProject";
+import { useProjectModules } from "@/features/modules/queries";
 
 type IconType = React.ElementType;
 
@@ -32,6 +36,13 @@ type NavItemDef = {
   label: string;
   href: string;
   Icon: IconType;
+  /**
+   * Módulo que respalda este item. Si está fijado, el item se oculta salvo que ese
+   * módulo esté habilitado para el proyecto — espejo del ModuleGate del backend,
+   * que devolvería 403 module_disabled sus endpoints al estar apagado. Así el nav
+   * nunca ofrece un enlace a una página que el proyecto tiene capada.
+   */
+  moduleKey?: string;
 };
 
 function buildNav(projectId: string): NavItemDef[] {
@@ -41,11 +52,15 @@ function buildNav(projectId: string): NavItemDef[] {
     { label: "API keys", href: `/projects/${projectId}/api-keys`, Icon: KeyCircleIcon },
     { label: "Members", href: `/projects/${projectId}/members`, Icon: UsersRoundIcon },
     { label: "Project users", href: `/projects/${projectId}/users`, Icon: UserIcon },
-    { label: "Permissions", href: `/projects/${projectId}/permissions`, Icon: ShieldCheckIcon },
-    { label: "Roles", href: `/projects/${projectId}/roles`, Icon: UserCogIcon },
-    { label: "OAuth clients", href: `/projects/${projectId}/oauth-clients`, Icon: LockIcon },
-    { label: "Heartbeat", href: `/projects/${projectId}/heartbeat`, Icon: ActivityIcon },
-    { label: "Audit", href: `/projects/${projectId}/audit`, Icon: ClipboardCheckIcon },
+    { label: "Permissions", href: `/projects/${projectId}/permissions`, Icon: ShieldCheckIcon, moduleKey: "permissions" },
+    { label: "Roles", href: `/projects/${projectId}/roles`, Icon: UserCogIcon, moduleKey: "permissions" },
+    { label: "OAuth clients", href: `/projects/${projectId}/oauth-clients`, Icon: ConnectIcon },
+    { label: "Vault", href: `/projects/${projectId}/vault`, Icon: LockIcon, moduleKey: "vault" },
+    { label: "Heartbeat", href: `/projects/${projectId}/heartbeat`, Icon: ActivityIcon, moduleKey: "registry" },
+    { label: "Config", href: `/projects/${projectId}/config`, Icon: SettingsIcon, moduleKey: "config" },
+    { label: "Metrics", href: `/projects/${projectId}/metrics`, Icon: GaugeIcon, moduleKey: "metrics" },
+    { label: "Notify", href: `/projects/${projectId}/notify`, Icon: BellIcon, moduleKey: "notify" },
+    { label: "Audit", href: `/projects/${projectId}/audit`, Icon: ClipboardCheckIcon, moduleKey: "audit" },
   ];
 }
 
@@ -117,7 +132,16 @@ export function Sidebar({ width }: { width: number }) {
   const footerRef = useRef<AnimIconHandle>(null);
 
   const projectId = project?.id ?? "";
-  const navItems = buildNav(projectId);
+  const modulesQ = useProjectModules(projectId);
+  // Oculta los items respaldados por un módulo desactivado. Mientras carga la
+  // lista de módulos mostramos todo (evita que los items "salten" en el primer
+  // pintado); al compartir queryKey con Modules, un toggle se refleja aquí al
+  // instante vía el update optimista.
+  const navItems = buildNav(projectId).filter((item) => {
+    if (!item.moduleKey) return true;
+    if (modulesQ.isLoading) return true;
+    return modulesQ.data?.find((m) => m.key === item.moduleKey)?.enabled ?? false;
+  });
 
   // The project index (Overview, href === `/projects/{id}`) must only be active
   // on the exact route, otherwise it matches every nested page too.
