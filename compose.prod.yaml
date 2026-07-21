@@ -60,7 +60,7 @@ services:
   api:
     build:
       context: .
-      dockerfile: apps/api/Dockerfile
+      dockerfile: ${NEXUS_API_DOCKERFILE:-apps/api/Dockerfile}
     image: nexus-api:local
     depends_on:
       postgres: { condition: service_healthy }
