@@ -308,28 +308,36 @@ testImplementation 'org.springframework.boot:spring-boot-starter-security-oauth2
 
 ---
 
-## Estado actual y roadmap
+## Estado actual
 
-### ✅ Implementado
+El módulo implementa un Authorization Server OAuth2/OIDC completo sobre el flujo
+Authorization Code + Refresh Token, con firma JWT respaldada por un keystore
+PKCS12 persistente (`kid` estable) y persistencia JDBC de clientes,
+autorizaciones y consentimientos OAuth2. Un cliente bootstrap técnico
+idempotente (`nexus.oauth.bootstrap.*`) inicializa el cliente base en cada arranque.
 
-- [x] Authorization Server OAuth2/OIDC funcional.
-- [x] Flujo Authorization Code + Refresh Token.
-- [x] Firma JWT con keystore PKCS12 persistente y `kid` estable.
-- [x] Persistencia JDBC de clientes, autorizaciones y consentimientos OAuth2.
-- [x] Cliente bootstrap técnico idempotente (`nexus.oauth.bootstrap.*`).
-- [x] **Multi-issuer por proyecto** (`/p/{slug}`) — `CompositeRegisteredClientRepository` + `ProjectOauthClientsService` (ADR-0016).
-- [x] **Login funcional de `ProjectUser`** en `/api/p/{slug}/login` (`ProjectSessionAuthenticator`, `ProjectUserUserDetailsService` con `projectId` obligatorio).
-- [x] **Verificación de email + registro dual + reseteo de contraseña** self-service (M2/M3).
-- [x] **TOTP MFA** end-user (step-up + inscripción + recovery codes; `amr: [pwd, otp]`) (M5).
-- [x] **Consent** branded vía redirect a Next.js + **gestión de sesiones** end-user (list/revoke) (M4 + sesiones).
-- [x] Panel Nexus con `NexusAccount` (login JSON + sesión HTTP + CSRF + MFA TOTP propia).
-- [x] **Rate-limiting** per-IP (bucket4j) en endpoints de auth pública + **backups** PostgreSQL (`scripts/backup-db.sh` + runbook) (M6).
-- [x] **Claim `permissions`** en access token, ID token y `/userinfo` (claves de permiso efectivas, comodines `orders.*` / `*` verbatim, ADR-0003) vía `ProjectIdTokenCustomizer` + `userInfoMapper`; permite autorizar en local del JWT. App de referencia resource-server en `examples/spring-client-app` (M7).
-- [x] Health-check interno del módulo.
+Cada proyecto tiene su propio issuer (`/p/{slug}`), resuelto mediante
+`CompositeRegisteredClientRepository` y `ProjectOauthClientsService` (ADR-0016).
+El login de `ProjectUser` es funcional en `/api/p/{slug}/login`
+(`ProjectSessionAuthenticator`, `ProjectUserUserDetailsService` con `projectId`
+obligatorio), con verificación de email, registro dual y reseteo de contraseña
+self-service. El flujo end-user incluye MFA por TOTP (step-up, inscripción y
+recovery codes; `amr: [pwd, otp]`), consent con redirect a Next.js y gestión de
+sesiones (listado/revocación). El panel Nexus usa un modelo separado
+(`NexusAccount`) con login JSON, sesión HTTP, CSRF y su propio MFA TOTP.
 
-### 🔲 Pendiente
+Las rutas de autenticación pública están protegidas por rate-limiting per-IP
+(bucket4j), y PostgreSQL se respalda con `scripts/backup-db.sh` según el runbook
+correspondiente. El access token, el ID token y `/userinfo` incluyen el claim
+`permissions` (claves de permiso efectivas, comodines `orders.*` / `*` en formato
+verbatim, ADR-0003) a través de `ProjectIdTokenCustomizer` y `userInfoMapper`,
+lo que permite autorizar localmente a partir del JWT sin ida y vuelta a Nexus; la
+app de referencia en `examples/spring-client-app` demuestra este flujo como
+resource server. El módulo expone además un health-check interno.
 
-- Sin pendientes relevantes tras M7 (claim `permissions` + app de referencia resource-server entregados).
+No hay trabajo pendiente relevante sobre este alcance: la incorporación del
+claim `permissions` y la app de referencia como resource server cierran el
+conjunto de capacidades descrito en este documento.
 
 ---
 

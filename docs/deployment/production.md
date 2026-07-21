@@ -144,18 +144,17 @@ Full procedure (modes, cron, restore, verify): [PostgreSQL backups](backups.md).
   tokens signed by a retired key stop validating until the client refreshes
   ([JWT signing keys §Rotation](jwt-signing-keys.md)).
 
-## 8. Operational checklist
+## 8. Before going live
 
-- [ ] Real JWT keystore mounted; readiness reports `keystoreConfigured: true`.
-- [ ] Real Vault master key + bootstrap client secret + DB password set (none are
-      the dev defaults).
-- [ ] TLS terminates at the edge; cookies are `Secure` / `SameSite` correct for
-      your domain.
-- [ ] PostgreSQL backed up on a schedule; a restore has been tested.
-- [ ] `/actuator/prometheus` is restricted (or intentionally public on a trusted
-      net).
-- [ ] Front proxy enforces connection/rate limits in front of the app.
-- [ ] You have reviewed the [threat model](../threat-model.md).
+Treat a deployment as production-ready only once all of the following hold: a
+real JWT keystore is mounted and readiness reports `keystoreConfigured: true`;
+the Vault master key, bootstrap client secret, and database password are all
+real values, not dev defaults; TLS terminates at the edge with cookies set to
+`Secure` / the correct `SameSite` for your domain; PostgreSQL is backed up on a
+schedule and a restore has actually been tested; `/actuator/prometheus` is
+restricted or intentionally left public on a trusted network; the front proxy
+enforces connection and rate limits in front of the app; and the [threat
+model](../threat-model.md) has been reviewed against your deployment.
 
 ## See also
 

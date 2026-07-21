@@ -1714,10 +1714,11 @@ ADRs should document decisions, not obvious implementation details. Good ADR top
 
 ## 23. Roadmap
 
-> **Status (v0.1.0).** Phases 0–6 are **implemented and shipped**, and the Java SDK
-> (`nexus-spring-boot-sdk`) is published on Maven Central (§18). Phase 7 lists
-> additional shared services: **Vault, Config, and Metrics are implemented**; the rest
-> remain future candidates.
+This section keeps the original phase breakdown for historical reference. As of
+v0.1.0, phases 0 through 6 have shipped, and the Java SDK (`nexus-spring-boot-sdk`,
+§18) is published on Maven Central. Within phase 7, Vault, Config, and Metrics have
+shipped; the remaining candidates are still future work (see the note at the end of
+that phase).
 
 ### Phase 0: Bootstrap
 
@@ -1804,10 +1805,8 @@ Deliverables:
 
 ### Phase 5: Java SDK
 
-> **Status: ✅ DONE.** The `nexus-spring-boot-sdk` (see §18) and the
-> reference app `examples/spring-client-app` are implemented and tested.
-
-Goal: make Java app integration easy.
+Goal: make Java app integration easy. Shipped: the `nexus-spring-boot-sdk` (see
+§18) and the reference app `examples/spring-client-app` are implemented and tested.
 
 Deliverables:
 
@@ -1823,10 +1822,9 @@ Deliverables:
 
 ### Phase 6: Notify
 
-> **Status: ✅ DONE.** The `notify` module (templates, per-project + instance SMTP,
-> send endpoint, history, audit) and the SDK `NotifyClient` are implemented.
-
-Goal: centralize notifications.
+Goal: centralize notifications. Shipped: the `notify` module (templates,
+per-project + instance SMTP, send endpoint, history, audit) and the SDK
+`NotifyClient`.
 
 Deliverables:
 
@@ -1839,9 +1837,9 @@ Deliverables:
 
 ### Phase 7: Future Shared Services
 
-> **Status: partially done.** **Vault**, **Config**, and **Metrics** are implemented
-> (see §18.3 for the SDK clients and the Prometheus export). The candidates below
-> remain unbuilt future work.
+Goal: extend the platform with additional shared services. Vault, Config, and
+Metrics have shipped (see §18.3 for the SDK clients and the Prometheus export).
+The candidates below are still unbuilt future work.
 
 Candidate modules:
 
@@ -1971,11 +1969,6 @@ npm run build
 
 ## 27. MVP Cut Line
 
-> **Status: ✅ met and exceeded (v0.1.0).** Everything below is implemented, plus
-> Notify, Vault, Config, Metrics, per-project OAuth/OIDC realms, TOTP MFA, the full
-> Next.js dashboard, and the published Java SDK. This is the first open-source release
-> baseline.
-
 The minimum useful Nexus should include:
 
 - Nexus account login,
@@ -1993,3 +1986,8 @@ The minimum useful Nexus should include:
 - Java SDK with heartbeat and permissions.
 
 Notify can follow immediately after MVP because it provides high personal value, but it does not need to block the permission/auth core.
+
+As of v0.1.0, this cut line has been reached and surpassed: everything above is
+implemented, along with Notify, Vault, Config, Metrics, per-project OAuth/OIDC
+realms, TOTP MFA, the full Next.js dashboard, and the published Java SDK. This
+is the baseline for the first open-source release.

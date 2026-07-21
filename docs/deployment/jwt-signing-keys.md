@@ -86,10 +86,12 @@ decision. To rotate:
 Because refresh tokens survive, disruption is limited to access tokens already in
 flight. Schedule rotations during low-traffic windows.
 
-## Security checklist
+## Security requirements for production
 
-- [ ] Production keystore password is strong, random, and stored in a secrets manager — never in version control.
-- [ ] Keystore file is readable only by the API user (`chmod 600`).
-- [ ] All four `NEXUS_OAUTH_JWK_*` variables are set in every production environment.
-- [ ] `/actuator/health/readiness` is `UP` (keystore loaded, not ephemeral).
-- [ ] The committed `dev-jwk.p12` is **not** used in production.
+Before a deployment is considered production-ready, the keystore password must
+be strong, random, and stored in a secrets manager rather than version control,
+and the keystore file must be readable only by the API user (`chmod 600`). All
+four `NEXUS_OAUTH_JWK_*` variables must be set explicitly in every production
+environment, and `/actuator/health/readiness` must report `UP` with the keystore
+loaded (not ephemeral). The committed `dev-jwk.p12` must never be used in
+production.

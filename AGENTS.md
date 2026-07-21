@@ -453,7 +453,7 @@ Packages are not product modules. Product behavior belongs in `apps/api`; integr
 
 ### packages/nexus-spring-boot-sdk
 
-One-stop Java SDK / Spring Boot starter for applications that integrate with Nexus.
+Java SDK / Spring Boot starter for applications that integrate with Nexus.
 A single dependency autoconfigures both halves: **security** (OIDC login, local JWT
 validation, `@perm` permission authz, RP-initiated + back-channel logout) and
 **management** (heartbeat, permission declaration sync, permission snapshot cache,

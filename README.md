@@ -34,8 +34,8 @@ OAuth2/OIDC.
 ## Integrate your apps — the client SDK
 
 Spring Boot apps integrate with Nexus through **`nexus-spring-boot-sdk`** (on
-Maven Central). Add the dependency, set a few `nexus.*` properties, and you're
-done — there's no dependency on the backend.
+Maven Central). Add the dependency and set a few `nexus.*` properties; the
+starter has no compile-time dependency on the backend.
 
 **Gradle**
 ```groovy

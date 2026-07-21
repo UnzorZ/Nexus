@@ -2,9 +2,9 @@
 
 [![Maven Central](https://img.shields.io/maven-central/v/dev.unzor.nexus.sdk/nexus-spring-boot-sdk.svg?label=Maven%20Central)](https://central.sonatype.com/artifact/dev.unzor.nexus.sdk/nexus-spring-boot-sdk)
 
-One-stop **Spring Boot** SDK for apps that integrate with a [Nexus](https://github.com/UnzorZ/Nexus)
-control plane. Add one dependency and it auto-configures, from `nexus.*` properties,
-everything needed to talk to a Nexus server over HTTP — with **no compile dependency
+**Spring Boot** SDK for apps that integrate with a [Nexus](https://github.com/UnzorZ/Nexus)
+control plane. A single dependency auto-configures, from `nexus.*` properties,
+what's needed to talk to a Nexus server over HTTP, with **no compile dependency
 on the backend**.
 
 - **Security** — OIDC login, local JWT validation (resource server), `@perm`

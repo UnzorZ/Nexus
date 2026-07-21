@@ -1,7 +1,7 @@
 # Contributing to Nexus
 
-Thanks for your interest in contributing! Nexus is a modular-monolith control plane
-(Spring Boot backend + Next.js dashboard). This guide gets you productive quickly.
+Nexus is a modular-monolith control plane (Spring Boot backend + Next.js dashboard).
+This guide covers the setup and conventions you need before opening a pull request.
 
 ## License
 
@@ -62,13 +62,7 @@ feat(identity): add email-verification token flow
 fix(notify): escape app name in offline email body
 ```
 
-End commit messages and PR descriptions with:
-
-```
-Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
-```
-
-when applicable. Keep commits focused; one logical change per commit.
+Keep commits focused; one logical change per commit.
 
 ## Tests and Quality
 

@@ -235,29 +235,32 @@ La clave foránea desde `project_memberships.nexus_account_id` protege la
 referencia a la cuenta Nexus. Las referencias `project_id` recibirán su clave
 foránea cuando se cree la tabla propietaria `projects`.
 
-## Trabajo pendiente
+## Estado actual
 
-- (nada: rate-limiting per-IP + backups de PostgreSQL entregados en M6).
+La persistencia se apoya en repositorios JPA para `NexusAccount`,
+`ProjectMembership` y `ProjectUser`, con un indicador persistente
+`instanceAdmin` que se otorga por bootstrap a la primera cuenta creada.
 
-## Implementado
+El panel tiene su propio circuito de registro y login: registro de
+`NexusAccount` con CSRF (`POST /api/panel/v1/accounts`),
+`NexusAccountUserDetailsService` restringido a esa cadena, login JSON
+(`POST /api/panel/v1/session/login` [+ `/login/mfa`]) con sesión HTTP, logout
+por API y CSRF (el form-login Thymeleaf `/panel/login` fue retirado), y MFA por
+TOTP propia para `NexusAccount` (inscripción, step-up y recovery codes).
 
-- repositorios JPA para `NexusAccount`, `ProjectMembership` y `ProjectUser`;
-- indicador persistente `instanceAdmin` (bootstrap en la primera cuenta);
-- registro de `NexusAccount` con CSRF (`POST /api/panel/v1/accounts`);
-- `NexusAccountUserDetailsService` solo en la cadena del panel;
-- login JSON del panel (`POST /api/panel/v1/session/login` [+ `/login/mfa`]),
-  sesión HTTP, logout API y CSRF — el form-login Thymeleaf `/panel/login` fue eliminado;
-- **MFA TOTP del panel** (`NexusAccount`: inscripción + step-up + recovery codes);
-- persistencia JDBC de clientes OAuth, autorizaciones y consentimientos;
-- **multi-issuer OAuth por proyecto** (`CompositeRegisteredClientRepository`,
-  `ProjectOauthClientsService`; ADR-0016);
-- **login funcional de `ProjectUser`** con contexto obligatorio de proyecto
-  (`ProjectSessionAuthenticator`), verificación de email, registro dual y reseteo
-  de contraseña self-service (M2/M3);
-- **TOTP MFA end-user** (step-up + inscripción + recovery codes; `amr: [pwd, otp]`, M5);
-- **consent** branded vía redirect a Next.js y **gestión de sesiones** end-user (list/revoke);
-- normalización de emails en registro.
-- **rate-limiting** per-IP (bucket4j) en endpoints de auth pública + **backups** PostgreSQL (`scripts/backup-db.sh` + runbook) (M6).
+Los clientes OAuth, sus autorizaciones y consentimientos se persisten vía JDBC,
+con un issuer independiente por proyecto (`CompositeRegisteredClientRepository`,
+`ProjectOauthClientsService`; ADR-0016). El login de `ProjectUser` exige
+contexto de proyecto (`ProjectSessionAuthenticator`) e incluye verificación de
+email, registro dual, reseteo de contraseña self-service, MFA por TOTP end-user
+(step-up, inscripción y recovery codes; `amr: [pwd, otp]`), consent con redirect
+a Next.js y gestión de sesiones end-user (listado/revocación). Los emails se
+normalizan en el registro.
+
+Los endpoints de autenticación pública están protegidos por rate-limiting
+per-IP (bucket4j), y PostgreSQL se respalda mediante `scripts/backup-db.sh`
+según el runbook correspondiente. No hay trabajo pendiente relevante sobre
+este alcance.
 
 ### Bootstrap público de la instancia
 
