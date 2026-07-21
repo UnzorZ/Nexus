@@ -1,6 +1,9 @@
 <div align="center">
 
-<img src="nexus-logo.png" alt="Nexus" width="160"/>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/nexus-logo-dark.png"/>
+  <img src="docs/assets/nexus-logo.png" alt="Nexus" width="260"/>
+</picture>
 
 # Nexus
 
