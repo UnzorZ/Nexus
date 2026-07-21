@@ -74,6 +74,7 @@ services:
       NEXUS_DATASOURCE_PASSWORD: ${POSTGRES_DB_PASSWORD:?set POSTGRES_DB_PASSWORD in .env}
       NEXUS_REDIS_URL: redis://redis:6379
       NEXUS_FRONTEND_BASE_URL: ${NEXUS_FRONTEND_BASE_URL:-http://localhost:3000}
+      NEXUS_API_EXTERNAL_BASE_URL: ${NEXUS_API_EXTERNAL_BASE_URL:-}
       NEXUS_ALLOWED_DEV_ORIGINS: ${NEXUS_ALLOWED_DEV_ORIGINS:-}
       NEXUS_OAUTH_BOOTSTRAP_CLIENT_SECRET: ${NEXUS_OAUTH_BOOTSTRAP_CLIENT_SECRET:?set a real OAuth client secret}
       NEXUS_OAUTH_JWK_KEYSTORE_LOCATION: ${NEXUS_OAUTH_JWK_KEYSTORE_LOCATION:?mount a real JWT keystore and set its path}
@@ -81,12 +82,13 @@ services:
       NEXUS_OAUTH_JWK_KEY_ALIAS: ${NEXUS_OAUTH_JWK_KEY_ALIAS:-nexus-key}
       NEXUS_OAUTH_JWK_KEY_PASSWORD: ${NEXUS_OAUTH_JWK_KEY_PASSWORD:?set the key password}
       NEXUS_VAULT_MASTER_KEY: ${NEXUS_VAULT_MASTER_KEY:?set a real vault master key}
-    # Mount your production JWT keystore read-only, e.g.:
-    # volumes:
-    #   - ./jwt-keystore.p12:/etc/nexus/jwt-keystore.p12:ro
+      JAVA_OPTS: ${NEXUS_JAVA_OPTS:--Xms256m -Xmx1024m}
+    volumes:
+      - ${NEXUS_JWK_KEYSTORE_HOST_PATH:?set the host keystore path}:/etc/nexus/jwt-keystore.p12:ro
     ports:
       - "8080:8080"
     restart: unless-stopped
+    mem_limit: 1280m
 
   web:
     build:
@@ -104,6 +106,7 @@ services:
     ports:
       - "3000:3000"
     restart: unless-stopped
+    mem_limit: 512m
 
 volumes:
   nexus-postgres-data:
