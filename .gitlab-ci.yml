@@ -12,7 +12,7 @@ variables:
   NPM_CONFIG_CACHE: "$CI_PROJECT_DIR/.npm"
   # The job container uses the runner host's Docker socket. Testcontainers
   # must connect to published ports through that host, not through localhost.
-  TESTCONTAINERS_HOST_OVERRIDE: "172.17.0.1"
+  TESTCONTAINERS_HOST_OVERRIDE: "127.0.0.1"
   # Ryuk itself also needs the daemon socket path as seen inside its container.
   TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: "/var/run/docker.sock"
 
