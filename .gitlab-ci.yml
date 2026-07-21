@@ -13,6 +13,8 @@ variables:
   # The job container uses the runner host's Docker socket. Testcontainers
   # must connect to published ports through that host, not through localhost.
   TESTCONTAINERS_HOST_OVERRIDE: "172.17.0.1"
+  # Ryuk itself also needs the daemon socket path as seen inside its container.
+  TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: "/var/run/docker.sock"
 
 cache:
   key: "$CI_JOB_NAME-$CI_COMMIT_REF_SLUG"
