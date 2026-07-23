@@ -177,7 +177,42 @@ public class ProjectSessionAuthenticator {
             throw new MfaRequiredException(projectId, user.getEmail());
         }
 
-        return establishSession(principal, user, projectId, now, null, request, response);
+        return establishSession(principal, user, projectId,
+                FactorGrantedAuthority
+                        .withAuthority(FactorGrantedAuthority.PASSWORD_AUTHORITY).issuedAt(now).build(),
+                null, "project_user.login_succeeded", "password", request, response);
+    }
+
+    /**
+     * Establece la sesión HTTP de un {@code ProjectUser} cuya identidad fue probada por un
+     * proveedor OIDC externo (Google), no por contraseña. Reutiliza {@link #establishSession}
+     * para que la rotación de sesión, el indexado y la auditoría sean idénticos a un login
+     * con contraseña. El método externo se registra como factor de autenticación primario
+     * (auth_time), de modo que el Authorization Server puede reanudar {@code /oauth2/authorize}.
+     *
+     * @param factor         nombre del factor externo (p. ej. {@code "google"}); se usa como
+     *                       {@code amr}/auth_time y en la auditoría
+     * @param authenticatedAt instante en que el proveedor externo validó la identidad
+     */
+    @Transactional(noRollbackFor = BadCredentialsException.class)
+    public Authentication establishFederatedSession(
+            UUID projectId, UUID userId, String factor, Instant authenticatedAt,
+            HttpServletRequest request, HttpServletResponse response
+    ) {
+        projectLookupService.lockOperationalById(projectId);
+        Instant now = Instant.now();
+        ProjectUser user = repository.findByProjectIdAndId(projectId, userId)
+                .orElseThrow(() -> new BadCredentialsException(GENERIC_ERROR));
+        if (user.isLocked(now) || !user.canAuthenticate()) {
+            publishFailure(projectId, user.getId(), user.getEmail());
+            throw new BadCredentialsException(GENERIC_ERROR);
+        }
+        ProjectUserPrincipal principal =
+                (ProjectUserPrincipal) userDetailsService.loadProjectUser(projectId, user.getEmail());
+        GrantedAuthority primaryFactor =
+                FactorGrantedAuthority.withFactor(factor).issuedAt(authenticatedAt).build();
+        return establishSession(principal, user, projectId, primaryFactor, null,
+                "project_user.federated_login_succeeded", factor, request, response);
     }
 
     /**
@@ -222,7 +257,11 @@ public class ProjectSessionAuthenticator {
         session.removeAttribute(NexusSessionAttributes.MFA_PENDING);
         ProjectUserPrincipal principal =
                 (ProjectUserPrincipal) userDetailsService.loadProjectUser(projectId, user.getEmail());
-        return establishSession(principal, user, projectId, ticket.passwordVerifiedAt(), now, request, response);
+        return establishSession(principal, user, projectId,
+                FactorGrantedAuthority
+                        .withAuthority(FactorGrantedAuthority.PASSWORD_AUTHORITY)
+                        .issuedAt(ticket.passwordVerifiedAt()).build(),
+                now, "project_user.login_succeeded", "password", request, response);
     }
 
     /**
@@ -260,14 +299,20 @@ public class ProjectSessionAuthenticator {
     /**
      * Mitad de éxito compartida: limpia intentos fallidos, rota el id de sesión
      * (anti session-fixation), indexa por {@code PROJECT_USER_ID}, construye el
-     * {@code Authentication} con el factor PASSWORD (y opcionalmente TOTP), persiste el
-     * {@code SecurityContext} y registra/audita el login.
+     * {@code Authentication} con el factor primario (PASSWORD o el factor externo) y
+     * opcionalmente TOTP, persiste el {@code SecurityContext} y registra/audita el login.
      *
+     * @param primaryFactor factor de autenticación primario (ya construido, con su
+     *                      {@code issuedAt} = auth_time): PASSWORD para login con
+     *                      contraseña, o el factor del proveedor externo para login federado
      * @param totpVerifiedAt instante de verificación TOTP; {@code null} si no hay MFA.
+     * @param auditAction   acción de auditoría a publicar
+     * @param authMethod    método de autenticación registrado en el contexto de auditoría
      */
     private Authentication establishSession(
             ProjectUserPrincipal principal, ProjectUser user, UUID projectId,
-            Instant passwordVerifiedAt, Instant totpVerifiedAt,
+            GrantedAuthority primaryFactor, Instant totpVerifiedAt,
+            String auditAction, String authMethod,
             HttpServletRequest request, HttpServletResponse response
     ) {
         if (user.getFailedLoginAttempts() != 0 || user.getLockedUntil() != null) {
@@ -290,10 +335,10 @@ public class ProjectSessionAuthenticator {
 
         ProjectUserPrincipal sessionPrincipal = principal.withoutCredentials();
         // Spring Security 7.0 deriva auth_time del id_token a partir del issuedAt de un
-        // FactorGrantedAuthority. El TOTP factor (si lo hay) refleja el segundo factor.
+        // FactorGrantedAuthority. El factor primario refleja cómo se autenticó el usuario
+        // (PASSWORD o el proveedor externo); el TOTP factor refleja el segundo factor.
         List<GrantedAuthority> authorities = new ArrayList<>(sessionPrincipal.getAuthorities());
-        authorities.add(FactorGrantedAuthority
-                .withAuthority(FactorGrantedAuthority.PASSWORD_AUTHORITY).issuedAt(passwordVerifiedAt).build());
+        authorities.add(primaryFactor);
         if (totpVerifiedAt != null) {
             authorities.add(FactorGrantedAuthority.withFactor("TOTP").issuedAt(totpVerifiedAt).build());
         }
@@ -305,9 +350,10 @@ public class ProjectSessionAuthenticator {
 
         recordLoginService.recordLogin(projectId, user.getId());
         eventPublisher.publishEvent(AuditEvent.byProjectUser(
-                projectId, "project_user.login_succeeded", "project_user",
+                projectId, auditAction, "project_user",
                 Objects.toString(user.getId(), null), user.getId(), Map.of(
                         "email", user.getEmail(),
+                        "authMethod", authMethod,
                         "mfa", String.valueOf(totpVerifiedAt != null))));
 
         return authentication;

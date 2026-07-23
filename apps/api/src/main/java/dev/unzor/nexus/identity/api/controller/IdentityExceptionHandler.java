@@ -2,6 +2,7 @@ package dev.unzor.nexus.identity.api.controller;
 
 import dev.unzor.nexus.identity.domain.exception.OauthClientIdAlreadyExistsException;
 import dev.unzor.nexus.identity.domain.exception.OauthClientNotFoundException;
+import dev.unzor.nexus.identity.domain.exception.OidcFederationException;
 import dev.unzor.nexus.identity.domain.exception.ProjectUserEmailAlreadyExistsException;
 import dev.unzor.nexus.identity.domain.exception.ProjectUserNotFoundException;
 import dev.unzor.nexus.identity.domain.exception.SessionNotFoundException;
@@ -83,6 +84,15 @@ class IdentityExceptionHandler {
         problem.setTitle("Forbidden");
         problem.setProperty("code", "project_not_operational");
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(problem);
+    }
+
+    @ExceptionHandler(OidcFederationException.class)
+    ResponseEntity<ProblemDetail> handleOidcFederation(OidcFederationException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST, exception.getMessage());
+        problem.setTitle("Federation error");
+        problem.setProperty("code", exception.code());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(problem);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
