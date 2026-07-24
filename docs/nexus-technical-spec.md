@@ -1925,6 +1925,25 @@ Before open sourcing:
 - add database migration policy,
 - add security reporting policy.
 
+### 24.6 Panel Account Password Change
+
+The panel has no endpoint to change a Nexus account password. Only account
+creation and session login are available. Today a password change needs a direct
+update of the `password_hash` column of the `nexus_accounts` table.
+
+Add a self-service endpoint:
+
+- `PUT /api/panel/v1/session/password` with the current password and the new
+  password,
+- CSRF protection with the double-submit token,
+- verification of the current password,
+- encoding of the new password with `BCryptPasswordEncoder`,
+- revocation of the other sessions of the account (ADR 0008),
+- a check of the new password against the password policy,
+- an audit record of the change.
+
+If the account has MFA enabled, obey the MFA rule for the change.
+
 ## 25. Quality Gate
 
 Required backend quality gate:
