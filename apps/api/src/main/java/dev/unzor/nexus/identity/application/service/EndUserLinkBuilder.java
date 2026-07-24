@@ -13,10 +13,11 @@ import java.nio.charset.StandardCharsets;
  * <p>Estos enlaces apuntan al <b>frontend Next.js</b> (donde viven las páginas de usuario
  * final), no al API: el usuario aterriza en la página Next.js, que a su vez llama a la
  * API JSON correspondiente. El base URL por defecto se toma de {@code nexus.frontend-base-url}
- * (siempre configurado; por defecto {@code http://localhost:3000} en desarrollo). El enlace
- * de verificación de email usa además el origen <b>de la app</b> registrado por el proyecto
- * (ver {@link #verifyEmailLink(String, String)}), de forma que el alta self-service se
- * completa en el dominio de la propia app.</p>
+ * (siempre configurado; por defecto {@code http://localhost:3000} en desarrollo). Los enlaces
+ * de verificación de email y de reseteo de contraseña usan además el origen <b>de la app</b>
+ * registrado por el proyecto (ver {@link #verifyEmailLink(String, String)} y
+ * {@link #passwordResetLink(String, String)}), de forma que el alta y el reseteo self-service
+ * se completan en el dominio de la propia app.</p>
  */
 @Component
 public class EndUserLinkBuilder {
@@ -39,9 +40,9 @@ public class EndUserLinkBuilder {
      * expone ningún origen registrado, cae al {@code frontend-base-url} (portal hosteado
      * por Nexus).
      *
-     * <p>Asimetría deliberada: el reseteo de contraseña, el portal y los enlaces de
-     * federación siguen usando {@link #base()} (frontend propio de Nexus) porque esas
-     * páginas aún no las hostea la app. Cuando una app las hostee, migrarlas aquí.</p>
+     * <p>El reseteo de contraseña sigue el mismo criterio (ver
+     * {@link #passwordResetLink(String, String)}). Sólo el portal y los enlaces de federación
+     * siguen en el frontend propio de Nexus, porque esas páginas aún no las hostea la app.</p>
      */
     public String verifyEmailLink(String projectSlug, String rawToken) {
         return appBaseForSlug(projectSlug) + "/p/" + projectSlug + "/verify-email?token=" + urlEncode(rawToken);
@@ -57,8 +58,14 @@ public class EndUserLinkBuilder {
                 .orElse(base());
     }
 
+    /**
+     * Enlace de confirmación de reseteo de contraseña. Aterriza en el dominio de la <b>app</b>
+     * (mismo criterio que {@link #verifyEmailLink(String, String)}): la app hostea la página de
+     * confirmación, de forma que el reseteo self-service se completa sin salir de la app. Si el
+     * proyecto no declara orígenes, cae al {@code frontend-base-url}.
+     */
     public String passwordResetLink(String projectSlug, String rawToken) {
-        return base() + "/p/" + projectSlug + "/password-reset/confirm?token=" + urlEncode(rawToken);
+        return appBaseForSlug(projectSlug) + "/p/" + projectSlug + "/password-reset/confirm?token=" + urlEncode(rawToken);
     }
 
     /**

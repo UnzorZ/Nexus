@@ -67,9 +67,18 @@ class EndUserLinkBuilderTest {
     }
 
     @Test
-    void passwordResetLinkStaysOnFrontendBaseUrl() {
-        // Asimetría documentada: el reseteo de contraseña no se rutea al origen de la app
-        // (la app aún no hostea /password-reset/confirm). Lock para evitar regresiones.
+    void passwordResetLinkUsesRegisteredAppOrigin() {
+        when(allowedOriginsResolver.primaryProjectOrigin("flip"))
+                .thenReturn(Optional.of("https://flip.unzor.dev"));
+        EndUserLinkBuilder builder = new EndUserLinkBuilder(FRONTEND_BASE_URL, allowedOriginsResolver);
+
+        assertThat(builder.passwordResetLink("flip", "raw-token"))
+                .isEqualTo("https://flip.unzor.dev/p/flip/password-reset/confirm?token=raw-token");
+    }
+
+    @Test
+    void passwordResetLinkFallsBackToFrontendBaseUrlWhenNoAppOrigin() {
+        when(allowedOriginsResolver.primaryProjectOrigin("flip")).thenReturn(Optional.empty());
         EndUserLinkBuilder builder = new EndUserLinkBuilder(FRONTEND_BASE_URL, allowedOriginsResolver);
 
         assertThat(builder.passwordResetLink("flip", "raw-token"))
