@@ -135,11 +135,13 @@ class GoogleOidcLoginController {
     /**
      * Open-redirect guard for the post-login target: only a relative authorize-resume path of
      * this realm ({@code /p/{slug}/oauth2/...}), or an absolute URL on the API host containing
-     * that marker, is honoured. Anything else falls back to the portal.
+     * that marker, is honoured. Anything else falls back to the app landing ({@code ?from=google}
+     * on the project's own origin), so the app can resume its OIDC authorize and mint its
+     * product session.
      */
     private String resolveSuccessTarget(String continueUrl, String projectSlug, HttpServletRequest request) {
         if (!StringUtils.hasText(continueUrl)) {
-            return linkBuilder.portalLink(projectSlug);
+            return linkBuilder.appLandingLink(projectSlug);
         }
         String marker = "/p/" + projectSlug + "/oauth2/";
         if (continueUrl.startsWith(marker)) {
@@ -152,9 +154,9 @@ class GoogleOidcLoginController {
                     return continueUrl;
                 }
             } catch (Exception ignored) {
-                return linkBuilder.portalLink(projectSlug);
+                return linkBuilder.appLandingLink(projectSlug);
             }
         }
-        return linkBuilder.portalLink(projectSlug);
+        return linkBuilder.appLandingLink(projectSlug);
     }
 }

@@ -11,10 +11,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
 /**
- * El enlace de verificación de email aterriza en el origen de la <b>app</b> registrado por
- * el proyecto (self-service: el alta se completa en el dominio de la app), con fallback al
- * frontend propio de Nexus. El reseteo de contraseña sigue en el frontend de Nexus (la app
- * aún no hostea esa página) —se documenta la asimetría para evitar regresiones—.
+ * Los enlaces públicos aterrizan en el origen de la <b>app</b> registrado por el proyecto
+ * (self-service: alta, reseteo y login federado se completan en el dominio de la app), con
+ * fallback al frontend propio de Nexus cuando el proyecto no declara orígenes.
  */
 @ExtendWith(MockitoExtension.class)
 class EndUserLinkBuilderTest {
@@ -83,5 +82,53 @@ class EndUserLinkBuilderTest {
 
         assertThat(builder.passwordResetLink("flip", "raw-token"))
                 .isEqualTo("https://nexus.unzor.dev/p/flip/password-reset/confirm?token=raw-token");
+    }
+
+    @Test
+    void googleLinkRequiredLinkUsesRegisteredAppOrigin() {
+        when(allowedOriginsResolver.primaryProjectOrigin("flip"))
+                .thenReturn(Optional.of("https://flip.unzor.dev"));
+        EndUserLinkBuilder builder = new EndUserLinkBuilder(FRONTEND_BASE_URL, allowedOriginsResolver);
+
+        assertThat(builder.googleLinkRequiredLink("flip"))
+                .isEqualTo("https://flip.unzor.dev/login?google_link_required=1");
+    }
+
+    @Test
+    void googleLinkRequiredLinkFallsBackToPortalWhenNoAppOrigin() {
+        when(allowedOriginsResolver.primaryProjectOrigin("flip")).thenReturn(Optional.empty());
+        EndUserLinkBuilder builder = new EndUserLinkBuilder(FRONTEND_BASE_URL, allowedOriginsResolver);
+
+        assertThat(builder.googleLinkRequiredLink("flip"))
+                .isEqualTo("https://nexus.unzor.dev/p/flip");
+    }
+
+    @Test
+    void googleErrorLinkUsesRegisteredAppOrigin() {
+        when(allowedOriginsResolver.primaryProjectOrigin("flip"))
+                .thenReturn(Optional.of("https://flip.unzor.dev"));
+        EndUserLinkBuilder builder = new EndUserLinkBuilder(FRONTEND_BASE_URL, allowedOriginsResolver);
+
+        assertThat(builder.googleErrorLink("flip", "provider_error"))
+                .isEqualTo("https://flip.unzor.dev/login?google_error=provider_error");
+    }
+
+    @Test
+    void appLandingLinkUsesRegisteredAppOrigin() {
+        when(allowedOriginsResolver.primaryProjectOrigin("flip"))
+                .thenReturn(Optional.of("https://flip.unzor.dev"));
+        EndUserLinkBuilder builder = new EndUserLinkBuilder(FRONTEND_BASE_URL, allowedOriginsResolver);
+
+        assertThat(builder.appLandingLink("flip"))
+                .isEqualTo("https://flip.unzor.dev/login?from=google");
+    }
+
+    @Test
+    void appLandingLinkFallsBackToPortalWhenNoAppOrigin() {
+        when(allowedOriginsResolver.primaryProjectOrigin("flip")).thenReturn(Optional.empty());
+        EndUserLinkBuilder builder = new EndUserLinkBuilder(FRONTEND_BASE_URL, allowedOriginsResolver);
+
+        assertThat(builder.appLandingLink("flip"))
+                .isEqualTo("https://nexus.unzor.dev/p/flip");
     }
 }
