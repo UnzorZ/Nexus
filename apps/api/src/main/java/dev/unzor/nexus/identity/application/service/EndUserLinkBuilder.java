@@ -32,6 +32,30 @@ public class EndUserLinkBuilder {
         return base() + "/p/" + projectSlug + "/password-reset/confirm?token=" + urlEncode(rawToken);
     }
 
+    /**
+     * Default landing page of a project's end-user portal (used after a federated login that
+     * has no authorization flow to resume).
+     */
+    public String portalLink(String projectSlug) {
+        return base() + "/p/" + projectSlug;
+    }
+
+    /**
+     * Page where the end-user re-authenticates (password) to confirm linking a Google
+     * identity to an existing account.
+     */
+    public String googleLinkRequiredLink(String projectSlug) {
+        return base() + "/p/" + projectSlug + "/login?google_link_required=1";
+    }
+
+    /**
+     * End-user login page with a Google federation error code, so the SPA can show the reason
+     * (for example a denied consent or an unverified email).
+     */
+    public String googleErrorLink(String projectSlug, String code) {
+        return base() + "/p/" + projectSlug + "/login?google_error=" + urlEncode(code == null ? "error" : code);
+    }
+
     private String base() {
         return frontendBaseUrl.replaceAll("/+$", "");
     }

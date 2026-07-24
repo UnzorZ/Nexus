@@ -1,6 +1,7 @@
 package dev.unzor.nexus.identity.persistence;
 
 import dev.unzor.nexus.TestcontainersConfiguration;
+import dev.unzor.nexus.admin.infrastructure.security.NexusAccountPrincipal;
 import dev.unzor.nexus.identity.application.configuration.NexusOAuthBootstrapProperties;
 import dev.unzor.nexus.identity.infrastructure.security.ProjectUserPrincipal;
 import org.junit.jupiter.api.Test;
@@ -126,6 +127,41 @@ class OAuthPersistenceIntegrationTests {
                         + "FROM oauth2_authorization WHERE id = ?",
                 Boolean.class, userId.toString(), "principal-roundtrip");
         assertThat(discoverableByStableUserId).isTrue();
+    }
+
+    @Test
+    void adminAccountPrincipalRoundTripsThroughJdbc() {
+        // Regresión: si un admin (NexusAccountPrincipal) queda como principal autenticado
+        // de una autorización (p.ej. autoriza o audita un client de proyecto con su sesión
+        // de panel activa), SAS lo persiste con @class. Si el PolymorphicTypeValidator del
+        // row-mapper JDBC no permite NexusAccountPrincipal, findByToken lanza
+        // "BasicPolymorphicTypeValidator denied resolution" y rompe el token exchange.
+        RegisteredClient client = registeredClientRepository.findByClientId(bootstrapProperties.clientId());
+        NexusAccountPrincipal principal = new NexusAccountPrincipal(
+                UUID.randomUUID(), "admin", "pw",
+                List.of(new SimpleGrantedAuthority("ROLE_ADMIN")), true);
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+                principal, null, principal.getAuthorities());
+        OAuth2AccessToken accessToken = new OAuth2AccessToken(
+                OAuth2AccessToken.TokenType.BEARER, "admin-roundtrip-token",
+                Instant.now(), Instant.now().plusSeconds(300), Set.of(OidcScopes.OPENID));
+
+        OAuth2Authorization authorization = OAuth2Authorization.withRegisteredClient(client)
+                .id("admin-roundtrip")
+                .principalName("admin")
+                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+                .attribute(Principal.class.getName(), authentication)
+                .token(accessToken)
+                .build();
+
+        authorizationService.save(authorization);
+
+        OAuth2Authorization reloaded = authorizationService.findByToken(
+                "admin-roundtrip-token", OAuth2TokenType.ACCESS_TOKEN);
+        assertThat(reloaded).isNotNull();
+        Authentication reloadedAuthentication = reloaded.getAttribute(Principal.class.getName());
+        assertThat(reloadedAuthentication).isNotNull();
+        assertThat(reloadedAuthentication.getPrincipal()).isInstanceOf(NexusAccountPrincipal.class);
     }
 
     @Test

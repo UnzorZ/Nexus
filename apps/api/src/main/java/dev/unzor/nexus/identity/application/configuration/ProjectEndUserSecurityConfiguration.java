@@ -62,9 +62,13 @@ class ProjectEndUserSecurityConfiguration {
                 )
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(HttpMethod.GET, "/api/p/*/csrf").permitAll()
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/p/*/login/google",
+                                "/api/p/*/login/google/callback").permitAll()
                         .requestMatchers(HttpMethod.POST,
                                 "/api/p/*/login",
                                 "/api/p/*/login/mfa",
+                                "/api/p/*/login/google/link",
                                 "/api/p/*/register",
                                 "/api/p/*/verify-email",
                                 "/api/p/*/verify-email/resend",

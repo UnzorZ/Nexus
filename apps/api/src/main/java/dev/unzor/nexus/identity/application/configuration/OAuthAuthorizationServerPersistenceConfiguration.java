@@ -2,6 +2,7 @@ package dev.unzor.nexus.identity.application.configuration;
 
 import dev.unzor.nexus.identity.application.service.ProjectOauthClientToRegisteredClientMapper;
 import dev.unzor.nexus.identity.infrastructure.security.ProjectUserPrincipal;
+import dev.unzor.nexus.shared.security.AuthenticatedAccount;
 import dev.unzor.nexus.identity.persistence.CompositeRegisteredClientRepository;
 import dev.unzor.nexus.identity.persistence.ProjectOperationalOAuth2AuthorizationService;
 import dev.unzor.nexus.identity.persistence.repository.ProjectOauthClientRepository;
@@ -86,6 +87,8 @@ class OAuthAuthorizationServerPersistenceConfiguration {
         // escritura ya emite el @class correctamente.
         BasicPolymorphicTypeValidator.Builder typeValidator = BasicPolymorphicTypeValidator.builder()
                 .allowIfSubType(ProjectUserPrincipal.class)
+                .allowIfSubType(AuthenticatedAccount.class)   // admin (NexusAccountPrincipal) que autoriza/audita un client de proyecto
+                .allowIfSubType(java.util.Collection.class)   // authorities (List/ImmutableList) del principal
                 .allowIfSubType(Number.class)      // authz_version (Long) y futuros claims numéricos
                 .allowIfSubType(Boolean.class)
                 .allowIfSubType(java.net.URL.class)  // iss queda tipado como URL por el AS
