@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -57,6 +58,19 @@ public class ProjectAllowedOriginsResolver {
         Set<String> origins = computeOrigins(slug);
         cache.put(slug, origins);
         return origins;
+    }
+
+    /**
+     * Origen web "principal" del proyecto (para construir enlaces públicos —p. ej. el de
+     * verificación de email— que deben aterrizar en el dominio de la <b>app</b>, no en el
+     * frontend propio de Nexus). Es el primero alfabéticamente entre los orígenes derivados
+     * de los redirect URIs de los clientes activos del proyecto (determinista; la mayoría de
+     * apps self-service tienen un único origen). Vacío si el proyecto no expone ningún
+     * origen registrado —el llamador cae entonces al {@code frontend-base-url} de la
+     * instancia (portal hosteado por Nexus).
+     */
+    public Optional<String> primaryProjectOrigin(String slug) {
+        return originsForSlug(slug).stream().sorted().findFirst();
     }
 
     private Set<String> computeOrigins(String slug) {

@@ -12,20 +12,49 @@ import java.nio.charset.StandardCharsets;
  *
  * <p>Estos enlaces apuntan al <b>frontend Next.js</b> (donde viven las páginas de usuario
  * final), no al API: el usuario aterriza en la página Next.js, que a su vez llama a la
- * API JSON correspondiente. El base URL se toma de {@code nexus.frontend-base-url}
- * (siempre configurado; por defecto {@code http://localhost:3000} en desarrollo).</p>
+ * API JSON correspondiente. El base URL por defecto se toma de {@code nexus.frontend-base-url}
+ * (siempre configurado; por defecto {@code http://localhost:3000} en desarrollo). El enlace
+ * de verificación de email usa además el origen <b>de la app</b> registrado por el proyecto
+ * (ver {@link #verifyEmailLink(String, String)}), de forma que el alta self-service se
+ * completa en el dominio de la propia app.</p>
  */
 @Component
 public class EndUserLinkBuilder {
 
     private final String frontendBaseUrl;
+    private final ProjectAllowedOriginsResolver allowedOriginsResolver;
 
-    public EndUserLinkBuilder(@Value("${nexus.frontend-base-url:http://localhost:3000}") String frontendBaseUrl) {
+    public EndUserLinkBuilder(
+            @Value("${nexus.frontend-base-url:http://localhost:3000}") String frontendBaseUrl,
+            ProjectAllowedOriginsResolver allowedOriginsResolver
+    ) {
         this.frontendBaseUrl = frontendBaseUrl == null ? "" : frontendBaseUrl.trim();
+        this.allowedOriginsResolver = allowedOriginsResolver;
     }
 
+    /**
+     * Enlace de verificación de email. Aterriza en el dominio de la <b>app</b> (el origen
+     * que el proyecto registró como redirect URI), no en el frontend propio de Nexus, de
+     * forma que el alta self-service se completa sin salir de la app. Si el proyecto no
+     * expone ningún origen registrado, cae al {@code frontend-base-url} (portal hosteado
+     * por Nexus).
+     *
+     * <p>Asimetría deliberada: el reseteo de contraseña, el portal y los enlaces de
+     * federación siguen usando {@link #base()} (frontend propio de Nexus) porque esas
+     * páginas aún no las hostea la app. Cuando una app las hostee, migrarlas aquí.</p>
+     */
     public String verifyEmailLink(String projectSlug, String rawToken) {
-        return base() + "/p/" + projectSlug + "/verify-email?token=" + urlEncode(rawToken);
+        return appBaseForSlug(projectSlug) + "/p/" + projectSlug + "/verify-email?token=" + urlEncode(rawToken);
+    }
+
+    /**
+     * Base del dominio de la app para un proyecto, o el frontend propio de Nexus (fallback
+     * seguro) si el proyecto no declara orígenes.
+     */
+    private String appBaseForSlug(String projectSlug) {
+        return allowedOriginsResolver.primaryProjectOrigin(projectSlug)
+                .map(EndUserLinkBuilder::stripTrailingSlash)
+                .orElse(base());
     }
 
     public String passwordResetLink(String projectSlug, String rawToken) {
@@ -57,7 +86,14 @@ public class EndUserLinkBuilder {
     }
 
     private String base() {
-        return frontendBaseUrl.replaceAll("/+$", "");
+        return stripTrailingSlash(frontendBaseUrl);
+    }
+
+    private static String stripTrailingSlash(String baseUrl) {
+        if (baseUrl == null) {
+            return "";
+        }
+        return baseUrl.replaceAll("/+$", "");
     }
 
     private static String urlEncode(String value) {

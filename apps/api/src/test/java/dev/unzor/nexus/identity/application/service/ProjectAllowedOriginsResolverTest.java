@@ -77,6 +77,25 @@ class ProjectAllowedOriginsResolverTest {
         assertThat(resolver.originsForSlug("  ")).isEmpty();
     }
 
+    @Test
+    void primaryProjectOriginIsAlphabeticallyFirst() {
+        when(slugResolver.resolveExisting(SLUG))
+                .thenReturn(new ProjectAuthenticationContext(PROJECT_ID, SLUG));
+        when(clientRepository.findAllByProjectId(PROJECT_ID)).thenReturn(List.of(
+                activeClient(List.of("https://other.example/cb"), List.of()),
+                activeClient(List.of("https://flip.unzor.dev/login/oauth2/code/nexus"), List.of())
+        ));
+
+        assertThat(resolver.primaryProjectOrigin(SLUG)).contains("https://flip.unzor.dev");
+    }
+
+    @Test
+    void primaryProjectOriginEmptyWhenNoRegisteredOrigins() {
+        when(slugResolver.resolveExisting("ghost")).thenThrow(new RuntimeException("not found"));
+
+        assertThat(resolver.primaryProjectOrigin("ghost")).isEmpty();
+    }
+
     private static ProjectOauthClient activeClient(List<String> redirectUris, List<String> postLogout) {
         return new ProjectOauthClient(
                 PROJECT_ID, "nxo-" + UUID.randomUUID(), null, "client",
