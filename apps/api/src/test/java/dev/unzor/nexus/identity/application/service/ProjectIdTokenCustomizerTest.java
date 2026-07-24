@@ -32,11 +32,11 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
- * Tests unitarios del {@link ProjectIdTokenCustomizer}: verifica que el claim
- * {@code permissions} (claves de permiso, comodines verbatim) se emite tanto en
- * el access token como en el ID token, junto a {@code project_id} y
- * {@code authz_version}. Se construye el {@link JwtEncodingContext} a mano (sin
- * contexto Spring ni MockMvc).
+ * Tests unitarios del {@link ProjectIdTokenCustomizer}: verifica que los claims
+ * {@code permissions} (claves de permiso, comodines verbatim) y {@code roles}
+ * (claves de rol) se emiten tanto en el access token como en el ID token, junto a
+ * {@code project_id} y {@code authz_version}. Se construye el
+ * {@link JwtEncodingContext} a mano (sin contexto Spring ni MockMvc).
  */
 class ProjectIdTokenCustomizerTest {
 
@@ -45,19 +45,21 @@ class ProjectIdTokenCustomizerTest {
     private static final String ISSUER = "http://localhost:8080/p/shop";
 
     @Test
-    void permissionsClaimEmittedInAccessTokenAndIdToken() {
+    void permissionsAndRolesClaimsEmittedInAccessTokenAndIdToken() {
         ProjectSlugResolver slugResolver = mock(ProjectSlugResolver.class);
         when(slugResolver.resolve("shop")).thenReturn(new ProjectAuthenticationContext(PROJECT_ID, "shop"));
         EffectiveAuthoritiesService authorities = mock(EffectiveAuthoritiesService.class);
         // TreeSet refleja el orden determinista real de EffectiveAuthorities.
         when(authorities.forUser(PROJECT_ID, USER_ID))
-                .thenReturn(new EffectiveAuthorities(new TreeSet<>(Set.of("orders.*", "orders.read"))));
+                .thenReturn(new EffectiveAuthorities(
+                        new TreeSet<>(Set.of("orders.*", "orders.read")),
+                        new TreeSet<>(Set.of("admin"))));
 
         ProjectIdTokenCustomizer customizer = new ProjectIdTokenCustomizer(slugResolver, authorities);
         ProjectUserPrincipal pup = principal(7L);
 
-        // ACCESS y ID token: el customizer no filtra por tipo, así que permissions
-        // aterriza en ambos encodings.
+        // ACCESS y ID token: el customizer no filtra por tipo, así que permissions y roles
+        // aterrizan en ambos encodings.
         List<OAuth2TokenType> tokenTypes = List.of(
                 OAuth2TokenType.ACCESS_TOKEN,
                 new OAuth2TokenType("id_token"));
@@ -69,8 +71,25 @@ class ProjectIdTokenCustomizerTest {
                     .containsEntry("project_id", PROJECT_ID.toString())
                     .containsEntry("authz_version", 7L)
                     // Comodines verbatim (ADR-0003), en el orden canónico del TreeSet.
-                    .containsEntry("permissions", List.of("orders.*", "orders.read"));
+                    .containsEntry("permissions", List.of("orders.*", "orders.read"))
+                    // Claves de rol: un cliente autoriza por rol (p. ej. "es admin").
+                    .containsEntry("roles", List.of("admin"));
         }
+    }
+
+    @Test
+    void userWithoutRolesEmitsEmptyRolesClaim() {
+        ProjectSlugResolver slugResolver = mock(ProjectSlugResolver.class);
+        when(slugResolver.resolve("shop")).thenReturn(new ProjectAuthenticationContext(PROJECT_ID, "shop"));
+        EffectiveAuthoritiesService authorities = mock(EffectiveAuthoritiesService.class);
+        when(authorities.forUser(PROJECT_ID, USER_ID))
+                .thenReturn(EffectiveAuthorities.empty());
+
+        ProjectIdTokenCustomizer customizer = new ProjectIdTokenCustomizer(slugResolver, authorities);
+
+        Map<String, Object> claims = runCustomizer(customizer, OAuth2TokenType.ACCESS_TOKEN, principal(7L));
+
+        assertThat(claims).containsEntry("roles", List.of());
     }
 
     @Test
@@ -83,7 +102,7 @@ class ProjectIdTokenCustomizerTest {
         // Principal que NO es ProjectUserPrincipal (p. ej. client credentials): sin claims de usuario.
         Map<String, Object> claims = runCustomizer(customizer, OAuth2TokenType.ACCESS_TOKEN, "not-a-project-user");
 
-        assertThat(claims).doesNotContainKey("permissions").doesNotContainKey("project_id");
+        assertThat(claims).doesNotContainKey("permissions").doesNotContainKey("project_id").doesNotContainKey("roles");
     }
 
     @Test
@@ -115,7 +134,7 @@ class ProjectIdTokenCustomizerTest {
         Map<String, Object> claims = runCustomizer(
                 customizer, OAuth2TokenType.ACCESS_TOKEN, principal(7L));
 
-        assertThat(claims).doesNotContainKey("permissions").doesNotContainKey("project_id");
+        assertThat(claims).doesNotContainKey("permissions").doesNotContainKey("project_id").doesNotContainKey("roles");
         verifyNoInteractions(authorities);
     }
 

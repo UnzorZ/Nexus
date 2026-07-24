@@ -23,20 +23,24 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Añade los claims {@code project_id}, {@code authz_version} y {@code permissions}
- * a los access/ID tokens emitidos para usuarios finales (spec §15.3). Lee el
+ * Añade los claims {@code project_id}, {@code authz_version}, {@code permissions}
+ * y {@code roles} a los access/ID tokens emitidos para usuarios finales. Lee el
  * issuer resuelto por SAS ({@code {origin}/p/{slug}}), resuelve el proyecto desde
  * el slug y, si el principal es un {@link ProjectUserPrincipal}, incrusta los
  * claims.
  *
  * <p>{@code permissions} contiene las claves de permiso efectivas del usuario
  * (comodines {@code orders.*} / {@code *} verbatim, ADR-0003); un resource server
- * que valide el JWT localmente puede autorizar a partir de ellas. Se emiten tanto
- * en el access token como en el ID token (sin filtro por tipo de token).</p>
+ * que valide el JWT localmente puede autorizar a partir de ellas. {@code roles}
+ * contiene las claves de los roles asignados (p. ej. {@code admin}), para que un
+ * cliente autorice por rol sin expandir permisos. Se emiten tanto en el access
+ * token como en el ID token (sin filtro por tipo de token); {@code /userinfo} los
+ * reexpone vía el {@code userInfoMapper}.</p>
  *
  * <p>No añade nada para flujos sin usuario final (p. ej. client credentials) ni
  * cuando el issuer no corresponde a un proyecto. El claim {@code iss} lo fija el
- * framework; aquí sólo se enriquecen los claims de proyecto.</p>
+ * framework; aquí sólo se enriquecen los claims de proyecto. Ver
+ * {@code docs/auth/oidc-claims.md} para el catálogo completo de claims.</p>
  */
 @Component
 public class ProjectIdTokenCustomizer implements OAuth2TokenCustomizer<JwtEncodingContext> {
@@ -102,6 +106,11 @@ public class ProjectIdTokenCustomizer implements OAuth2TokenCustomizer<JwtEncodi
         // a un ArrayList para una serialización Jackson determinista en oauth2_authorization.
         EffectiveAuthorities authorities = effectiveAuthoritiesService.forUser(pup.projectId(), pup.userId());
         context.getClaims().claim("permissions", new ArrayList<>(authorities.permissionKeys()));
+
+        // roles: claves de los roles asignados al usuario (p. ej. "admin"). Permite que un
+        // cliente autorice por rol (¿es admin de la app?) sin expandir permisos. Lista vacía
+        // si el usuario no tiene roles.
+        context.getClaims().claim("roles", new ArrayList<>(authorities.roleKeys()));
 
         // amr: refleja el segundo factor cuando el login completó MFA TOTP (M5).
         if (hasTotpFactor(principalAuth)) {

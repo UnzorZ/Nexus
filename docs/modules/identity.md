@@ -328,12 +328,14 @@ sesiones (listado/revocación). El panel Nexus usa un modelo separado
 
 Las rutas de autenticación pública están protegidas por rate-limiting per-IP
 (bucket4j), y PostgreSQL se respalda con `scripts/backup-db.sh` según el runbook
-correspondiente. El access token, el ID token y `/userinfo` incluyen el claim
+correspondiente. El access token, el ID token y `/userinfo` incluyen los claims
 `permissions` (claves de permiso efectivas, comodines `orders.*` / `*` en formato
-verbatim, ADR-0003) a través de `ProjectIdTokenCustomizer` y `userInfoMapper`,
-lo que permite autorizar localmente a partir del JWT sin ida y vuelta a Nexus; la
+verbatim, ADR-0003) y `roles` (claves de los roles asignados al usuario, por
+ejemplo `admin`) a través de `ProjectIdTokenCustomizer` y `userInfoMapper`, lo
+que permite autorizar localmente a partir del JWT sin ida y vuelta a Nexus; la
 app de referencia en `examples/spring-client-app` demuestra este flujo como
-resource server. El módulo expone además un health-check interno.
+resource server. El catálogo completo de claims está en `docs/auth/oidc-claims.md`.
+El módulo expone además un health-check interno.
 
 No hay trabajo pendiente relevante sobre este alcance: la incorporación del
 claim `permissions` y la app de referencia como resource server cierran el
