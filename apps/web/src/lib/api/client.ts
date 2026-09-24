@@ -99,6 +99,21 @@ export async function apiRequest<T>(
       window.location.assign("/login/suspended");
     }
 
+    // Interceptor global: sesión caducada o inválida (401) devuelve al login
+    // recordando la URL actual para volver tras autenticarse de nuevo (el login
+    // consume "continue", ver isInternalPath allí). Se ignora en la propia
+    // página de login para no redirigir en bucle.
+    if (
+      response.status === 401 &&
+      typeof window !== "undefined" &&
+      !window.location.pathname.startsWith("/login")
+    ) {
+      const back = encodeURIComponent(
+        window.location.pathname + window.location.search,
+      );
+      window.location.assign(`/login?continue=${back}`);
+    }
+
     throw new NexusApiError(message, {
       status: response.status,
       code,

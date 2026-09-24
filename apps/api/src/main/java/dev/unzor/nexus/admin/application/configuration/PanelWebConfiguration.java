@@ -1,8 +1,10 @@
 package dev.unzor.nexus.admin.application.configuration;
 
+import dev.unzor.nexus.shared.security.AuthenticatedAccountArgumentResolver;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
@@ -23,7 +25,8 @@ class PanelWebConfiguration {
     @Bean
     WebMvcConfigurer panelCorsConfigurer(
             @Value("${nexus.frontend-base-url:http://localhost:3000}") String frontendBaseUrl,
-            @Value("${nexus.allowed-dev-origins:${NEXUS_ALLOWED_DEV_ORIGINS:}}") String allowedDevOrigins
+            @Value("${nexus.allowed-dev-origins:${NEXUS_ALLOWED_DEV_ORIGINS:}}") String allowedDevOrigins,
+            AuthenticatedAccountArgumentResolver authenticatedAccountResolver
     ) {
         String[] allowedOrigins = resolveAllowedOrigins(frontendBaseUrl, allowedDevOrigins);
 
@@ -35,6 +38,14 @@ class PanelWebConfiguration {
                         .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
                         .allowedHeaders("*")
                         .allowCredentials(true);
+            }
+
+            @Override
+            public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
+                // Every @AuthenticationPrincipal AuthenticatedAccount argument resolves here: a
+                // request without an account principal answers 401 (login again) instead of
+                // failing inside the controller as a NullPointerException surfaced as 500.
+                resolvers.add(authenticatedAccountResolver);
             }
         };
     }

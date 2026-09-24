@@ -67,6 +67,10 @@ services:
       redis: { condition: service_healthy }
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      # Panel session: sliding inactivity window. Spring Session refreshes the Redis
+      # TTL on every authenticated request, so an in-use session lives forever and a
+      # 30-minute idle one expires (the 401 interceptor then returns the user to login).
+      NEXUS_SESSION_TIMEOUT: ${NEXUS_SESSION_TIMEOUT:-30m}
       # Never let Spring Boot manage the dev compose stack in production.
       SPRING_DOCKER_COMPOSE_ENABLED: "false"
       NEXUS_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-nexus}
