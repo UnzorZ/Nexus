@@ -93,10 +93,13 @@ function LoginScreen() {
   const continuePath =
     rawContinue && isInternalPath(rawContinue) ? rawContinue : "/projects";
   const loggedOut = searchParams.get("logout") === "1";
+  // Callback de Google con MFA pendiente: la contraseña (federada) ya se validó
+  // y el ticket espera el código TOTP — entrar directo al paso del segundo factor.
+  const mfaPending = searchParams.get("mfa_required") === "1";
 
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [step, setStep] = useState<"password" | "mfa">("password");
+  const [step, setStep] = useState<"password" | "mfa">(mfaPending ? "mfa" : "password");
 
   const loginM = useMutation({
     mutationFn: async ({

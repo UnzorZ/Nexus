@@ -9,6 +9,8 @@ import dev.unzor.nexus.projects.domain.exception.ProjectNotFoundException;
 import dev.unzor.nexus.projects.domain.exception.ProjectNotOperationalException;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.FactorGrantedAuthority;
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
@@ -153,6 +155,69 @@ class ProjectIdTokenCustomizerTest {
                         error -> assertThat(error.getError().getErrorCode())
                                 .isEqualTo(OAuth2ErrorCodes.INVALID_GRANT));
         verifyNoInteractions(authorities);
+    }
+
+    @Test
+    void passwordOnlySessionEmitsPwdAmrAndPwdAcr() {
+        Map<String, Object> claims = runWithFactors(factor(FactorGrantedAuthority.PASSWORD_AUTHORITY));
+
+        assertThat(claims).containsEntry("amr", List.of("pwd")).containsEntry("acr", "pwd");
+    }
+
+    @Test
+    void passwordAndTotpSessionEmitsOtpAmrAndMfaAcr() {
+        Map<String, Object> claims = runWithFactors(
+                factor(FactorGrantedAuthority.PASSWORD_AUTHORITY),
+                factor("FACTOR_TOTP"));
+
+        assertThat(claims).containsEntry("amr", List.of("pwd", "otp")).containsEntry("acr", "mfa");
+    }
+
+    @Test
+    void googleAndTotpSessionEmitsGoogleOtpAmrAndMfaAcr() {
+        // withFactor("google") genera la authority "FACTOR_google" (sin mayúsculas): el
+        // mapeo debe basarse en lo que el session authenticator construye de verdad.
+        Map<String, Object> claims = runWithFactors(factor("FACTOR_google"), factor("FACTOR_TOTP"));
+
+        assertThat(claims).containsEntry("amr", List.of("google", "otp")).containsEntry("acr", "mfa");
+    }
+
+    @Test
+    void googleOnlySessionEmitsGoogleAmrAndGoogleAcr() {
+        Map<String, Object> claims = runWithFactors(factor("FACTOR_google"));
+
+        assertThat(claims).containsEntry("amr", List.of("google")).containsEntry("acr", "google");
+    }
+
+    @Test
+    void sessionWithoutFactorAuthoritiesEmitsNoAmrOrAcr() {
+        // Client credentials: la Authentication existe pero sin factores; no se fabrican
+        // amr/acr.
+        Map<String, Object> claims = runWithFactors();
+
+        assertThat(claims).doesNotContainKey("amr").doesNotContainKey("acr");
+    }
+
+    private static FactorGrantedAuthority factor(String authority) {
+        return FactorGrantedAuthority.fromAuthority(authority);
+    }
+
+    /** Igual que {@link #runCustomizer}, pero la Authentication lleva factores dados. */
+    private static Map<String, Object> runWithFactors(GrantedAuthority... factors) {
+        var auth = new UsernamePasswordAuthenticationToken(principal(7L), null, List.of(factors));
+        JwtEncodingContext ctx = JwtEncodingContext
+                .with(JwsHeader.with(SignatureAlgorithm.RS256), JwtClaimsSet.builder())
+                .tokenType(OAuth2TokenType.ACCESS_TOKEN)
+                .authorizationServerContext(serverContext())
+                .principal(auth)
+                .build();
+        ctx.getClaims().claim("iss", ISSUER);
+        ProjectSlugResolver slugResolver = mock(ProjectSlugResolver.class);
+        when(slugResolver.resolve("shop")).thenReturn(new ProjectAuthenticationContext(PROJECT_ID, "shop"));
+        EffectiveAuthoritiesService authorities = mock(EffectiveAuthoritiesService.class);
+        when(authorities.forUser(PROJECT_ID, USER_ID)).thenReturn(EffectiveAuthorities.empty());
+        new ProjectIdTokenCustomizer(slugResolver, authorities).customize(ctx);
+        return ctx.getClaims().build().getClaims();
     }
 
     private static ProjectUserPrincipal principal(long authzVersion) {

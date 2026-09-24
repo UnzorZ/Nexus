@@ -173,7 +173,8 @@ public class ProjectSessionAuthenticator {
             session.setAttribute(FindByIndexNameSessionRepository.PRINCIPAL_NAME_INDEX_NAME,
                     NexusSessionAttributes.projectUserIndexValue(user.getId()));
             session.setAttribute(NexusSessionAttributes.MFA_PENDING,
-                    new MfaPendingTicket(user.getId(), projectId, now, now.plus(MFA_PENDING_TTL)));
+                    new MfaPendingTicket(user.getId(), projectId, now, now.plus(MFA_PENDING_TTL),
+                            MfaPendingTicket.FACTOR_PASSWORD));
             throw new MfaRequiredException(projectId, user.getEmail());
         }
 
@@ -257,11 +258,18 @@ public class ProjectSessionAuthenticator {
         session.removeAttribute(NexusSessionAttributes.MFA_PENDING);
         ProjectUserPrincipal principal =
                 (ProjectUserPrincipal) userDetailsService.loadProjectUser(projectId, user.getEmail());
+        // El factor primario sale del ticket, no se asume contraseña: un login federado
+        // (Google) con MFA completa aquí con FACTOR_google + auth_time del proveedor, y
+        // la auditoría distingue ambos métodos.
+        boolean federated = MfaPendingTicket.FACTOR_GOOGLE.equals(ticket.primaryFactor());
+        GrantedAuthority primaryFactor = federated
+                ? FactorGrantedAuthority.withFactor(MfaPendingTicket.FACTOR_GOOGLE)
+                        .issuedAt(ticket.passwordVerifiedAt()).build()
+                : FactorGrantedAuthority.withAuthority(FactorGrantedAuthority.PASSWORD_AUTHORITY)
+                        .issuedAt(ticket.passwordVerifiedAt()).build();
+        String authMethod = federated ? MfaPendingTicket.FACTOR_GOOGLE : MfaPendingTicket.FACTOR_PASSWORD;
         return establishSession(principal, user, projectId,
-                FactorGrantedAuthority
-                        .withAuthority(FactorGrantedAuthority.PASSWORD_AUTHORITY)
-                        .issuedAt(ticket.passwordVerifiedAt()).build(),
-                now, "project_user.login_succeeded", "password", request, response);
+                primaryFactor, now, "project_user.login_succeeded", authMethod, request, response);
     }
 
     /**

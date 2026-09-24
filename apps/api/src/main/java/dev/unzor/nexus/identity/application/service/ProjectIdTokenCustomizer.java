@@ -20,6 +20,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 /**
@@ -36,6 +37,13 @@ import java.util.UUID;
  * cliente autorice por rol sin expandir permisos. Se emiten tanto en el access
  * token como en el ID token (sin filtro por tipo de token); {@code /userinfo} los
  * reexpone vía el {@code userInfoMapper}.</p>
+ *
+ * <p>{@code amr} refleja los métodos de autenticación reales de la sesión, derivados
+ * de los {@link FactorGrantedAuthority} del principal ({@code pwd} por contraseña,
+ * {@code otp} por TOTP y el resto verbatim en minúsculas, p. ej. {@code google});
+ * {@code acr} vale {@code mfa} cuando hubo segundo factor TOTP y, si no, el factor
+ * primario. Ambos se emiten en access e ID token y se omiten si la sesión no lleva
+ * factores (no se fabrican).</p>
  *
  * <p>No añade nada para flujos sin usuario final (p. ej. client credentials) ni
  * cuando el issuer no corresponde a un proyecto. El claim {@code iss} lo fija el
@@ -112,22 +120,43 @@ public class ProjectIdTokenCustomizer implements OAuth2TokenCustomizer<JwtEncodi
         // si el usuario no tiene roles.
         context.getClaims().claim("roles", new ArrayList<>(authorities.roleKeys()));
 
-        // amr: refleja el segundo factor cuando el login completó MFA TOTP (M5).
-        if (hasTotpFactor(principalAuth)) {
-            context.getClaims().claim("amr", List.of("pwd", "otp"));
+        // amr: métodos de autenticación reales de la sesión, derivados de los factores
+        // del principal (no se asume contraseña como primario). acr: "mfa" con segundo
+        // factor TOTP; en otro caso, el factor primario. Sin factores, no se emiten.
+        List<String> factors = factors(principalAuth);
+        if (!factors.isEmpty()) {
+            context.getClaims().claim("amr", factors);
+            context.getClaims().claim("acr", factors.contains("otp") ? "mfa" : factors.get(0));
         }
     }
 
-    private static boolean hasTotpFactor(Authentication auth) {
+    /**
+     * Extrae los factores {@link FactorGrantedAuthority} del {@link Authentication} y
+     * los mapea a valores OIDC {@code amr}: quita el prefijo {@code FACTOR_} de la
+     * authority, pasa a minúsculas y traduce {@code password} → {@code pwd} y
+     * {@code totp} → {@code otp}; el resto pasa verbatim (p. ej. {@code google}).
+     */
+    private static List<String> factors(Authentication auth) {
         if (auth == null || auth.getAuthorities() == null) {
-            return false;
+            return List.of();
         }
+        List<String> amr = new ArrayList<>();
         for (GrantedAuthority a : auth.getAuthorities()) {
-            if (a instanceof FactorGrantedAuthority f && "FACTOR_TOTP".equals(f.getAuthority())) {
-                return true;
+            if (a instanceof FactorGrantedAuthority) {
+                String factor = a.getAuthority();
+                if (factor.startsWith("FACTOR_")) {
+                    factor = factor.substring("FACTOR_".length());
+                }
+                factor = factor.toLowerCase(Locale.ROOT);
+                if ("password".equals(factor)) {
+                    factor = "pwd";
+                } else if ("totp".equals(factor)) {
+                    factor = "otp";
+                }
+                amr.add(factor);
             }
         }
-        return false;
+        return amr;
     }
 
     /** Extrae el slug del issuer {@code {origin}/p/{slug}} (o de una URL con ese sufijo). */

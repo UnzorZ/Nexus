@@ -80,7 +80,8 @@ class ProjectArchivedSessionRevocationIT {
         var mfaPending = projectUserSession(archivedUserId);
         Instant now = Instant.now();
         mfaPending.setAttribute(NexusSessionAttributes.MFA_PENDING,
-                new MfaPendingTicket(archivedUserId, archivedProjectId, now, now.plusSeconds(300)));
+                new MfaPendingTicket(archivedUserId, archivedProjectId, now, now.plusSeconds(300),
+                        MfaPendingTicket.FACTOR_PASSWORD));
         var otherProject = projectUserSession(activeUserId);
         var panel = sessionRepository.createSession();
         panel.setAttribute(PanelSessionConfiguration.ACCOUNT_ID, UUID.randomUUID().toString());

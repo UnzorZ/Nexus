@@ -86,6 +86,8 @@ class GoogleOidcLoginController {
                     redirect(resolveSuccessTarget(loggedIn.continueUrl(), projectSlug, request));
             case GoogleLoginOutcome.LinkRequired ignored ->
                     redirect(linkBuilder.googleLinkRequiredLink(projectSlug));
+            case GoogleLoginOutcome.MfaRequired ignored ->
+                    redirect(linkBuilder.googleMfaRequiredLink(projectSlug));
             case GoogleLoginOutcome.FederationError federationError ->
                     redirect(linkBuilder.googleErrorLink(projectSlug, federationError.code()));
         };
@@ -107,9 +109,27 @@ class GoogleOidcLoginController {
             }
             case GoogleLoginOutcome.LinkRequired ignored ->
                     ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", "link_required"));
+            // 200 (no-error), igual que el login con contraseña: la sesión ya lleva el
+            // ticket MFA pendiente (anónima para SAS) y el SPA cambia al paso TOTP.
+            case GoogleLoginOutcome.MfaRequired mfaRequired ->
+                    ResponseEntity.ok(mfaRequiredJson(mfaRequired, projectSlug, servletRequest));
             case GoogleLoginOutcome.FederationError federationError ->
                     ResponseEntity.status(httpStatus(federationError.code())).body(Map.of("code", federationError.code()));
         };
+    }
+
+    /**
+     * Shape de respuesta de {@code MfaRequired}: {@code code=mfa_required} (la señal que el
+     * frontend ya conoce del login con contraseña) más el destino {@code redirect} cuando
+     * haya un {@code continueUrl} que reanudar tras verificar el código TOTP en
+     * {@code POST /login/mfa}.
+     */
+    private Map<String, String> mfaRequiredJson(
+            GoogleLoginOutcome.MfaRequired mfaRequired, String projectSlug, HttpServletRequest request
+    ) {
+        String redirect = resolveSuccessTarget(mfaRequired.continueUrl(), projectSlug, request);
+        return redirect == null ? Map.of("code", "mfa_required")
+                : Map.of("code", "mfa_required", "redirect", redirect);
     }
 
     private ProjectAuthenticationContext resolve(String projectSlug) {

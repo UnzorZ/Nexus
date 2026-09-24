@@ -98,6 +98,15 @@ public class EndUserLinkBuilder {
     }
 
     /**
+     * App login page after a federated (Google) login of an account with TOTP MFA enabled:
+     * the app must ask for the second factor (same {@code POST /login/mfa} endpoint as the
+     * password flow). Lands on the <b>app</b> origin.
+     */
+    public String googleMfaRequiredLink(String projectSlug) {
+        return appOrigin(projectSlug, "/login?mfa_required=1");
+    }
+
+    /**
      * App login page with a Google federation error code, so the SPA can show the reason (for
      * example a denied consent or an unverified email). Lands on the <b>app</b> origin.
      */

@@ -19,7 +19,8 @@ no añade estos claims.
 | `authz_version` | integer | La versión de autorización. Aumenta cuando cambian los permisos o los roles. Invalida los tokens anteriores. |
 | `permissions` | array de strings | Las claves de permiso efectivas. Incluye comodines (`orders.*`, `*`) en formato verbatim. |
 | `roles` | array de strings | Las claves de los roles asignados al usuario (por ejemplo, `admin`). Lista vacía si el usuario no tiene roles. |
-| `amr` | array de strings | Solo si el login uso MFA TOTP: `["pwd", "otp"]`. |
+| `amr` | array de strings | Los métodos de autenticación de la sesión. Nexus lo deriva de los factores reales del login: `pwd` (contraseña), `otp` (TOTP) o el proveedor externo (por ejemplo, `google`). No aparece si la sesión no lleva factores. |
+| `acr` | string | `mfa` si el login completo un segundo factor TOTP. Si no, el factor primario: `pwd` o el proveedor externo (por ejemplo, `google`). No aparece si la sesión no lleva factores. |
 
 ## Como se llenan `permissions` y `roles`
 

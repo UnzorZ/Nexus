@@ -7,11 +7,13 @@ import dev.unzor.nexus.identity.domain.entity.ProjectOidcIdp;
 import dev.unzor.nexus.identity.domain.entity.ProjectUser;
 import dev.unzor.nexus.identity.domain.entity.ProjectUserOidcLink;
 import dev.unzor.nexus.identity.domain.exception.OidcFederationException;
+import dev.unzor.nexus.identity.infrastructure.security.MfaPendingTicket;
 import dev.unzor.nexus.identity.infrastructure.security.ProjectSessionAuthenticator;
 import dev.unzor.nexus.identity.persistence.repository.ProjectOidcIdpRepository;
 import dev.unzor.nexus.identity.persistence.repository.ProjectUserOidcLinkRepository;
 import dev.unzor.nexus.identity.persistence.repository.ProjectUserRepository;
 import dev.unzor.nexus.shared.audit.AuditEvent;
+import dev.unzor.nexus.shared.security.NexusSessionAttributes;
 import dev.unzor.nexus.shared.security.OidcFederationCrypto;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -21,6 +23,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.session.FindByIndexNameSessionRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -29,6 +32,7 @@ import org.springframework.util.StringUtils;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Map;
@@ -55,6 +59,8 @@ public class GoogleFederationService {
 
     private static final Logger log = LoggerFactory.getLogger(GoogleFederationService.class);
     private static final int DISPLAY_NAME_MAX = 120;
+    /** TTL del ticket MFA pendiente tras un primer factor federado (igual que el flujo de contraseña). */
+    private static final Duration MFA_PENDING_TTL = Duration.ofMinutes(5);
 
     private final ProjectOidcIdpRepository idpRepository;
     private final ProjectUserOidcLinkRepository linkRepository;
@@ -203,6 +209,11 @@ public class GoogleFederationService {
                     ctx.projectId(), "project_user.google_linked", "project_user",
                     Objects.toString(user.getId(), null), user.getId(),
                     Map.of("email", user.getEmail(), "subject", ticket.subject())));
+            GoogleLoginOutcome mfaPending = mfaPendingIfRequired(
+                    ctx.projectId(), user, ticket.authenticatedAt(), ticket.continueUrl(), request);
+            if (mfaPending != null) {
+                return mfaPending;
+            }
             sessionAuthenticator.establishFederatedSession(
                     ctx.projectId(), user.getId(), GoogleOidc.FACTOR, ticket.authenticatedAt(), request, response);
             return new GoogleLoginOutcome.LoggedIn(ticket.continueUrl());
@@ -247,6 +258,11 @@ public class GoogleFederationService {
         if (user == null || !user.canAuthenticate()) {
             return new GoogleLoginOutcome.FederationError("account_unavailable");
         }
+        GoogleLoginOutcome mfaPending = mfaPendingIfRequired(
+                projectId, user, Instant.now(), continueUrl, request);
+        if (mfaPending != null) {
+            return mfaPending;
+        }
         sessionAuthenticator.establishFederatedSession(
                 projectId, userId, GoogleOidc.FACTOR, Instant.now(), request, response);
         return new GoogleLoginOutcome.LoggedIn(continueUrl);
@@ -288,9 +304,50 @@ public class GoogleFederationService {
                 projectId, "project_user.google_provisioned", "project_user",
                 Objects.toString(saved.getId(), null), saved.getId(),
                 Map.of("email", saved.getEmail(), "subject", verified.subject())));
+        GoogleLoginOutcome mfaPending = mfaPendingIfRequired(
+                projectId, saved, Instant.now(), continueUrl, request);
+        if (mfaPending != null) {
+            return mfaPending;
+        }
         sessionAuthenticator.establishFederatedSession(
                 projectId, saved.getId(), GoogleOidc.FACTOR, Instant.now(), request, response);
         return new GoogleLoginOutcome.LoggedIn(continueUrl);
+    }
+
+    /**
+     * Puerta de MFA de los logins federados: si la cuenta resuelta tiene TOTP activo, el
+     * primer factor de Google NO basta para autenticar. Fija el mismo ticket efímero que el
+     * flujo de contraseña ({@link MfaPendingTicket}, factor primario {@code google}, con el
+     * índice de ProjectUser para que el archivado del proyecto pueda revocar la sesión
+     * anónima) y devuelve {@link GoogleLoginOutcome.MfaRequired} — sin persistir ningún
+     * {@code SecurityContext}. El segundo factor se completa vía el mismo
+     * {@code POST /api/p/{slug}/login/mfa} del flujo de contraseña. Devuelve {@code null}
+     * cuando la cuenta no tiene MFA y el login federado puede continuar.
+     *
+     * @param authenticatedAt instante en que Google verificó la identidad (auth_time del
+     *                        primer factor)
+     */
+    private GoogleLoginOutcome mfaPendingIfRequired(
+            UUID projectId, ProjectUser user, Instant authenticatedAt,
+            String continueUrl, HttpServletRequest request
+    ) {
+        if (!user.isMfaEnabled()) {
+            return null;
+        }
+        Instant now = Instant.now();
+        HttpSession session = request.getSession();
+        // Igual que en el flujo de contraseña: la sesión anónima con MFA pendiente queda
+        // bajo el índice estable del ProjectUser, de modo que al archivar el proyecto se
+        // borre junto con las sesiones autenticadas y no pueda revivir tras restaurarlo.
+        // RedisIndexedSessionRepository sólo recalcula el índice cuando cambia principalName
+        // o SPRING_SECURITY_CONTEXT: este marcador dispara el IndexResolver sin autenticar.
+        session.setAttribute(NexusSessionAttributes.PROJECT_USER_ID, user.getId().toString());
+        session.setAttribute(FindByIndexNameSessionRepository.PRINCIPAL_NAME_INDEX_NAME,
+                NexusSessionAttributes.projectUserIndexValue(user.getId()));
+        session.setAttribute(NexusSessionAttributes.MFA_PENDING,
+                new MfaPendingTicket(user.getId(), projectId, authenticatedAt,
+                        now.plus(MFA_PENDING_TTL), MfaPendingTicket.FACTOR_GOOGLE));
+        return new GoogleLoginOutcome.MfaRequired(continueUrl);
     }
 
     private ProjectOidcIdp requireEnabledConfig(UUID projectId) {
