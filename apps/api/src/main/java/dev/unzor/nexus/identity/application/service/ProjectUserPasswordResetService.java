@@ -70,6 +70,22 @@ public class ProjectUserPasswordResetService {
                 .ifPresent(this::issueAndSend);
     }
 
+    /**
+     * Reseteo pedido por un servicio del proyecto para un usuario concreto (API de
+     * proyecto). A diferencia de {@link #requestReset}, dice si se envió: solo las
+     * cuentas con email verificado reciben el enlace.
+     */
+    @Transactional
+    public boolean requestResetFor(UUID projectId, UUID userId) {
+        return repository.findByProjectIdAndId(projectId, userId)
+                .filter(ProjectUser::isEmailVerified)
+                .map(user -> {
+                    issueAndSend(user);
+                    return true;
+                })
+                .orElse(false);
+    }
+
     private void issueAndSend(ProjectUser user) {
         String slug = projectLookupService.requireSlug(user.getProjectId());
         String rawToken = IdentityTokens.generate();

@@ -35,4 +35,20 @@ public class ProjectUserQueryService {
                 .map(ProjectUserDetails::from)
                 .orElseThrow(() -> new ProjectUserNotFoundException(projectId, userId));
     }
+
+    /**
+     * El usuario cuyo login OIDC ({@code sub}) es {@code login}: el username si lo
+     * tiene, si no el email (ver {@code ProjectUserPrincipal.loginOf}).
+     */
+    @Transactional(readOnly = true)
+    public java.util.Optional<ProjectUserDetails> findByLogin(UUID projectId, String login) {
+        String clean = login == null ? "" : login.trim();
+        if (clean.isEmpty()) {
+            return java.util.Optional.empty();
+        }
+        return repository.findByProjectIdAndUsername(projectId, clean)
+                .or(() -> repository.findByProjectIdAndEmailIgnoreCase(projectId, clean)
+                        .filter(user -> user.getUsername() == null))
+                .map(ProjectUserDetails::from);
+    }
 }

@@ -32,6 +32,9 @@ public interface ProjectUserRepository extends Repository<ProjectUser, UUID> {
 
     Optional<ProjectUser> findByProjectIdAndEmailIgnoreCase(UUID projectId, String email);
 
+    /** El login OIDC ({@code sub}) de un usuario con username es ese username. */
+    Optional<ProjectUser> findByProjectIdAndUsername(UUID projectId, String username);
+
     boolean existsByProjectIdAndEmailIgnoreCase(UUID projectId, String email);
 
     List<ProjectUser> findAllByProjectId(UUID projectId);

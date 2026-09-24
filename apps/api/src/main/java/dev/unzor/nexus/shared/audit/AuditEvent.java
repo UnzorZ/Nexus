@@ -100,4 +100,27 @@ public record AuditEvent(
                 MDC.get("traceId"),
                 reason == null ? null : Map.of("reason", reason));
     }
+
+    /** Actor explícito ({@link AuditActor}): cuenta del panel o API key del API de proyecto. */
+    public static AuditEvent by(
+            AuditActor actor,
+            UUID projectId,
+            String action,
+            String resourceType,
+            String resourceId,
+            Map<String, Object> metadata
+    ) {
+        return new AuditEvent(
+                projectId,
+                action,
+                resourceType,
+                resourceId,
+                Severity.forAction(action),
+                actor.type(),
+                actor.id(),
+                MDC.get("ip"),
+                MDC.get("userAgent"),
+                MDC.get("traceId"),
+                metadata);
+    }
 }

@@ -4,6 +4,7 @@ import dev.unzor.nexus.identity.api.dto.ProjectUserDetails;
 import dev.unzor.nexus.identity.domain.entity.ProjectUser;
 import dev.unzor.nexus.identity.domain.exception.ProjectUserNotFoundException;
 import dev.unzor.nexus.identity.persistence.repository.ProjectUserRepository;
+import dev.unzor.nexus.shared.audit.AuditActor;
 import dev.unzor.nexus.shared.audit.AuditEvent;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -41,17 +42,27 @@ public class ProjectUserStatusService {
 
     @Transactional
     public ProjectUserDetails suspend(UUID projectId, UUID userId, UUID actorAccountId) {
-        return restrict(projectId, userId, actorAccountId, "project_user.suspended", ProjectUser::suspend);
+        return suspend(projectId, userId, AuditActor.account(actorAccountId));
+    }
+
+    @Transactional
+    public ProjectUserDetails suspend(UUID projectId, UUID userId, AuditActor actor) {
+        return restrict(projectId, userId, actor, "project_user.suspended", ProjectUser::suspend);
     }
 
     @Transactional
     public ProjectUserDetails reactivate(UUID projectId, UUID userId, UUID actorAccountId) {
-        return transition(projectId, userId, actorAccountId, "project_user.reactivated", ProjectUser::reactivate);
+        return reactivate(projectId, userId, AuditActor.account(actorAccountId));
+    }
+
+    @Transactional
+    public ProjectUserDetails reactivate(UUID projectId, UUID userId, AuditActor actor) {
+        return transition(projectId, userId, actor, "project_user.reactivated", ProjectUser::reactivate);
     }
 
     @Transactional
     public ProjectUserDetails disable(UUID projectId, UUID userId, UUID actorAccountId) {
-        return restrict(projectId, userId, actorAccountId, "project_user.disabled", ProjectUser::disable);
+        return restrict(projectId, userId, AuditActor.account(actorAccountId), "project_user.disabled", ProjectUser::disable);
     }
 
     /**
@@ -61,16 +72,15 @@ public class ProjectUserStatusService {
      * refresh token podía seguir emitiendo tokens nuevos tras suspender/desactivar.
      */
     private ProjectUserDetails restrict(
-            UUID projectId, UUID userId, UUID actorAccountId, String action, Consumer<ProjectUser> mutator
+            UUID projectId, UUID userId, AuditActor actor, String action, Consumer<ProjectUser> mutator
     ) {
         ProjectUser user = load(projectId, userId);
         mutator.accept(user);
         user.incrementAuthzVersion();
         ProjectUser saved = repository.save(user);
         revokeCredentials(projectId, userId, saved);
-        eventPublisher.publishEvent(AuditEvent.byAccount(
-                projectId, action, "project_user", Objects.toString(saved.getId(), null),
-                actorAccountId, Map.of()));
+        eventPublisher.publishEvent(AuditEvent.by(
+                actor, projectId, action, "project_user", Objects.toString(saved.getId(), null), Map.of()));
         return ProjectUserDetails.from(saved);
     }
 
@@ -87,26 +97,30 @@ public class ProjectUserStatusService {
      */
     @Transactional
     public ProjectUserDetails revokeTokens(UUID projectId, UUID userId, UUID actorAccountId) {
+        return revokeTokens(projectId, userId, AuditActor.account(actorAccountId));
+    }
+
+    @Transactional
+    public ProjectUserDetails revokeTokens(UUID projectId, UUID userId, AuditActor actor) {
         ProjectUser user = load(projectId, userId);
         user.incrementAuthzVersion();
         ProjectUserDetails details = ProjectUserDetails.from(repository.save(user));
         // Sesiones HTTP + autorizaciones OAuth persistidas (refresh tokens).
         revokeCredentials(projectId, userId, user);
-        eventPublisher.publishEvent(AuditEvent.byAccount(
-                projectId, "project_user.tokens_revoked", "project_user",
-                Objects.toString(user.getId(), null), actorAccountId, Map.of()));
+        eventPublisher.publishEvent(AuditEvent.by(
+                actor, projectId, "project_user.tokens_revoked", "project_user",
+                Objects.toString(user.getId(), null), Map.of()));
         return details;
     }
 
     private ProjectUserDetails transition(
-            UUID projectId, UUID userId, UUID actorAccountId, String action, Consumer<ProjectUser> mutator
+            UUID projectId, UUID userId, AuditActor actor, String action, Consumer<ProjectUser> mutator
     ) {
         ProjectUser user = load(projectId, userId);
         mutator.accept(user);
         ProjectUser saved = repository.save(user);
-        eventPublisher.publishEvent(AuditEvent.byAccount(
-                projectId, action, "project_user", Objects.toString(saved.getId(), null),
-                actorAccountId, Map.of()));
+        eventPublisher.publishEvent(AuditEvent.by(
+                actor, projectId, action, "project_user", Objects.toString(saved.getId(), null), Map.of()));
         return ProjectUserDetails.from(saved);
     }
 

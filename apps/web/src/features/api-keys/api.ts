@@ -30,6 +30,8 @@ export const KNOWN_SCOPES = [
   "permissions:check",
   "authz:snapshot",
   "notify:send",
+  "users:read",
+  "users:write",
 ];
 
 const SCOPE_RE = /^[a-z][a-z0-9-]*:[a-z][a-z0-9_-]*$/;

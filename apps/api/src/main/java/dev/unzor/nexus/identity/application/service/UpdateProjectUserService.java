@@ -5,6 +5,7 @@ import dev.unzor.nexus.identity.domain.entity.ProjectUser;
 import dev.unzor.nexus.identity.domain.exception.ProjectUserNotFoundException;
 import dev.unzor.nexus.identity.infrastructure.security.ProjectUserPrincipal;
 import dev.unzor.nexus.identity.persistence.repository.ProjectUserRepository;
+import dev.unzor.nexus.shared.audit.AuditActor;
 import dev.unzor.nexus.shared.audit.AuditEvent;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -42,6 +43,13 @@ public class UpdateProjectUserService {
     public ProjectUserDetails update(
             UUID projectId, UUID userId, String displayName, String username, UUID actorAccountId
     ) {
+        return update(projectId, userId, displayName, username, AuditActor.account(actorAccountId));
+    }
+
+    @Transactional
+    public ProjectUserDetails update(
+            UUID projectId, UUID userId, String displayName, String username, AuditActor actor
+    ) {
         ProjectUser user = load(projectId, userId);
         String previousPrincipalName = ProjectUserPrincipal.loginOf(user);
         user.updateProfile(displayName.trim(), username == null || username.isBlank() ? null : username.trim());
@@ -54,9 +62,9 @@ public class UpdateProjectUserService {
             sessions.revokeAll(userId);
         }
         ProjectUser saved = repository.save(user);
-        eventPublisher.publishEvent(AuditEvent.byAccount(
-                projectId, "project_user.updated", "project_user", Objects.toString(saved.getId(), null),
-                actorAccountId, Map.of()));
+        eventPublisher.publishEvent(AuditEvent.by(
+                actor, projectId, "project_user.updated", "project_user", Objects.toString(saved.getId(), null),
+                Map.of()));
         return ProjectUserDetails.from(saved);
     }
 
