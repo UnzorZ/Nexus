@@ -372,12 +372,13 @@ public class GoogleFederationService {
         return b.append("/api/p/").append(ctx.projectSlug()).append("/login/google/callback").toString();
     }
 
+    /** Contador atómico en base de datos (F20): nunca leer-sumar-guardar la entidad. */
     private void recordFailedLoginBestEffort(ProjectUser user, Instant now) {
         try {
-            user.recordFailedLogin(now, loginProperties.maxAttempts(), loginProperties.lockoutDuration());
-            userRepository.save(user);
-        } catch (RuntimeException exception) {
-            log.warn("Failed to record Google-link failed login: userId={}", user.getId(), exception);
+            userRepository.recordFailedLogin(user.getProjectId(), user.getId(), now,
+                    loginProperties.maxAttempts(), now.plus(loginProperties.lockoutDuration()));
+        } catch (RuntimeException e) {
+            log.warn("Failed to record Google-link failed login: userId={}", user.getId(), e);
         }
     }
 

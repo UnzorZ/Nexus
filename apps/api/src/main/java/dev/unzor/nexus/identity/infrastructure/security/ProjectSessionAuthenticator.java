@@ -379,10 +379,11 @@ public class ProjectSessionAuthenticator {
                 Objects.toString(user.getId(), null), user.getId(), Map.of("email", user.getEmail())));
     }
 
+    /** Contador atómico en base de datos (F20): nunca leer-sumar-guardar la entidad. */
     private void recordFailedLoginBestEffort(ProjectUser user, Instant now) {
         try {
-            user.recordFailedLogin(now, loginProperties.maxAttempts(), loginProperties.lockoutDuration());
-            repository.save(user);
+            repository.recordFailedLogin(user.getProjectId(), user.getId(), now,
+                    loginProperties.maxAttempts(), now.plus(loginProperties.lockoutDuration()));
         } catch (RuntimeException e) {
             log.warn("Failed to record project-user failed login: userId={}", user.getId(), e);
         }

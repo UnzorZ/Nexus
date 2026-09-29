@@ -1,10 +1,13 @@
 package dev.unzor.nexus.identity.persistence.repository;
 
 import dev.unzor.nexus.identity.domain.entity.ProjectUser;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -21,6 +24,29 @@ public interface ProjectUserRepository extends Repository<ProjectUser, UUID> {
     ProjectUser save(ProjectUser user);
 
     Optional<ProjectUser> findByProjectIdAndId(UUID projectId, UUID userId);
+
+    /**
+     * Registra un intento de login fallido en una sola sentencia: suma 1 al contador y, al llegar a
+     * {@code maxAttempts}, fija {@code lockedUntil}. Un bloqueo ya caducado reinicia el contador a 1.
+     * Las peticiones en paralelo se ordenan por el bloqueo de fila de PostgreSQL, así que ningún
+     * intento se pierde (auditoría 2026-09-28, F20).
+     *
+     * @return filas actualizadas (0 si el usuario no existe en el proyecto)
+     */
+    @Modifying(flushAutomatically = true)
+    @Transactional
+    @Query("update ProjectUser u set "
+            + "u.failedLoginAttempts = case when u.lockedUntil is not null and u.lockedUntil <= :now then 1 "
+            + "    else u.failedLoginAttempts + 1 end, "
+            + "u.lockedUntil = case "
+            + "    when (case when u.lockedUntil is not null and u.lockedUntil <= :now then 1 "
+            + "          else u.failedLoginAttempts + 1 end) >= :maxAttempts then :lockUntil "
+            + "    when u.lockedUntil is not null and u.lockedUntil <= :now then cast(null as Instant) "
+            + "    else u.lockedUntil end "
+            + "where u.projectId = :projectId and u.id = :userId")
+    int recordFailedLogin(@Param("projectId") UUID projectId, @Param("userId") UUID userId,
+                          @Param("now") Instant now, @Param("maxAttempts") int maxAttempts,
+                          @Param("lockUntil") Instant lockUntil);
 
     /**
      * Sólo la versión de autorización actual del usuario (proyección fina para el

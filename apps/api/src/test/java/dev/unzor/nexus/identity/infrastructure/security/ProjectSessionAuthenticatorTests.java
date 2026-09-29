@@ -206,6 +206,15 @@ class ProjectSessionAuthenticatorTests {
         when(userDetailsService.loadProjectUser(projectId, "neo@example.com"))
                 .thenReturn(ProjectUserPrincipal.from(user, AUTHORITIES));
         when(repository.findByProjectIdAndId(projectId, user.getId())).thenReturn(Optional.of(user));
+        // El contador es una sentencia atómica en base de datos (F20): el mock la aplica a la entidad.
+        when(repository.recordFailedLogin(org.mockito.ArgumentMatchers.eq(projectId),
+                org.mockito.ArgumentMatchers.eq(user.getId()), any(), org.mockito.ArgumentMatchers.anyInt(), any()))
+                .thenAnswer(invocation -> {
+                    Instant at = invocation.getArgument(2);
+                    Instant until = invocation.getArgument(4);
+                    user.recordFailedLogin(at, invocation.getArgument(3), Duration.between(at, until));
+                    return 1;
+                });
 
         // 5 intentos fallidos (maxAttempts=5) -> la cuenta queda bloqueada.
         for (int i = 0; i < 5; i++) {
