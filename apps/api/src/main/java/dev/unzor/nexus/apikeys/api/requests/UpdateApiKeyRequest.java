@@ -7,10 +7,13 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 import java.time.Instant;
+import java.util.List;
 
 /**
  * Actualiza los campos editables de una API key: nombre, estado (activar /
- * deshabilitar) y expiración. La key/secret no son editables aquí (usa rotación).
+ * deshabilitar), expiración y scopes. {@code scopes} es opcional: {@code null}
+ * deja los actuales (clientes que no lo envían). La key/secret no son editables
+ * aquí (usa rotación).
  */
 @JsonIgnoreProperties(ignoreUnknown = false)
 public record UpdateApiKeyRequest(
@@ -21,6 +24,8 @@ public record UpdateApiKeyRequest(
         @NotNull
         ApiKeyStatus status,
 
-        Instant expiresAt
+        Instant expiresAt,
+
+        List<@NotNull @ApiKeyScope @Size(max = 64) String> scopes
 ) {
 }

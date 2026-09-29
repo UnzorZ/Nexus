@@ -82,11 +82,17 @@ public class ProjectApiKeysService {
             String name,
             ApiKeyStatus status,
             Instant expiresAt,
+            List<String> scopes,
             UUID actorAccountId
     ) {
         String slug = projectLookupService.requireSlug(projectId);
         ProjectApiKey key = requireKey(projectId, keyId);
         ApiKeyStatus previousStatus = key.getStatus();
+        List<String> previousScopes = key.getScopes();
+        boolean scopesChanged = scopes != null && !scopes.equals(previousScopes);
+        if (scopesChanged) {
+            key.replaceScopes(scopes);
+        }
         key.rename(name);
         if (status == ApiKeyStatus.DISABLED) {
             key.disable();
@@ -107,6 +113,13 @@ public class ProjectApiKeysService {
             action = "api_key.updated";
         }
         audit(action, projectId, keyId, actorAccountId, Map.of("name", name));
+        if (scopesChanged) {
+            // Un instance token lleva una copia de los scopes: se revoca para que
+            // el cambio (sobre todo quitar uno) se aplique ya y no al caducar.
+            instanceTokenService.revokeFor(keyId);
+            audit("api_key.scopes_changed", projectId, keyId, actorAccountId,
+                    Map.of("before", previousScopes, "after", scopes));
+        }
         return summary;
     }
 

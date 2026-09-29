@@ -36,7 +36,7 @@ export function useCreateApiKey(projectId: string) {
   });
 }
 
-/** Actualiza nombre/estado/expiración de una API key. */
+/** Actualiza nombre/estado/expiración de una API key y, si se envían, sus scopes. */
 export function useUpdateApiKey(projectId: string) {
   const qc = useQueryClient();
   return useMutation({
@@ -45,12 +45,14 @@ export function useUpdateApiKey(projectId: string) {
       name: string;
       status: ApiKeyStatus;
       expiresAt: string | null;
+      scopes?: string[];
     }) =>
       withCsrf((token) =>
         updateApiKey(projectId, vars.keyId, {
           name: vars.name,
           status: vars.status,
           expiresAt: vars.expiresAt,
+          scopes: vars.scopes,
         }, token),
       ),
     onSuccess: () =>

@@ -825,6 +825,34 @@ Rules:
 - Subsequent reads show metadata only.
 - Key creation writes an audit event.
 
+### 12.3 Update API Key
+
+Panel API:
+
+```http
+PATCH /api/panel/v1/projects/{projectId}/api-keys/{keyId}
+Content-Type: application/json
+```
+
+Request:
+
+```json
+{
+  "name": "fshop-backend",
+  "status": "ACTIVE",
+  "expiresAt": null,
+  "scopes": ["notify:send", "users:read"]
+}
+```
+
+Rules:
+
+- `scopes` is optional. If you do not send it, the key keeps its current scopes.
+- If you send `scopes`, the list replaces the current scopes. Each scope must have the format `module:action`. An incorrect scope gives `400 validation_error`, and the key does not change.
+- A scope change applies to the next request that uses the API key.
+- A scope change revokes all instance tokens of the key. SDK clients must register again to get a token with the new scopes.
+- A scope change writes the audit event `api_key.scopes_changed` with the scopes before and after the change.
+
 ## 13. Registry and Heartbeat
 
 ### 13.1 Heartbeat

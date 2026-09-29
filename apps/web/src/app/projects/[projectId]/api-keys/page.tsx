@@ -5,7 +5,6 @@ import { PlusIcon } from "@/components/ui/plus";
 import { EllipsisIcon } from "@/components/ui/ellipsis-icon";
 import { DeleteIcon } from "@/components/ui/delete";
 import { KeyCircleIcon } from "@/components/ui/key-circle";
-import { XIcon } from "@/components/ui/x";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,11 +47,8 @@ import {
   Panel,
   StatusBadge,
 } from "@/components/dashboard/shared";
-import {
-  KNOWN_SCOPES,
-  isValidScope,
-  type ApiKeySummary,
-} from "@/features/api-keys/api";
+import { type ApiKeySummary } from "@/features/api-keys/api";
+import { ScopePicker } from "@/features/api-keys/scope-picker";
 import {
   useCreateApiKey,
   useDeleteApiKey,
@@ -141,38 +137,19 @@ export default function ProjectApiKeysPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [keyName, setKeyName] = useState("");
   const [scopes, setScopes] = useState<string[]>([]);
-  const [scopeInput, setScopeInput] = useState("");
-  const [scopeError, setScopeError] = useState<string | null>(null);
   const [expiresAt, setExpiresAt] = useState("");
 
   const [revealed, setRevealed] = useState<ApiKeyCreated | null>(null);
   const [removeTarget, setRemoveTarget] = useState<ApiKeySummary | null>(null);
+  const [scopesTarget, setScopesTarget] = useState<ApiKeySummary | null>(null);
+  const [editScopes, setEditScopes] = useState<string[]>([]);
 
   const loadingState = projectLoading || (Boolean(project) && loading);
 
   function resetCreateForm() {
     setKeyName("");
     setScopes([]);
-    setScopeInput("");
-    setScopeError(null);
     setExpiresAt("");
-  }
-
-  function addScope(value: string) {
-    const trimmed = value.trim();
-    if (!trimmed) return;
-    if (!isValidScope(trimmed)) {
-      setScopeError("Use the format module:action (e.g. registry:heartbeat).");
-      return;
-    }
-    if (scopes.includes(trimmed)) {
-      setScopeInput("");
-      setScopeError(null);
-      return;
-    }
-    setScopes((current) => [...current, trimmed]);
-    setScopeInput("");
-    setScopeError(null);
   }
 
   async function onCreate() {
@@ -216,6 +193,28 @@ export default function ProjectApiKeysPage() {
         status: key.status === "ACTIVE" ? "DISABLED" : "ACTIVE",
         expiresAt: key.expiresAt,
       });
+    } catch {
+      /* actionError */
+    }
+  }
+
+  function openEditScopes(key: ApiKeySummary) {
+    resetActionErrors();
+    setEditScopes(key.scopes);
+    setScopesTarget(key);
+  }
+
+  async function onSaveScopes() {
+    if (!scopesTarget) return;
+    try {
+      await updateM.mutateAsync({
+        keyId: scopesTarget.id,
+        name: scopesTarget.name,
+        status: scopesTarget.status,
+        expiresAt: scopesTarget.expiresAt,
+        scopes: editScopes,
+      });
+      setScopesTarget(null);
     } catch {
       /* actionError */
     }
@@ -381,6 +380,12 @@ export default function ProjectApiKeysPage() {
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               disabled={busy}
+                              onClick={() => openEditScopes(key)}
+                            >
+                              Edit scopes
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              disabled={busy}
                               onClick={() => onRotate(key)}
                             >
                               Rotate
@@ -437,71 +442,7 @@ export default function ProjectApiKeysPage() {
                 <p className="text-xs text-destructive">{fieldErrors.name}</p>
               ) : null}
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>Scopes</Label>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="module:action"
-                  value={scopeInput}
-                  onChange={(e) => {
-                    setScopeInput(e.target.value);
-                    setScopeError(null);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      addScope(scopeInput);
-                    }
-                  }}
-                  className="font-mono"
-                />
-                <Button
-                  variant="outline"
-                  type="button"
-                  onClick={() => addScope(scopeInput)}
-                >
-                  Add
-                </Button>
-              </div>
-              {scopeError ? (
-                <p className="text-xs text-destructive">{scopeError}</p>
-              ) : null}
-              <div className="flex flex-wrap gap-1">
-                {KNOWN_SCOPES.filter((s) => !scopes.includes(s)).map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => addScope(s)}
-                    className="rounded-full border border-dashed border-border px-2 py-0.5 font-mono text-[10px] text-muted-foreground hover:border-primary/40 hover:text-foreground"
-                  >
-                    + {s}
-                  </button>
-                ))}
-              </div>
-              {scopes.length > 0 ? (
-                <div className="flex flex-wrap gap-1.5">
-                  {scopes.map((scope) => (
-                    <Badge
-                      key={scope}
-                      variant="secondary"
-                      className="gap-1 font-mono text-[11px]"
-                    >
-                      {scope}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setScopes((c) => c.filter((x) => x !== scope))
-                        }
-                        className="text-muted-foreground hover:text-foreground"
-                        aria-label={`Remove ${scope}`}
-                      >
-                        <XIcon size={12} />
-                      </button>
-                    </Badge>
-                  ))}
-                </div>
-              ) : null}
-            </div>
+            <ScopePicker value={scopes} onChange={setScopes} />
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="key-expiry">Expires (optional)</Label>
               <Input
@@ -561,6 +502,38 @@ export default function ProjectApiKeysPage() {
           </div>
           <DialogFooter>
             <Button onClick={() => setRevealed(null)}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit scopes */}
+      <Dialog
+        open={scopesTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setScopesTarget(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit scopes of {scopesTarget?.name}</DialogTitle>
+            <DialogDescription>
+              Changes apply at once. Instance tokens minted from this key are
+              revoked, so SDK clients register again with the new scopes.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-1">
+            <ScopePicker value={editScopes} onChange={setEditScopes} />
+          </div>
+          {actionError && scopesTarget ? (
+            <p className="text-xs text-destructive">{actionError}</p>
+          ) : null}
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button onClick={onSaveScopes} disabled={busy}>
+              {busy ? "Saving…" : "Save scopes"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -248,6 +248,37 @@ class RegistryHeartbeatRuntimeTests {
                 .andExpect(jsonPath("$.code").value("invalid_instance_token"));
     }
 
+    @Test
+    void heartbeatRejectsTokenAfterKeyScopesChange() throws Exception {
+        String ownerEmail = unique("tok-scope");
+        registerAccount(ownerEmail);
+        LoginSession owner = login(ownerEmail);
+        String projectId = createProject(owner, randomSlug("tok"));
+        String key = createKey(owner, projectId,
+                "{\"name\":\"CI\",\"scopes\":[\"registry:heartbeat\"],\"expiresAt\":null}");
+        MvcResult reg = mockMvc.perform(post("/api/v1/registry/register").header("X-Nexus-Api-Key", key))
+                .andExpect(status().isOk())
+                .andReturn();
+        String token = objectMapper.readTree(reg.getResponse().getContentAsString()).at("/token").asText();
+
+        // El token copia los scopes al emitirse: al quitar registry:heartbeat de
+        // la key, un token vivo no debe seguir latiendo con el scope viejo.
+        String keyId = firstKeyId(owner, projectId);
+        mockMvc.perform(patch("/api/panel/v1/projects/{projectId}/api-keys/{keyId}", projectId, keyId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-XSRF-TOKEN", owner.csrfToken())
+                        .cookie(owner.csrfCookie(), owner.sessionCookie())
+                        .content("{\"name\":\"CI\",\"status\":\"ACTIVE\",\"expiresAt\":null,\"scopes\":[\"users:read\"]}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/registry/heartbeat")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Nexus-Instance-Token", token)
+                        .content(validBody()))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("invalid_instance_token"));
+    }
+
     // --- helpers -----------------------------------------------------------------
 
     private static String validBody() {

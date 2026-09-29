@@ -68,7 +68,13 @@ export async function createApiKey(
 export async function updateApiKey(
   projectId: string,
   keyId: string,
-  body: { name: string; status: ApiKeyStatus; expiresAt: string | null },
+  body: {
+    name: string;
+    status: ApiKeyStatus;
+    expiresAt: string | null;
+    /** Omitido = el backend conserva los scopes actuales. */
+    scopes?: string[];
+  },
   csrfToken: string,
 ): Promise<ApiKeySummary> {
   return apiClient.patch<ApiKeySummary>(

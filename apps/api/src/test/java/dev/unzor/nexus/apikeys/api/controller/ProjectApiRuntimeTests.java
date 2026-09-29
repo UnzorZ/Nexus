@@ -185,6 +185,83 @@ class ProjectApiRuntimeTests {
                 .andExpect(jsonPath("$.code").value("scope_required"));
     }
 
+    // --- editar scopes por panel ------------------------------------------------
+    // Modos de fallo: (1) el PATCH ignora los scopes y la key no gana el nuevo;
+    // (2) quitar un scope no corta el acceso al momento; (3) un PATCH sin
+    // "scopes" (clientes antiguos) borra los scopes de la key; (4) un scope con
+    // formato inválido o nulo se guarda o da 500; (5) un miembro sin permiso de
+    // gestión cambia los scopes.
+
+    @Test
+    void patchScopesGrantsTheNewScopeAtOnce() throws Exception {
+        LoginSession owner = newOwner("rt-edit-add");
+        String projectId = createProject(owner, randomSlug("rt"));
+        CreatedKey created = createKeyWithId(owner, projectId,
+                "{\"name\":\"CI\",\"scopes\":[\"other:thing\"],\"expiresAt\":null}");
+
+        patchKey(owner, projectId, created.id,
+                "{\"name\":\"CI\",\"status\":\"ACTIVE\",\"expiresAt\":null,\"scopes\":[\"other:thing\",\"test:scoped\"]}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.scopes.length()").value(2))
+                .andExpect(jsonPath("$.scopes[1]").value("test:scoped"));
+
+        mockMvc.perform(get("/api/v1/test/scoped").header("X-Nexus-Api-Key", created.key))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void patchScopesRevokesARemovedScopeAtOnce() throws Exception {
+        LoginSession owner = newOwner("rt-edit-rm");
+        String projectId = createProject(owner, randomSlug("rt"));
+        CreatedKey created = createKeyWithId(owner, projectId,
+                "{\"name\":\"CI\",\"scopes\":[\"test:scoped\"],\"expiresAt\":null}");
+        mockMvc.perform(get("/api/v1/test/scoped").header("X-Nexus-Api-Key", created.key))
+                .andExpect(status().isOk());
+
+        patchKey(owner, projectId, created.id,
+                "{\"name\":\"CI\",\"status\":\"ACTIVE\",\"expiresAt\":null,\"scopes\":[\"other:thing\"]}")
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/test/scoped").header("X-Nexus-Api-Key", created.key))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("missing_scope"));
+    }
+
+    @Test
+    void patchWithoutScopesKeepsTheCurrentScopes() throws Exception {
+        LoginSession owner = newOwner("rt-edit-keep");
+        String projectId = createProject(owner, randomSlug("rt"));
+        CreatedKey created = createKeyWithId(owner, projectId,
+                "{\"name\":\"CI\",\"scopes\":[\"test:scoped\"],\"expiresAt\":null}");
+
+        patchKey(owner, projectId, created.id, "{\"name\":\"Renamed\",\"status\":\"ACTIVE\",\"expiresAt\":null}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.scopes[0]").value("test:scoped"));
+
+        mockMvc.perform(get("/api/v1/test/scoped").header("X-Nexus-Api-Key", created.key))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void patchRejectsAnInvalidScopeAndKeepsTheOldOnes() throws Exception {
+        LoginSession owner = newOwner("rt-edit-bad");
+        String projectId = createProject(owner, randomSlug("rt"));
+        CreatedKey created = createKeyWithId(owner, projectId,
+                "{\"name\":\"CI\",\"scopes\":[\"test:scoped\"],\"expiresAt\":null}");
+
+        patchKey(owner, projectId, created.id,
+                "{\"name\":\"CI\",\"status\":\"ACTIVE\",\"expiresAt\":null,\"scopes\":[\"NOT A SCOPE\"]}")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("validation_error"));
+        patchKey(owner, projectId, created.id,
+                "{\"name\":\"CI\",\"status\":\"ACTIVE\",\"expiresAt\":null,\"scopes\":[null]}")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("validation_error"));
+
+        mockMvc.perform(get("/api/v1/test/scoped").header("X-Nexus-Api-Key", created.key))
+                .andExpect(status().isOk());
+    }
+
     // --- helpers -----------------------------------------------------------------
 
     private record CreatedKey(String id, String key) {
@@ -204,6 +281,21 @@ class ProjectApiRuntimeTests {
                 .andReturn();
         JsonNode root = objectMapper.readTree(result.getResponse().getContentAsString());
         return new CreatedKey(root.at("/id").asText(), root.at("/secret").asText());
+    }
+
+    private LoginSession newOwner(String prefix) throws Exception {
+        String email = unique(prefix);
+        registerAccount(email);
+        return login(email);
+    }
+
+    private org.springframework.test.web.servlet.ResultActions patchKey(
+            LoginSession owner, String projectId, String keyId, String body) throws Exception {
+        return mockMvc.perform(patch("/api/panel/v1/projects/{projectId}/api-keys/{keyId}", projectId, keyId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .header("X-XSRF-TOKEN", owner.csrfToken())
+                .cookie(owner.csrfCookie(), owner.sessionCookie())
+                .content(body));
     }
 
     private void disableKey(LoginSession owner, String projectId, String keyId) throws Exception {

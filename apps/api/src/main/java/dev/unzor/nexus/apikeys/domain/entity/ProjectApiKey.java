@@ -126,6 +126,10 @@ public class ProjectApiKey {
         this.name = Objects.requireNonNull(name);
     }
 
+    public void replaceScopes(List<String> scopes) {
+        this.scopes = List.copyOf(scopes);
+    }
+
     public void expireAt(Instant expiresAt) {
         this.expiresAt = expiresAt;
     }

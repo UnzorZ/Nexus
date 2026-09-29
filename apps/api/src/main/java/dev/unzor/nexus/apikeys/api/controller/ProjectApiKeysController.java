@@ -76,7 +76,7 @@ class ProjectApiKeysController {
         boolean isInstanceAdmin = isInstanceAdmin(authentication);
         projectAccessService.requireManage(projectId, principal.accountId(), isInstanceAdmin);
         return service.update(projectId, keyId, request.name(), request.status(), request.expiresAt(),
-                principal.accountId());
+                request.scopes(), principal.accountId());
     }
 
     @PostMapping("/{keyId}/rotate")

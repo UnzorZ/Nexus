@@ -79,7 +79,7 @@ class ProjectApiKeysServiceTests {
         when(repository.save(any(ProjectApiKey.class))).thenAnswer(i -> i.getArgument(0));
         Instant expiry = Instant.now().plusSeconds(3600);
 
-        ApiKeySummary updated = service.update(projectId, keyId, "renamed", ApiKeyStatus.DISABLED, expiry,
+        ApiKeySummary updated = service.update(projectId, keyId, "renamed", ApiKeyStatus.DISABLED, expiry, null,
                 UUID.randomUUID());
 
         assertThat(updated.status()).isEqualTo(ApiKeyStatus.DISABLED);
@@ -130,7 +130,7 @@ class ProjectApiKeysServiceTests {
         UUID keyId = UUID.randomUUID();
         when(repository.findByProjectIdAndId(projectId, keyId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.update(projectId, keyId, "x", ApiKeyStatus.ACTIVE, null, UUID.randomUUID()))
+        assertThatThrownBy(() -> service.update(projectId, keyId, "x", ApiKeyStatus.ACTIVE, null, null, UUID.randomUUID()))
                 .isInstanceOf(ApiKeyNotFoundException.class);
     }
 
