@@ -2,6 +2,8 @@ package dev.unzor.nexus.identity.application.service;
 
 import dev.unzor.nexus.identity.application.context.ProjectAuthenticationContext;
 import dev.unzor.nexus.identity.infrastructure.security.ProjectUserPrincipal;
+import dev.unzor.nexus.identity.domain.entity.ProjectUser;
+import dev.unzor.nexus.identity.persistence.repository.ProjectUserRepository;
 import dev.unzor.nexus.permissions.application.dto.EffectiveAuthorities;
 import dev.unzor.nexus.permissions.application.service.EffectiveAuthoritiesService;
 import dev.unzor.nexus.projects.domain.enums.ProjectStatus;
@@ -57,7 +59,7 @@ class ProjectIdTokenCustomizerTest {
                         new TreeSet<>(Set.of("orders.*", "orders.read")),
                         new TreeSet<>(Set.of("admin"))));
 
-        ProjectIdTokenCustomizer customizer = new ProjectIdTokenCustomizer(slugResolver, authorities);
+        ProjectIdTokenCustomizer customizer = new ProjectIdTokenCustomizer(slugResolver, authorities, users(null));
         ProjectUserPrincipal pup = principal(7L);
 
         // ACCESS y ID token: el customizer no filtra por tipo, así que permissions y roles
@@ -87,7 +89,7 @@ class ProjectIdTokenCustomizerTest {
         when(authorities.forUser(PROJECT_ID, USER_ID))
                 .thenReturn(EffectiveAuthorities.empty());
 
-        ProjectIdTokenCustomizer customizer = new ProjectIdTokenCustomizer(slugResolver, authorities);
+        ProjectIdTokenCustomizer customizer = new ProjectIdTokenCustomizer(slugResolver, authorities, users(null));
 
         Map<String, Object> claims = runCustomizer(customizer, OAuth2TokenType.ACCESS_TOKEN, principal(7L));
 
@@ -100,7 +102,7 @@ class ProjectIdTokenCustomizerTest {
         when(slugResolver.resolve("shop")).thenReturn(new ProjectAuthenticationContext(PROJECT_ID, "shop"));
         EffectiveAuthoritiesService authorities = mock(EffectiveAuthoritiesService.class);
 
-        ProjectIdTokenCustomizer customizer = new ProjectIdTokenCustomizer(slugResolver, authorities);
+        ProjectIdTokenCustomizer customizer = new ProjectIdTokenCustomizer(slugResolver, authorities, users(null));
         // Principal que NO es ProjectUserPrincipal (p. ej. client credentials): sin claims de usuario.
         Map<String, Object> claims = runCustomizer(customizer, OAuth2TokenType.ACCESS_TOKEN, "not-a-project-user");
 
@@ -118,7 +120,7 @@ class ProjectIdTokenCustomizerTest {
         when(slugResolver.resolve("shop")).thenReturn(new ProjectAuthenticationContext(otherRealm, "shop"));
         EffectiveAuthoritiesService authorities = mock(EffectiveAuthoritiesService.class);
 
-        ProjectIdTokenCustomizer customizer = new ProjectIdTokenCustomizer(slugResolver, authorities);
+        ProjectIdTokenCustomizer customizer = new ProjectIdTokenCustomizer(slugResolver, authorities, users(null));
         ProjectUserPrincipal pup = principal(7L); // projectId = PROJECT_ID (A)
 
         assertThatThrownBy(() -> runCustomizer(customizer, OAuth2TokenType.ACCESS_TOKEN, pup))
@@ -132,7 +134,7 @@ class ProjectIdTokenCustomizerTest {
         when(slugResolver.resolve("shop")).thenThrow(new ProjectNotFoundException("shop"));
         EffectiveAuthoritiesService authorities = mock(EffectiveAuthoritiesService.class);
 
-        ProjectIdTokenCustomizer customizer = new ProjectIdTokenCustomizer(slugResolver, authorities);
+        ProjectIdTokenCustomizer customizer = new ProjectIdTokenCustomizer(slugResolver, authorities, users(null));
         Map<String, Object> claims = runCustomizer(
                 customizer, OAuth2TokenType.ACCESS_TOKEN, principal(7L));
 
@@ -147,7 +149,7 @@ class ProjectIdTokenCustomizerTest {
                 new ProjectNotOperationalException(PROJECT_ID, ProjectStatus.ARCHIVED));
         EffectiveAuthoritiesService authorities = mock(EffectiveAuthoritiesService.class);
 
-        ProjectIdTokenCustomizer customizer = new ProjectIdTokenCustomizer(slugResolver, authorities);
+        ProjectIdTokenCustomizer customizer = new ProjectIdTokenCustomizer(slugResolver, authorities, users(null));
 
         assertThatThrownBy(() -> runCustomizer(
                 customizer, OAuth2TokenType.ACCESS_TOKEN, principal(7L)))
@@ -198,6 +200,105 @@ class ProjectIdTokenCustomizerTest {
         assertThat(claims).doesNotContainKey("amr").doesNotContainKey("acr");
     }
 
+    // --- claims estándar email / profile --------------------------------------------
+    // Modos de fallo: (1) con scope email el ID token no lleva email, y la app cliente
+    // guarda la cuenta sin email (FlipDaFile: soporte, invitaciones); (2) email_verified
+    // falta o miente, y la app admite o rechaza por error; (3) se emiten sin que el
+    // cliente pidiera el scope (fuga de datos personales); (4) el usuario ya no existe
+    // al emitir y el login cae con una excepción; (5) el access token lleva datos
+    // personales que ningún resource server necesita.
+
+    @Test
+    void emailScopeAddsEmailAndEmailVerifiedToTheIdToken() {
+        ProjectUser user = user("alice@example.com", "Alice Doe", "alice");
+        user.verifyEmail(java.time.Instant.parse("2026-01-01T00:00:00Z"));
+
+        Map<String, Object> claims = runStandardClaims(user, ID_TOKEN, Set.of("openid", "email"));
+
+        assertThat(claims).containsEntry("email", "alice@example.com").containsEntry("email_verified", true)
+                .doesNotContainKey("name").doesNotContainKey("preferred_username");
+    }
+
+    @Test
+    void unverifiedEmailIsReportedAsNotVerified() {
+        ProjectUser user = user("bob@example.com", "Bob", null);
+
+        Map<String, Object> claims = runStandardClaims(user, ID_TOKEN, Set.of("openid", "email"));
+
+        assertThat(claims).containsEntry("email", "bob@example.com").containsEntry("email_verified", false);
+    }
+
+    @Test
+    void profileScopeAddsNameAndPreferredUsername() {
+        ProjectUser user = user("alice@example.com", "Alice Doe", "alice");
+
+        Map<String, Object> claims = runStandardClaims(user, ID_TOKEN, Set.of("openid", "profile"));
+
+        assertThat(claims).containsEntry("name", "Alice Doe").containsEntry("preferred_username", "alice")
+                .doesNotContainKey("email").doesNotContainKey("email_verified");
+    }
+
+    @Test
+    void withoutTheScopesNoPersonalClaimsAreAdded() {
+        ProjectUser user = user("alice@example.com", "Alice Doe", "alice");
+
+        Map<String, Object> claims = runStandardClaims(user, ID_TOKEN, Set.of("openid"));
+
+        assertThat(claims).doesNotContainKeys("email", "email_verified", "name", "preferred_username");
+    }
+
+    @Test
+    void accessTokenNeverCarriesPersonalClaims() {
+        ProjectUser user = user("alice@example.com", "Alice Doe", "alice");
+
+        Map<String, Object> claims = runStandardClaims(user, OAuth2TokenType.ACCESS_TOKEN,
+                Set.of("openid", "email", "profile"));
+
+        assertThat(claims).doesNotContainKeys("email", "email_verified", "name", "preferred_username")
+                .containsKey("project_id");
+    }
+
+    @Test
+    void aMissingUserSkipsTheClaimsWithoutFailingTheLogin() {
+        Map<String, Object> claims = runStandardClaims(null, ID_TOKEN, Set.of("openid", "email", "profile"));
+
+        assertThat(claims).doesNotContainKeys("email", "name").containsKey("project_id");
+    }
+
+    private static final OAuth2TokenType ID_TOKEN = new OAuth2TokenType("id_token");
+
+    private static ProjectUser user(String email, String displayName, String username) {
+        ProjectUser user = new ProjectUser(PROJECT_ID, email, "hash", displayName);
+        if (username != null) {
+            user.updateProfile(displayName, username);
+        }
+        return user;
+    }
+
+    private static ProjectUserRepository users(ProjectUser user) {
+        ProjectUserRepository repository = mock(ProjectUserRepository.class);
+        when(repository.findByProjectIdAndId(PROJECT_ID, USER_ID)).thenReturn(java.util.Optional.ofNullable(user));
+        return repository;
+    }
+
+    private static Map<String, Object> runStandardClaims(ProjectUser user, OAuth2TokenType tokenType, Set<String> scopes) {
+        var auth = new UsernamePasswordAuthenticationToken(principal(7L), null, List.of());
+        JwtEncodingContext ctx = JwtEncodingContext
+                .with(JwsHeader.with(SignatureAlgorithm.RS256), JwtClaimsSet.builder())
+                .tokenType(tokenType)
+                .authorizationServerContext(serverContext())
+                .principal(auth)
+                .authorizedScopes(scopes)
+                .build();
+        ctx.getClaims().claim("iss", ISSUER);
+        ProjectSlugResolver slugResolver = mock(ProjectSlugResolver.class);
+        when(slugResolver.resolve("shop")).thenReturn(new ProjectAuthenticationContext(PROJECT_ID, "shop"));
+        EffectiveAuthoritiesService authorities = mock(EffectiveAuthoritiesService.class);
+        when(authorities.forUser(PROJECT_ID, USER_ID)).thenReturn(EffectiveAuthorities.empty());
+        new ProjectIdTokenCustomizer(slugResolver, authorities, users(user)).customize(ctx);
+        return ctx.getClaims().build().getClaims();
+    }
+
     private static FactorGrantedAuthority factor(String authority) {
         return FactorGrantedAuthority.fromAuthority(authority);
     }
@@ -216,7 +317,7 @@ class ProjectIdTokenCustomizerTest {
         when(slugResolver.resolve("shop")).thenReturn(new ProjectAuthenticationContext(PROJECT_ID, "shop"));
         EffectiveAuthoritiesService authorities = mock(EffectiveAuthoritiesService.class);
         when(authorities.forUser(PROJECT_ID, USER_ID)).thenReturn(EffectiveAuthorities.empty());
-        new ProjectIdTokenCustomizer(slugResolver, authorities).customize(ctx);
+        new ProjectIdTokenCustomizer(slugResolver, authorities, users(null)).customize(ctx);
         return ctx.getClaims().build().getClaims();
     }
 

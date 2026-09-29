@@ -2,6 +2,7 @@ package dev.unzor.nexus.identity.application.service;
 
 import dev.unzor.nexus.identity.application.context.ProjectAuthenticationContext;
 import dev.unzor.nexus.identity.infrastructure.security.ProjectUserPrincipal;
+import dev.unzor.nexus.identity.persistence.repository.ProjectUserRepository;
 import dev.unzor.nexus.permissions.application.dto.EffectiveAuthorities;
 import dev.unzor.nexus.permissions.application.service.EffectiveAuthoritiesService;
 import dev.unzor.nexus.projects.domain.exception.ProjectNotFoundException;
@@ -14,6 +15,8 @@ import org.springframework.security.core.authority.FactorGrantedAuthority;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2ErrorCodes;
+import org.springframework.security.oauth2.core.oidc.OidcScopes;
+import org.springframework.security.oauth2.core.oidc.StandardClaimNames;
 import org.springframework.security.oauth2.server.authorization.token.JwtEncodingContext;
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenCustomizer;
 import org.springframework.stereotype.Component;
@@ -21,6 +24,7 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -54,14 +58,18 @@ import java.util.UUID;
 public class ProjectIdTokenCustomizer implements OAuth2TokenCustomizer<JwtEncodingContext> {
 
     private static final Logger log = LoggerFactory.getLogger(ProjectIdTokenCustomizer.class);
+    private static final String ID_TOKEN = "id_token";
 
     private final ProjectSlugResolver projectSlugResolver;
     private final EffectiveAuthoritiesService effectiveAuthoritiesService;
+    private final ProjectUserRepository projectUsers;
 
     public ProjectIdTokenCustomizer(ProjectSlugResolver projectSlugResolver,
-                                    EffectiveAuthoritiesService effectiveAuthoritiesService) {
+                                    EffectiveAuthoritiesService effectiveAuthoritiesService,
+                                    ProjectUserRepository projectUsers) {
         this.projectSlugResolver = projectSlugResolver;
         this.effectiveAuthoritiesService = effectiveAuthoritiesService;
+        this.projectUsers = projectUsers;
     }
 
     @Override
@@ -127,6 +135,43 @@ public class ProjectIdTokenCustomizer implements OAuth2TokenCustomizer<JwtEncodi
         if (!factors.isEmpty()) {
             context.getClaims().claim("amr", factors);
             context.getClaims().claim("acr", factors.contains("otp") ? "mfa" : factors.get(0));
+        }
+
+        addStandardClaims(context, pup);
+    }
+
+    /**
+     * Claims OIDC estándar de los scopes {@code email} ({@code email}, {@code email_verified})
+     * y {@code profile} ({@code name}, {@code preferred_username}). Solo en el ID token (y así
+     * en {@code /userinfo}): el access token no lleva datos personales. Se leen del usuario en
+     * base de datos al emitir, no de la sesión, para que un cambio de email o de nombre llegue
+     * en el próximo token. Si el usuario ya no existe, no se añade nada.
+     */
+    private void addStandardClaims(JwtEncodingContext context, ProjectUserPrincipal pup) {
+        if (!ID_TOKEN.equals(context.getTokenType().getValue())) {
+            return;
+        }
+        Set<String> scopes = context.getAuthorizedScopes();
+        boolean email = scopes.contains(OidcScopes.EMAIL);
+        boolean profile = scopes.contains(OidcScopes.PROFILE);
+        if (!email && !profile) {
+            return;
+        }
+        projectUsers.findByProjectIdAndId(pup.projectId(), pup.userId()).ifPresent(user -> {
+            if (email) {
+                context.getClaims().claim(StandardClaimNames.EMAIL, user.getEmail());
+                context.getClaims().claim(StandardClaimNames.EMAIL_VERIFIED, user.isEmailVerified());
+            }
+            if (profile) {
+                putIfPresent(context, StandardClaimNames.NAME, user.getDisplayName());
+                putIfPresent(context, StandardClaimNames.PREFERRED_USERNAME, user.getUsername());
+            }
+        });
+    }
+
+    private static void putIfPresent(JwtEncodingContext context, String claim, String value) {
+        if (value != null && !value.isBlank()) {
+            context.getClaims().claim(claim, value);
         }
     }
 

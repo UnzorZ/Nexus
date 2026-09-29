@@ -22,6 +22,21 @@ no añade estos claims.
 | `amr` | array de strings | Los métodos de autenticación de la sesión. Nexus lo deriva de los factores reales del login: `pwd` (contraseña), `otp` (TOTP) o el proveedor externo (por ejemplo, `google`). No aparece si la sesión no lleva factores. |
 | `acr` | string | `mfa` si el login completo un segundo factor TOTP. Si no, el factor primario: `pwd` o el proveedor externo (por ejemplo, `google`). No aparece si la sesión no lleva factores. |
 
+## Claims estándar de `email` y `profile`
+
+Nexus añade estos claims solo al ID token y, por eso, también a `/userinfo`. El
+access token no los lleva. Nexus los añade solo si el cliente pidió el scope y
+el cliente tiene ese scope permitido. Nexus lee los valores del usuario en la
+base de datos cuando emite el token. Si el usuario ya no existe, Nexus no añade
+estos claims.
+
+| Scope | Claim | Tipo | Contenido |
+|---|---|---|---|
+| `email` | `email` | string | El email del usuario. |
+| `email` | `email_verified` | boolean | `true` si el usuario verificó el email. Si no, `false`. |
+| `profile` | `name` | string | El nombre visible del usuario. No aparece si está vacío. |
+| `profile` | `preferred_username` | string | El nombre de usuario. No aparece si el usuario no tiene nombre de usuario. |
+
 ## Como se llenan `permissions` y `roles`
 
 `ProjectIdTokenCustomizer` pide a `EffectiveAuthoritiesService.forUser` las
