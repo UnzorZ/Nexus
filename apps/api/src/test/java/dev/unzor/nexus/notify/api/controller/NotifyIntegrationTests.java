@@ -41,6 +41,9 @@ class NotifyIntegrationTests {
     @Autowired
     private tools.jackson.databind.ObjectMapper objectMapper;
 
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+
     @Test
     void templateSendRenderAndHistory() throws Exception {
         String ownerEmail = unique("ntf-owner");
@@ -76,6 +79,48 @@ class NotifyIntegrationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].recipient").value("user@example.com"))
                 .andExpect(jsonPath("$[0].status").value("FAILED"));
+    }
+
+    /**
+     * Auditoría 2026-09-28, F21. Modos de fallo escritos antes del código: una variable del envío
+     * (texto del usuario final de la app, p. ej. el mensaje de una entrega) entra tal cual en una
+     * plantilla HTML y añade enlaces o marcado al email; un salto de línea en una variable del
+     * asunto parte la cabecera. El HTML propio de la plantilla debe seguir intacto.
+     */
+    @Test
+    void sendEscapesCallerVariablesInTheHtmlBody() throws Exception {
+        String ownerEmail = unique("ntf-esc");
+        registerAccount(ownerEmail);
+        LoginSession owner = login(ownerEmail);
+        String projectId = createProject(owner, randomSlug("ntfesc"));
+        String key = createKey(owner, projectId, "[\"notify:send\"]");
+        mockMvc.perform(post("/api/panel/v1/projects/{projectId}/notify/templates", projectId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-XSRF-TOKEN", owner.csrfToken())
+                        .cookie(owner.csrfCookie(), owner.sessionCookie())
+                        .content("{\"name\":\"delivery\",\"subject\":\"De {$sender}\","
+                                + "\"bodyTemplate\":\"<p><b>Mensaje:</b> {$message}</p>\"}"))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/api/v1/notify/send")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Nexus-Api-Key", key)
+                        .content("{\"to\":\"user@example.com\",\"templateName\":\"delivery\","
+                                + "\"variables\":{\"sender\":\"Ana\\r\\nBcc: x@evil.example\","
+                                + "\"message\":\"<a href=\\\"https://evil.example\\\">Paga aqui</a> & <b>ya</b>\"}}"))
+                .andExpect(status().isOk());
+
+        java.util.Map<String, Object> row = jdbcTemplate.queryForMap(
+                "SELECT subject, body FROM notifications WHERE project_id = ?::uuid ORDER BY created_at DESC LIMIT 1",
+                projectId);
+        String body = (String) row.get("body");
+        String subject = (String) row.get("subject");
+        org.assertj.core.api.Assertions.assertThat(body)
+                .startsWith("<p><b>Mensaje:</b> ")
+                .contains("&lt;a href=&quot;https://evil.example&quot;&gt;Paga aqui&lt;/a&gt; &amp; &lt;b&gt;ya&lt;/b&gt;")
+                .doesNotContain("<a href");
+        org.assertj.core.api.Assertions.assertThat(subject).doesNotContain("\r").doesNotContain("\n")
+                .startsWith("De Ana");
     }
 
     @Test

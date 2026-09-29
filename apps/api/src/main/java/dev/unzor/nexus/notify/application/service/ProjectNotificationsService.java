@@ -169,15 +169,18 @@ public class ProjectNotificationsService {
                     .orElseThrow(() -> new NotifyTemplateNotFoundException(
                             "Template '" + templateName + "' not found in project " + projectId + "."));
             templateId = template.getId();
-            Map<String, String> resolved = resolveVariables(projectId, template.getVariables(), variables);
-            finalSubject = render(template.getSubject(), resolved);
-            finalBody = render(template.getBodyTemplate(), resolved);
+            // Las variables del envío traen texto del usuario final de la app (mensajes, nombres):
+            // se escapan para el cuerpo HTML. Globales y defaults los fija el panel y pueden llevar HTML.
+            finalSubject = singleLine(render(template.getSubject(),
+                    resolveVariables(projectId, template.getVariables(), variables)));
+            finalBody = render(template.getBodyTemplate(),
+                    resolveVariables(projectId, template.getVariables(), htmlEscaped(variables)));
         } else {
             if (isBlank(subject) || isBlank(body)) {
                 throw new InvalidNotificationRequestException(
                         "Either templateName or both subject and body are required.");
             }
-            finalSubject = subject;
+            finalSubject = singleLine(subject);
             finalBody = body;
         }
 
@@ -206,10 +209,11 @@ public class ProjectNotificationsService {
     public RenderedTemplate preview(UUID projectId, UUID templateId, Map<String, String> variables) {
         projectLookupService.requireById(projectId);
         NotificationTemplate template = requireTemplate(projectId, templateId);
-        Map<String, String> resolved = resolveVariables(projectId, template.getVariables(), variables);
+        Map<String, String> resolved = resolveVariables(projectId, template.getVariables(), htmlEscaped(variables));
         // El body se renderiza con marcadores <span class="nx-var" data-var="…"> para
         // que la vista previa resalte dónde cayó cada variable y permita navegar a ella.
-        return new RenderedTemplate(render(template.getSubject(), resolved),
+        return new RenderedTemplate(
+                singleLine(render(template.getSubject(), resolveVariables(projectId, template.getVariables(), variables))),
                 renderHighlighted(template.getBodyTemplate(), resolved));
     }
 
@@ -254,6 +258,25 @@ public class ProjectNotificationsService {
             merged.putAll(provided);
         }
         return merged;
+    }
+
+    /**
+     * Las variables del envío, escapadas para HTML (auditoría 2026-09-28, F21): un valor con
+     * marcado no puede añadir enlaces ni etiquetas al email.
+     */
+    static Map<String, String> htmlEscaped(Map<String, String> variables) {
+        if (variables == null) {
+            return null;
+        }
+        Map<String, String> escaped = new HashMap<>();
+        variables.forEach((key, value) ->
+                escaped.put(key, value == null ? null : org.springframework.web.util.HtmlUtils.htmlEscape(value)));
+        return escaped;
+    }
+
+    /** Un asunto es una cabecera de una línea: los saltos de línea se sustituyen por espacios. */
+    static String singleLine(String value) {
+        return value == null ? null : value.replaceAll("[\\r\\n]+", " ");
     }
 
     private NotificationTemplate requireTemplate(UUID projectId, UUID templateId) {
