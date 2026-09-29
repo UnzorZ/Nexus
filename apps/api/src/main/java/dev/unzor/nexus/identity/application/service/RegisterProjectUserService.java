@@ -53,6 +53,8 @@ public class RegisterProjectUserService {
             throw new PublicRegistrationDisabledException();
         }
         String normalizedEmail = email.trim();
+        // Antes que la comprobación de email: una contraseña débil nunca revela si el email existe.
+        dev.unzor.nexus.identity.domain.ProjectUserPasswordPolicy.check(password, normalizedEmail);
         if (repository.existsByProjectIdAndEmailIgnoreCase(projectId, normalizedEmail)) {
             throw new ProjectUserEmailAlreadyExistsException(projectId, normalizedEmail);
         }

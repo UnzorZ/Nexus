@@ -65,6 +65,8 @@ class ProjectEndUserRegistrationController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         } catch (ProjectUserEmailAlreadyExistsException e) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", "email_exists"));
+        } catch (dev.unzor.nexus.identity.domain.exception.WeakPasswordException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("code", "weak_password"));
         }
         return ResponseEntity.ok(Map.of("status", "verification_email_sent", "email", request.email().trim()));
     }

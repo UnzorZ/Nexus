@@ -111,6 +111,7 @@ public class ProjectUserPasswordResetService {
         ProjectUser user = repository
                 .findByProjectIdAndPasswordResetTokenHash(projectId, IdentityTokens.hash(rawToken))
                 .orElseThrow(InvalidPasswordResetTokenException::new);
+        dev.unzor.nexus.identity.domain.ProjectUserPasswordPolicy.check(newPassword, user.getEmail());
         if (user.getPasswordResetExpiresAt() != null
                 && user.getPasswordResetExpiresAt().isBefore(Instant.now())) {
             throw new InvalidPasswordResetTokenException();
