@@ -6,6 +6,7 @@ import java.util.UUID;
 import dev.unzor.nexus.apikeys.api.RequiredScope;
 import dev.unzor.nexus.apikeys.security.ResolvedApiKey;
 import dev.unzor.nexus.identity.api.dto.ProjectUserDetails;
+import dev.unzor.nexus.identity.api.dto.RuntimeProjectUserDetails;
 import dev.unzor.nexus.identity.application.service.ProjectUserPasswordResetService;
 import dev.unzor.nexus.identity.application.service.ProjectUserQueryService;
 import dev.unzor.nexus.identity.application.service.ProjectUserStatusService;
@@ -56,18 +57,22 @@ class RuntimeProjectUsersController {
         this.passwordResetService = passwordResetService;
     }
 
-    /** Busca por login OIDC ({@code sub}): username o, si no tiene, email. */
+    /**
+     * Busca por login OIDC ({@code sub}): username o, si no tiene, email. Incluye
+     * {@code roles} (claves en este proyecto) para que el backend llamante pueda
+     * revalidar un rol sin esperar al refill de sesión/token.
+     */
     @GetMapping("/lookup")
     @RequiredScope("users:read")
-    ProjectUserDetails lookup(@RequestParam String login, @AuthenticationPrincipal ResolvedApiKey apiKey) {
-        return queryService.findByLogin(apiKey.projectId(), login)
+    RuntimeProjectUserDetails lookup(@RequestParam String login, @AuthenticationPrincipal ResolvedApiKey apiKey) {
+        return queryService.findWithRolesByLogin(apiKey.projectId(), login)
                 .orElseThrow(() -> new ProjectUserNotFoundException(apiKey.projectId(), null));
     }
 
     @GetMapping("/{userId}")
     @RequiredScope("users:read")
-    ProjectUserDetails get(@PathVariable UUID userId, @AuthenticationPrincipal ResolvedApiKey apiKey) {
-        return queryService.get(apiKey.projectId(), userId);
+    RuntimeProjectUserDetails get(@PathVariable UUID userId, @AuthenticationPrincipal ResolvedApiKey apiKey) {
+        return queryService.getWithRoles(apiKey.projectId(), userId);
     }
 
     /** Cambiar el username cambia el login OIDC: Nexus revoca sesiones y tokens. */

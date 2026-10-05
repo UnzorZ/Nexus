@@ -112,6 +112,52 @@ class RuntimeProjectUsersRuntimeTests {
                 .andExpect(status().isNotFound());
     }
 
+    @Test
+    void lookupReturnsOnlyTheRolesOfThatProject() throws Exception {
+        LoginSession owner = login(unique("users-roles"));
+        String projectId = createProject(owner, randomSlug("usersrl"));
+        String otherProject = createProject(owner, randomSlug("usersot"));
+        String key = createKey(owner, projectId,
+                "{\"name\":\"Backend\",\"scopes\":[\"users:read\"],\"expiresAt\":null}");
+        UUID userId = seedUserWithRole(UUID.fromString(projectId), "admin", "files.read");
+        String username = "snap-" + userId;
+
+        // The role assigned in THIS project is returned, sorted by key.
+        mockMvc.perform(get("/api/v1/users/lookup").param("login", username).header("X-Nexus-Api-Key", key))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(userId.toString()))
+                .andExpect(jsonPath("$.roles[0]").value("admin"));
+
+        // GET /{userId} exposes the same roles.
+        mockMvc.perform(get("/api/v1/users/{userId}", userId).header("X-Nexus-Api-Key", key))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.roles[0]").value("admin"));
+
+        // An orphan assignment of ANOTHER project (same project_user_id) must not leak.
+        seedOrphanUserRole(UUID.fromString(otherProject), userId, "superadmin");
+
+        // Deleting the assignment takes effect on the next lookup: no revoked role lingers.
+        jdbc.update("DELETE FROM project_user_roles WHERE project_user_id = ? AND project_id = ?", userId, UUID.fromString(projectId));
+        mockMvc.perform(get("/api/v1/users/lookup").param("login", username).header("X-Nexus-Api-Key", key))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.roles").isArray())
+                .andExpect(jsonPath("$.roles").value(org.hamcrest.Matchers.empty()));
+    }
+
+    /** Inserta una asignación huérfana de otro proyecto: role_id global pero user sin proyecto. */
+    private void seedOrphanUserRole(UUID otherProjectId, UUID userId, String roleKey) {
+        Timestamp now = Timestamp.from(Instant.now());
+        UUID roleId = UUID.randomUUID();
+        jdbc.update("INSERT INTO project_roles (id, project_id, system, key, label, description, "
+                + "created_at, updated_at) VALUES (?,?, false, ?, ?, ?, ?, ?)",
+                roleId, otherProjectId, roleKey, roleKey, null, now, now);
+        // project_user_roles has no FK to project_users: a row of another project can
+        // reference this user id. Roles must be resolved scoped to the key's project.
+        jdbc.update("INSERT INTO project_user_roles (id, project_id, project_user_id, role_id, "
+                + "created_at) VALUES (?,?,?,?, ?)",
+                UUID.randomUUID(), otherProjectId, userId, roleId, now);
+    }
+
     private UUID seedUserWithRole(UUID projectId, String roleKey, String permissionKey) {
         UUID userId = UUID.randomUUID();
         UUID roleId = UUID.randomUUID();

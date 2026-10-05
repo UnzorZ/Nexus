@@ -341,6 +341,15 @@ No hay trabajo pendiente relevante sobre este alcance: la incorporación del
 claim `permissions` y la app de referencia como resource server cierran el
 conjunto de capacidades descrito en este documento.
 
+La API de proyecto de usuarios (`RuntimeProjectUsersController`,
+`GET /api/v1/users/lookup` y `GET /api/v1/users/{userId}`, scope `users:read`)
+devuelve `RuntimeProjectUserDetails`: el perfil de `ProjectUserDetails` más
+`roles`, las claves de los roles del usuario en el proyecto de la API key.
+Se resuelven con el mismo `EffectiveAuthoritiesService` que el claim `roles`
+del ID token (mismas claves, mismo orden alfabético), de modo que un backend
+puede revalidar un rol (p. ej. ¿sigue siendo `admin`?) sin esperar al refill de
+sesión/token. Lista vacía si no tiene roles; nunca roles de otro proyecto.
+
 ---
 
 ## Relación con otros módulos
