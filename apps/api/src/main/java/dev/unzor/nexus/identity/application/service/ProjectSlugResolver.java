@@ -27,4 +27,9 @@ public class ProjectSlugResolver {
         ProjectSlugReference reference = resolveProjectBySlugService.resolve(projectSlug);
         return new ProjectAuthenticationContext(reference.projectId(), reference.projectSlug());
     }
+
+    /** Public base URL the project declared, or {@code null} (see {@link ResolveProjectBySlugService#publicBaseUrl}). */
+    public String publicBaseUrl(String projectSlug) {
+        return resolveProjectBySlugService.publicBaseUrl(projectSlug);
+    }
 }

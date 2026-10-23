@@ -63,14 +63,37 @@ public class ProjectAllowedOriginsResolver {
     /**
      * Origen web "principal" del proyecto (para construir enlaces públicos —p. ej. el de
      * verificación de email— que deben aterrizar en el dominio de la <b>app</b>, no en el
-     * frontend propio de Nexus). Es el primero alfabéticamente entre los orígenes derivados
-     * de los redirect URIs de los clientes activos del proyecto (determinista; la mayoría de
-     * apps self-service tienen un único origen). Vacío si el proyecto no expone ningún
-     * origen registrado —el llamador cae entonces al {@code frontend-base-url} de la
-     * instancia (portal hosteado por Nexus).
+     * frontend propio de Nexus).
+     *
+     * <p>Es el origen del {@code publicBaseUrl} del proyecto cuando coincide con uno de los
+     * orígenes registrados: un proyecto con varios orígenes (p. ej. un host de administración
+     * detrás de un muro de acceso) elige así el de sus usuarios. Un {@code publicBaseUrl} que
+     * ningún cliente registró (el placeholder {@code <slug>.nexus.local}) nunca se usa como
+     * destino. Si no hay coincidencia, el primero alfabéticamente entre los orígenes derivados
+     * de los redirect URIs de los clientes activos (determinista; la mayoría de apps
+     * self-service tienen un único origen). Vacío si el proyecto no expone ningún origen
+     * registrado —el llamador cae entonces al {@code frontend-base-url} de la instancia
+     * (portal hosteado por Nexus).</p>
      */
     public Optional<String> primaryProjectOrigin(String slug) {
-        return originsForSlug(slug).stream().sorted().findFirst();
+        Set<String> origins = originsForSlug(slug);
+        if (origins.isEmpty()) {
+            return Optional.empty();
+        }
+        String declared = declaredOrigin(slug);
+        if (declared != null && origins.contains(declared)) {
+            return Optional.of(declared);
+        }
+        return origins.stream().sorted().findFirst();
+    }
+
+    /** Origen del {@code publicBaseUrl} del proyecto, o {@code null} si no se puede leer. */
+    private String declaredOrigin(String slug) {
+        try {
+            return WebOrigin.of(slugResolver.publicBaseUrl(slug));
+        } catch (RuntimeException unreadable) {
+            return null;
+        }
     }
 
     private Set<String> computeOrigins(String slug) {

@@ -395,7 +395,8 @@ export default function ProjectSettingsPage() {
                 aria-invalid={Boolean(fieldErrors.publicBaseUrl)}
               />
               <p className="text-[11px] text-muted-foreground">
-                Used for OAuth issuer and redirect URI defaults.
+                Used for OAuth issuer and redirect URI defaults. When it matches a client redirect
+                origin, email verification, password reset and Google sign-in links land here.
               </p>
               {fieldErrors.publicBaseUrl ? (
                 <p className="text-xs text-destructive">{fieldErrors.publicBaseUrl}</p>

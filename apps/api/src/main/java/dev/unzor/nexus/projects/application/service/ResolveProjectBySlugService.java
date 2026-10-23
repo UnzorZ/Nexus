@@ -36,6 +36,16 @@ public class ResolveProjectBySlugService {
         return toReference(project);
     }
 
+    /**
+     * Public base URL the project declared (the address of its own app), or {@code null}. It can be
+     * a placeholder: callers that build links must check it against the origins the project
+     * registered.
+     */
+    @Transactional(readOnly = true)
+    public String publicBaseUrl(String projectSlug) {
+        return requireProject(projectSlug).getPublicBaseUrl();
+    }
+
     private Project requireProject(String projectSlug) {
         return projectRepository.findBySlugIgnoreCase(projectSlug)
                 .orElseThrow(() -> new ProjectNotFoundException(projectSlug));
