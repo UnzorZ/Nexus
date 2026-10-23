@@ -43,9 +43,9 @@ export function ModulePage({
   const name = project?.name ?? "...";
   const modulesQ = useProjectModules(projectId);
 
-  // undefined mientras carga la lista de módulos → asumimos habilitado para no
-  // fl: un 403 pasajero del componente hijo es preferible a mostrar "disabled"
-  // por error. En cuanto llega el estado real, si está apagado mostramos el aviso.
+  // undefined mientras carga la lista de módulos → asumimos habilitado: un 403
+  // pasajero del componente hijo es preferible a mostrar "disabled" por error.
+  // En cuanto llega el estado real, si está apagado mostramos el aviso.
   const status = modulesQ.data?.find((m) => m.key === moduleKey);
   const disabled = status ? !status.enabled : false;
 

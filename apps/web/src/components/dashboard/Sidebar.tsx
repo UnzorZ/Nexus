@@ -133,14 +133,14 @@ export function Sidebar({ width }: { width: number }) {
 
   const projectId = project?.id ?? "";
   const modulesQ = useProjectModules(projectId);
-  // Oculta los items respaldados por un módulo desactivado. Mientras carga la
-  // lista de módulos mostramos todo (evita que los items "salten" en el primer
-  // pintado); al compartir queryKey con Modules, un toggle se refleja aquí al
-  // instante vía el update optimista.
+  // Oculta los items respaldados por un módulo desactivado. Sin la lista de
+  // módulos (cargando, proyecto aún sin resolver o la consulta falló) mostramos
+  // todo: un fallo de esa consulta no debe vaciar el nav. Al compartir queryKey
+  // con Modules, un toggle se refleja aquí al instante vía el update optimista.
+  const modules = modulesQ.data;
   const navItems = buildNav(projectId).filter((item) => {
-    if (!item.moduleKey) return true;
-    if (modulesQ.isLoading) return true;
-    return modulesQ.data?.find((m) => m.key === item.moduleKey)?.enabled ?? false;
+    if (!item.moduleKey || !modules) return true;
+    return modules.find((m) => m.key === item.moduleKey)?.enabled ?? false;
   });
 
   // The project index (Overview, href === `/projects/{id}`) must only be active
